@@ -26,6 +26,7 @@ interface SectorOrderTableProps {
   stopReasonsHierarchy: any[];
   user: User | null;
   capacities?: ProductionCapacity[];
+  globalSearchTerm?: string;
 }
 
 const ITEMS_PER_PAGE = 50;
@@ -59,7 +60,7 @@ const ResizableHeader = ({
   );
 };
 
-const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onViewDetails, onUpdateOrder, stopReasonsHierarchy, user, capacities = [] }) => {
+const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onViewDetails, onUpdateOrder, stopReasonsHierarchy, user, capacities = [], globalSearchTerm }) => {
   const [searchTerm, setSearchTerm] = React.useState('');
   const deferredSearch = React.useDeferredValue(searchTerm);
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -145,17 +146,22 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
   };
 
   const filteredOrders = React.useMemo(() => {
-    const search = deferredSearch.toLowerCase().trim();
     return orders.filter(o => {
-      if (!search) return true;
-      return (
+      const search = deferredSearch.toLowerCase().trim();
+      const matchesSearch = !search || 
         (o.docNr || '').toLowerCase().includes(search) || 
         (o.clientName || '').toLowerCase().includes(search) ||
         (o.reference || '').toLowerCase().includes(search) ||
-        (o.colorDesc || '').toLowerCase().includes(search)
-      );
+        (o.colorDesc || '').toLowerCase().includes(search);
+        
+      const globalSearch = (globalSearchTerm || '').toLowerCase().trim();
+      const matchesGlobalSearch = !globalSearch || 
+                                  (o.docNr || '').toLowerCase().includes(globalSearch) ||
+                                  (o.itemNr !== undefined && o.itemNr.toString().includes(globalSearch));
+
+      return matchesSearch && matchesGlobalSearch;
     });
-  }, [orders, deferredSearch]);
+  }, [orders, deferredSearch, globalSearchTerm]);
 
   const totalPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
   const paginatedOrders = React.useMemo(() => {

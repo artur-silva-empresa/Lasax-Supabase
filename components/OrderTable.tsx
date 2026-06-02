@@ -27,6 +27,7 @@ import { getOrderState, getSectorState, exportOrdersToSQLite, getDirectoryHandle
 import { formatDate } from '../utils/formatters';
 import { SECTORS } from '../constants';
 import StopReasonSelector from './StopReasonSelector';
+import ConfirmModal from './ConfirmModal';
 
 // Definição dos tipos de filtros ativos vindos do Dashboard
 export type ActiveFilterType = 'LATE' | 'WEEK_DELIVERIES' | 'WEEK_COMPLETED' | null;
@@ -42,6 +43,7 @@ interface OrderTableProps {
   onUpdateStopReason?: (docNr: string, sectorId: string, reason: string) => void;
   stopReasonsHierarchy: any[];
   onArchiveOrder?: (docNr: string, archive: boolean) => void;
+  globalSearchTerm?: string;
 }
 
 const ITEMS_PER_PAGE = 50;
@@ -55,7 +57,7 @@ const getISOWeek = (d: Date) => {
   return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
 };
 
-const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetails, excelHeaders, activeFilter, user, onUpdatePriority, onUpdateManual, onUpdateStopReason, stopReasonsHierarchy, onArchiveOrder }) => {
+const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetails, excelHeaders, activeFilter, user, onUpdatePriority, onUpdateManual, onUpdateStopReason, stopReasonsHierarchy, onArchiveOrder, globalSearchTerm }) => {
   const [searchTerm, setSearchTerm] = React.useState('');
   const deferredSearch = React.useDeferredValue(searchTerm);
   
@@ -74,6 +76,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
 
   // Estado para controlar qual menu de prioridade está aberto
   const [openPriorityMenuId, setOpenPriorityMenuId] = React.useState<string | null>(null);
+  const [orderToArchive, setOrderToArchive] = React.useState<Order | null>(null);
   
   // Ref para fechar menu ao clicar fora
   const menuRef = React.useRef<HTMLDivElement>(null);
@@ -267,10 +270,15 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                             (o.clientName || '').toLowerCase().includes(search) ||
                             (o.family || '').toLowerCase().includes(search) ||
                             (o.sizeDesc || '').toLowerCase().includes(search);
+                            
+      const globalSearch = (globalSearchTerm || '').toLowerCase().trim();
+      const matchesGlobalSearch = !globalSearch || 
+                                  (o.docNr || '').toLowerCase().includes(globalSearch) ||
+                                  (o.itemNr !== undefined && o.itemNr.toString().includes(globalSearch));
       
-      return matchesDocSeries && matchesComercial && matchesReference && matchesStatus && matchesSearch && matchesObservations && matchesWeek && matchesFlags && matchesArchived;
+      return matchesDocSeries && matchesComercial && matchesReference && matchesStatus && matchesSearch && matchesGlobalSearch && matchesObservations && matchesWeek && matchesFlags && matchesArchived;
     });
-  }, [orders, deferredSearch, filterStatus, filterDocSeries, filterComercial, filterReference, filterHasObservations, filterDate, filterPriority, filterManual, activeFilter, filterArchived]);
+  }, [orders, deferredSearch, globalSearchTerm, filterStatus, filterDocSeries, filterComercial, filterReference, filterHasObservations, filterDate, filterPriority, filterManual, activeFilter, filterArchived]);
 
   React.useEffect(() => {
     setCurrentPage(1);
@@ -780,6 +788,9 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 </th>
                 <th className="px-2 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center w-[10%]">Classificação</th>
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center w-[10%]">Estado</th>
+                {user?.role === 'admin' && onArchiveOrder && (
+                  <th className="px-2 py-4 w-[50px]"></th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-950 transition-colors">
@@ -896,11 +907,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                   {user?.role === 'admin' && onArchiveOrder && (
                   <td className="px-2 py-4 align-middle text-center" onClick={(e) => e.stopPropagation()}>
                     <button
-                      onClick={() => {
-                        const action = order.isArchived ? 'desarquivar' : 'arquivar';
-                        if (window.confirm(`Tem a certeza que deseja ${action} a encomenda ${order.docNr}?`)) {
-                          onArchiveOrder(order.docNr, !order.isArchived);
-                        }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setOrderToArchive(order);
                       }}
                       className={`p-1.5 rounded-lg transition-all hover:scale-110 active:scale-95 ${order.isArchived ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' : 'text-slate-300 dark:text-slate-600 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
                       title={order.isArchived ? `Desarquivar (arquivado por ${order.archivedBy})` : 'Arquivar encomenda'}
@@ -982,7 +992,22 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 </div>
                 <div className="text-right">
                   <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Entrega</p>
-                  <p className="text-xs font-bold text-slate-600 dark:text-slate-400">{formatDate(order.requestedDate)}</p>
+                  <div className="flex items-center gap-2 justify-end">
+                    <p className="text-xs font-bold text-slate-600 dark:text-slate-400">{formatDate(order.requestedDate)}</p>
+                    {user?.role === 'admin' && onArchiveOrder && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setOrderToArchive(order);
+                        }}
+                        title={order.isArchived ? `Desarquivar (arquivado por ${order.archivedBy})` : 'Arquivar encomenda'}
+                        className={`p-1.5 rounded-lg transition-all active:scale-95 ${order.isArchived ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20' : 'text-slate-400 bg-slate-50 dark:bg-slate-800'}`}
+                      >
+                        {order.isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1016,6 +1041,22 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 </button>
             </div>
         </div>
+      )}
+      
+      {orderToArchive && (
+        <ConfirmModal 
+          title={orderToArchive.isArchived ? "Desarquivar Encomenda" : "Arquivar Encomenda"}
+          message={`Tem a certeza que deseja ${orderToArchive.isArchived ? 'desarquivar' : 'arquivar'} a encomenda ${orderToArchive.docNr}?`}
+          confirmText={orderToArchive.isArchived ? 'Desarquivar' : 'Arquivar'}
+          isDestructive={!orderToArchive.isArchived}
+          onConfirm={() => {
+            if (onArchiveOrder) {
+               onArchiveOrder(orderToArchive.docNr, !orderToArchive.isArchived);
+            }
+            setOrderToArchive(null);
+          }}
+          onCancel={() => setOrderToArchive(null)}
+        />
       )}
     </div>
   );

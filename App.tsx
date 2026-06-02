@@ -42,6 +42,9 @@ const App: React.FC = () => {
   // Estado para controlo de filtros vindos do dashboard
   const [activeDashboardFilter, setActiveDashboardFilter] = React.useState<ActiveFilterType>(null);
   
+  // Global search state
+  const [globalSearchTerm, setGlobalSearchTerm] = React.useState('');
+  
   // PWA Installation support
   const [deferredPrompt, setDeferredPrompt] = React.useState<any>(null);
   const [showInstallBanner, setShowInstallBanner] = React.useState(false);
@@ -502,6 +505,7 @@ const App: React.FC = () => {
                         stopReasonsHierarchy={stopReasons}
                         user={currentUser}
                         capacities={capacities}
+                        globalSearchTerm={globalSearchTerm}
                     />
                 </div>
             </div>
@@ -531,6 +535,7 @@ const App: React.FC = () => {
           onUpdateStopReason={handleUpdateStopReason}
           stopReasonsHierarchy={stopReasons}
           onArchiveOrder={handleArchiveOrder}
+          globalSearchTerm={globalSearchTerm}
         />;
       case 'timeline':
         if (!currentUser?.permissions?.timeline || currentUser?.permissions?.timeline === 'none') {
@@ -627,6 +632,15 @@ const App: React.FC = () => {
   const [pendingLoginUser, setPendingLoginUser] = React.useState<User | null>(null);
 
   // Se não estiver logado, mostra apenas o Login
+  const handleGlobalSearch = (term: string) => {
+    setGlobalSearchTerm(term);
+    if (term) {
+      if (activeView !== 'orders' && !activeView.startsWith('sector-')) {
+        handleSetActiveView('orders');
+      }
+    }
+  };
+
   if (!currentUser) {
     const doLogin = (user: User) => {
       // Determinar vista inicial baseada em permissões
@@ -759,6 +773,8 @@ const App: React.FC = () => {
         onLogout={() => setCurrentUser(null)}
         orders={orders}
         onViewDetails={handleViewDetails}
+        globalSearchTerm={globalSearchTerm}
+        onGlobalSearch={handleGlobalSearch}
       >
         {renderContent()}
       </Layout>

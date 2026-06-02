@@ -17,7 +17,8 @@ import {
   AlertTriangle,
   Calendar,
   Target,
-  Zap
+  Zap,
+  Search
 } from 'lucide-react';
 import { User, Order } from '../types';
 import { SECTORS } from '../constants';
@@ -33,9 +34,11 @@ interface LayoutProps {
   onLogout: () => void;
   orders: Order[];
   onViewDetails: (order: Order) => void;
+  globalSearchTerm?: string;
+  onGlobalSearch?: (term: string) => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, onImportClick, alertCount, user, onLogout, orders, onViewDetails }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, onImportClick, alertCount, user, onLogout, orders, onViewDetails, globalSearchTerm, onGlobalSearch }) => {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(window.innerWidth > 1024);
   const [isSectorsOpen, setIsSectorsOpen] = React.useState(false);
   const [isConfigOpen, setIsConfigOpen] = React.useState(false);
@@ -306,6 +309,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
             <div className="md:hidden flex items-center gap-2">
                 <h1 className="font-bold text-slate-800 dark:text-slate-100 text-sm">TexFlow</h1>
             </div>
+          </div>
+
+          {/* Global Search Bar */}
+          <div className="flex-1 max-w-md mx-4 hidden md:flex items-center relative">
+            <Search size={18} className="absolute left-3 text-slate-400 dark:text-slate-500" />
+            <input
+              type="text"
+              placeholder="Pesquisar Encomenda ou Artigo..."
+              value={globalSearchTerm || ''}
+              onChange={(e) => onGlobalSearch && onGlobalSearch(e.target.value)}
+              className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-full py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-200 outline-none transition-shadow"
+            />
           </div>
 
           <div className="flex items-center gap-2 md:gap-4 relative">
