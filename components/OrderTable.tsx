@@ -77,6 +77,26 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
   // Estado para controlar qual menu de prioridade está aberto
   const [openPriorityMenuId, setOpenPriorityMenuId] = React.useState<string | null>(null);
   const [orderToArchive, setOrderToArchive] = React.useState<Order | null>(null);
+  const [selectedOrderIds, setSelectedOrderIds] = React.useState<Set<string>>(new Set());
+  const [bulkArchiveConfirm, setBulkArchiveConfirm] = React.useState(false);
+  const [bulkUnarchiveConfirm, setBulkUnarchiveConfirm] = React.useState(false);
+  const [showMobileFilters, setShowMobileFilters] = React.useState(true);
+  const lastScrollTop = React.useRef(0);
+
+  const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (window.innerWidth >= 1280) return;
+    const scrollTop = e.currentTarget.scrollTop;
+    if (scrollTop > lastScrollTop.current && scrollTop > 50) {
+      if (showMobileFilters) {
+        setShowMobileFilters(false);
+      }
+    } else if (scrollTop === 0) {
+      if (!showMobileFilters) {
+        setShowMobileFilters(true);
+      }
+    }
+    lastScrollTop.current = scrollTop;
+  };
   
   // Ref para fechar menu ao clicar fora
   const menuRef = React.useRef<HTMLDivElement>(null);
@@ -285,6 +305,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
   }, [deferredSearch, filterDocSeries, filterComercial, filterReference, filterStatus, filterHasObservations, filterDate, filterPriority, filterManual, filterArchived]);
 
   React.useEffect(() => {
+    setSelectedOrderIds(new Set());
+  }, [deferredSearch, filterDocSeries, filterComercial, filterReference, filterStatus, filterHasObservations, filterDate, filterPriority, filterManual, filterArchived]);
+
+  React.useEffect(() => {
     setFilterComercial('All');
     setFilterReference('All');
   }, [filterDocSeries]);
@@ -459,6 +483,98 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
       }
   };
 
+  // Bulk Selection and Update Helpers
+  const allSelected = paginatedOrders.length > 0 && paginatedOrders.every(o => selectedOrderIds.has(o.id));
+  
+  const handleSelectAllToggle = () => {
+    const newSelected = new Set(selectedOrderIds);
+    if (allSelected) {
+      paginatedOrders.forEach(o => newSelected.delete(o.id));
+    } else {
+      paginatedOrders.forEach(o => newSelected.add(o.id));
+    }
+    setSelectedOrderIds(newSelected);
+  };
+
+  const handleToggleSelectOrder = (e: React.MouseEvent | React.ChangeEvent, orderId: string) => {
+    e.stopPropagation();
+    const newSelected = new Set(selectedOrderIds);
+    if (newSelected.has(orderId)) {
+      newSelected.delete(orderId);
+    } else {
+      newSelected.add(orderId);
+    }
+    setSelectedOrderIds(newSelected);
+  };
+
+  // List of distinct docNr's of selected orders (cross-page selection via full orders list)
+  const selectedDocNrs = React.useMemo(() => {
+    const list = orders.filter(o => selectedOrderIds.has(o.id));
+    return Array.from(new Set(list.map(o => o.docNr).filter(Boolean))) as string[];
+  }, [selectedOrderIds, orders]);
+
+  // Flattened distinct stop reasons from the hierarchy for the bulk select classification dropdown
+  const allReasonOptions = React.useMemo(() => {
+    const list: string[] = [];
+    stopReasonsHierarchy?.forEach((cat: any) => {
+      cat.reasons?.forEach((r: any) => {
+        if (r && typeof r === 'string') {
+          list.push(r);
+        } else if (r && typeof r === 'object' && r.name) {
+          list.push(r.name);
+        }
+      });
+    });
+    return Array.from(new Set(list)).sort();
+  }, [stopReasonsHierarchy]);
+
+  const handleBulkPriority = (priority: number) => {
+    if (onUpdatePriority && selectedDocNrs.length > 0) {
+      selectedDocNrs.forEach(docNr => {
+        onUpdatePriority(docNr, priority);
+      });
+      setSelectedOrderIds(new Set());
+    }
+  };
+
+  const handleBulkStopReason = (reason: string) => {
+    if (onUpdateStopReason && selectedDocNrs.length > 0) {
+      selectedDocNrs.forEach(docNr => {
+        onUpdateStopReason(docNr, 'planeamento', reason === 'none' ? '' : reason);
+      });
+      setSelectedOrderIds(new Set());
+    }
+  };
+
+  const handleBulkManual = (isManual: boolean) => {
+    if (onUpdateManual && selectedDocNrs.length > 0) {
+      selectedDocNrs.forEach(docNr => {
+        onUpdateManual(docNr, isManual);
+      });
+      setSelectedOrderIds(new Set());
+    }
+  };
+
+  const executeBulkArchive = () => {
+    if (onArchiveOrder && selectedDocNrs.length > 0) {
+      selectedDocNrs.forEach(docNr => {
+        onArchiveOrder(docNr, true);
+      });
+      setSelectedOrderIds(new Set());
+    }
+    setBulkArchiveConfirm(false);
+  };
+
+  const executeBulkUnarchive = () => {
+    if (onArchiveOrder && selectedDocNrs.length > 0) {
+      selectedDocNrs.forEach(docNr => {
+        onArchiveOrder(docNr, false);
+      });
+      setSelectedOrderIds(new Set());
+    }
+    setBulkUnarchiveConfirm(false);
+  };
+
   return (
     <div className="flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500">
       <div className="flex-shrink-0 p-4 md:p-6 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 transition-colors">
@@ -575,9 +691,54 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 </button>
                 )}
             </div>
+
+            {/* Small filter button on Mobile/Tablet */}
+            <div className="xl:hidden flex items-center">
+              <button
+                onClick={() => setShowMobileFilters(!showMobileFilters)}
+                className={`p-2 rounded-xl transition-all shadow-sm shrink-0 active:scale-95 border flex items-center gap-1.5 ${
+                  showMobileFilters 
+                    ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-600 dark:border-blue-600' 
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'
+                }`}
+                title={showMobileFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
+              >
+                <Filter size={15} className={showMobileFilters ? "fill-white/10" : "text-slate-400"} />
+                <span className="text-xs font-bold">{showMobileFilters ? "Ocultar" : "Filtros"}</span>
+                {/* Active filter count indicator */}
+                {(() => {
+                  let count = 0;
+                  if (searchTerm) count++;
+                  if (filterDate) count++;
+                  if (filterPriority !== 'All') count++;
+                  if (filterDocSeries !== 'All') count++;
+                  if (filterComercial !== 'All') count++;
+                  if (filterReference !== 'All') count++;
+                  if (filterStatus !== 'All') count++;
+                  if (filterArchived !== 'active') count++;
+                  if (filterManual) count++;
+                  if (filterHasObservations) count++;
+                  if (count > 0) {
+                    return (
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                        showMobileFilters ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
+                      }`}>
+                        {count}
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
+              </button>
+            </div>
           </div>
           
-          <div className="flex flex-col xl:flex-row gap-3">
+          <div className={`transition-all duration-300 ease-in-out xl:block ${
+            showMobileFilters 
+              ? 'max-h-[1400px] opacity-100 mt-2' 
+              : 'max-h-0 opacity-0 overflow-hidden mt-0 pointer-events-none'
+          }`}>
+            <div className="flex flex-col xl:flex-row gap-3 pt-3">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
               <input 
@@ -738,15 +899,41 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 )}
               </div>
             </div>
+            
+            {/* Collapse button at the bottom of the filters inside mobile/tablet */}
+            {showMobileFilters && (
+              <div className="xl:hidden flex justify-center mt-3 pt-2 border-t border-slate-200/50 dark:border-slate-850/50">
+                <button
+                  onClick={() => setShowMobileFilters(false)}
+                  className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 dark:hover:bg-slate-850 text-slate-500 dark:text-slate-400 font-bold rounded-lg text-[11px] transition-colors shadow-xs"
+                >
+                  <ChevronLeft size={12} className="rotate-90 text-slate-400" />
+                  <span>▲ Ocultar Filtros</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
+    </div>
       
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" onScroll={handleListScroll}>
         <div className="hidden md:block">
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-100 dark:bg-slate-900 sticky top-0 z-10 shadow-sm transition-colors">
               <tr>
+                {user?.permissions?.orders === 'write' && (
+                  <th className="px-4 py-4 w-[40px] text-center align-middle">
+                    <input 
+                      type="checkbox" 
+                      checked={allSelected} 
+                      onChange={handleSelectAllToggle}
+                      className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4 bg-white dark:bg-slate-800"
+                      onClick={(e) => e.stopPropagation()}
+                      title="Selecionar / Desmarcar todos na página"
+                    />
+                  </th>
+                )}
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap w-[15%]">
                     <div className="flex items-center gap-2">
                         Documento / PO
@@ -798,8 +985,19 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 <tr 
                   key={order.id} 
                   onClick={() => onViewDetails(order)}
-                  className={`hover:bg-blue-50 dark:hover:bg-slate-900 transition-colors group cursor-pointer ${order.isArchived ? 'opacity-50 bg-slate-50 dark:bg-slate-900/50' : ''}`}
+                  className={`hover:bg-blue-50 dark:hover:bg-slate-900 transition-colors group cursor-pointer ${order.isArchived ? 'opacity-50 bg-slate-50 dark:bg-slate-900/50' : ''} ${selectedOrderIds.has(order.id) ? 'bg-blue-50/50 dark:bg-slate-900/40' : ''}`}
                 >
+                  {user?.permissions?.orders === 'write' && (
+                    <td className="px-4 py-4 align-middle text-center" onClick={(e) => e.stopPropagation()}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedOrderIds.has(order.id)} 
+                        onChange={(e) => handleToggleSelectOrder(e, order.id)}
+                        className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4 bg-white dark:bg-slate-800"
+                        title="Selecionar encomenda"
+                      />
+                    </td>
+                  )}
                   <td className="px-6 py-4 align-top">
                     <div className="flex items-start gap-2">
                         <div className="flex flex-col gap-1.5 shrink-0 pt-0.5 items-center">
@@ -938,10 +1136,20 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
             <div 
               key={order.id}
               onClick={() => onViewDetails(order)}
-              className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800 transition-colors space-y-4"
+              className={`p-4 rounded-2xl border transition-colors space-y-4 ${selectedOrderIds.has(order.id) ? 'border-blue-300 dark:border-blue-700 bg-blue-50/20 dark:bg-blue-900/10' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800'}`}
             >
               <div className="flex justify-between items-start">
                 <div className="flex items-start gap-2">
+                   {user?.permissions?.orders === 'write' && (
+                     <div className="pt-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                       <input 
+                         type="checkbox" 
+                         checked={selectedOrderIds.has(order.id)} 
+                         onChange={(e) => handleToggleSelectOrder(e, order.id)}
+                         className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4 bg-white dark:bg-slate-800 mr-1"
+                       />
+                     </div>
+                   )}
                    {/* Mobile Flags Container */}
                     <div className="pt-0.5 flex flex-col gap-1 items-center">
                        <Flag size={16} className={getPriorityColor(order.priority || 0)} strokeWidth={2} />
@@ -1056,6 +1264,149 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
             setOrderToArchive(null);
           }}
           onCancel={() => setOrderToArchive(null)}
+        />
+      )}
+
+      {/* Floating Bulk Actions Bar */}
+      {selectedOrderIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] w-[92%] md:w-auto max-w-4xl bg-slate-900 border border-slate-800 shadow-2xl rounded-2xl flex flex-col md:flex-row items-center gap-4 py-3.5 pb-4 md:pb-3.5 px-5 text-white animate-in slide-in-from-bottom-5 duration-300 transition-all font-sans text-xs">
+          {/* Left item: Selection Info */}
+          <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+            <div className="flex items-center gap-2">
+              <div className="h-5 px-2 bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-lg flex items-center justify-center font-black">
+                {selectedOrderIds.size}
+              </div>
+              <span className="font-bold text-slate-200">Selecionadas</span>
+              <span className="text-slate-500 hidden md:inline">|</span>
+              <span className="text-slate-400 text-[10px] uppercase font-bold">({selectedDocNrs.length} Docs)</span>
+            </div>
+            
+            <button 
+              onClick={() => setSelectedOrderIds(new Set())}
+              className="px-2.5 py-1 bg-slate-850 hover:bg-slate-800 hover:text-white transition-colors text-slate-400 font-bold rounded-lg flex items-center gap-1 border border-slate-800"
+              title="Limpar seleção"
+            >
+              <X size={12} />
+              <span className="hidden md:inline">Limpar</span>
+            </button>
+          </div>
+
+          <div className="w-full md:w-px h-px md:h-6 bg-slate-800 my-1 md:my-0"></div>
+
+          {/* Core Bulk Action Options */}
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-center">
+            {/* Priority Select */}
+            {onUpdatePriority && (
+              <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors">
+                <Flag size={14} className="text-slate-400" />
+                <select
+                  className="bg-transparent outline-none text-xs font-bold text-slate-200 cursor-pointer"
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value !== "") {
+                      handleBulkPriority(Number(e.target.value));
+                      e.target.value = "";
+                    }
+                  }}
+                >
+                  <option value="" disabled className="bg-slate-900 text-slate-400">Prioridade...</option>
+                  <option value="1" className="bg-slate-900 text-red-400 font-bold">Alta</option>
+                  <option value="2" className="bg-slate-900 text-orange-400 font-bold">Média</option>
+                  <option value="3" className="bg-slate-900 text-yellow-500 font-bold">Baixa</option>
+                  <option value="0" className="bg-slate-900 text-slate-300">Sem Prioridade</option>
+                </select>
+              </div>
+            )}
+
+            {/* Classification Option */}
+            {onUpdateStopReason && (
+              <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors">
+                <Tag size={14} className="text-slate-400" />
+                <select
+                  className="bg-transparent outline-none text-xs font-bold text-slate-200 cursor-pointer max-w-[140px]"
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value !== "") {
+                      handleBulkStopReason(e.target.value);
+                      e.target.value = "";
+                    }
+                  }}
+                >
+                  <option value="" disabled className="bg-slate-900 text-slate-400">Classificação...</option>
+                  <option value="none" className="bg-slate-900 text-rose-400 font-bold">Limpar Classificação</option>
+                  {allReasonOptions.map(reason => (
+                    <option key={reason} value={reason} className="bg-slate-900 text-slate-200">{reason}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Manual Confection M Toggle */}
+            {onUpdateManual && (
+              <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors">
+                <span className="text-xs font-black text-indigo-400">M</span>
+                <select
+                  className="bg-transparent outline-none text-xs font-bold text-slate-200 cursor-pointer"
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value !== "") {
+                      handleBulkManual(e.target.value === "true");
+                      e.target.value = "";
+                    }
+                  }}
+                >
+                  <option value="" disabled className="bg-slate-900 text-slate-400">Confeção Manual...</option>
+                  <option value="true" className="bg-slate-900 text-slate-200">Sim (Manual)</option>
+                  <option value="false" className="bg-slate-900 text-slate-200">Não (Auto)</option>
+                </select>
+              </div>
+            )}
+
+            {/* Admin Archive Actions */}
+            {user?.role === 'admin' && onArchiveOrder && (
+              <div className="flex items-center gap-2 border-l border-slate-800 md:pl-2">
+                <button
+                  onClick={() => setBulkArchiveConfirm(true)}
+                  className="px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600 border border-amber-500/30 hover:border-amber-500 text-amber-300 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+                  title="Arquivar encomendas selecionadas"
+                >
+                  <Archive size={14} />
+                  <span>Arquivar</span>
+                </button>
+                <button
+                  onClick={() => setBulkUnarchiveConfirm(true)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+                  title="Desarquivar encomendas selecionadas"
+                >
+                  <ArchiveRestore size={14} />
+                  <span>Desarquivar</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modals for Bulk Actions */}
+      {bulkArchiveConfirm && (
+        <ConfirmModal 
+          title="Arquivar Encomendas em Lote"
+          message={`Tem a certeza que deseja arquivar as ${selectedOrderIds.size} encomendas selecionadas (${selectedDocNrs.length} documentos únicos)?`}
+          confirmText="Sim, Arquivar"
+          isDestructive={true}
+          onConfirm={executeBulkArchive}
+          onCancel={() => setBulkArchiveConfirm(false)}
+        />
+      )}
+
+      {bulkUnarchiveConfirm && (
+        <ConfirmModal 
+          title="Desarquivar Encomendas em Lote"
+          message={`Tem a certeza que deseja desarquivar as ${selectedOrderIds.size} encomendas selecionadas (${selectedDocNrs.length} documentos únicos)?`}
+          confirmText="Sim, Desarquivar"
+          isDestructive={false}
+          onConfirm={executeBulkUnarchive}
+          onCancel={() => setBulkUnarchiveConfirm(false)}
         />
       )}
     </div>

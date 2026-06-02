@@ -40,6 +40,7 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, onImportClick, alertCount, user, onLogout, orders, onViewDetails, globalSearchTerm, onGlobalSearch }) => {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(window.innerWidth > 1024);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isSectorsOpen, setIsSectorsOpen] = React.useState(false);
   const [isConfigOpen, setIsConfigOpen] = React.useState(false);
   const [isProductionOpen, setIsProductionOpen] = React.useState(false);
@@ -298,6 +299,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
       <div className="flex-1 flex flex-col min-w-0 relative h-full">
         <header className="h-14 md:h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 z-40 transition-colors duration-300">
           <div className="flex items-center gap-3">
+            {/* Hamburger menu / Sidebar toggler */}
+            <button 
+              onClick={() => {
+                setIsMobileMenuOpen(!isMobileMenuOpen);
+              }}
+              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 md:hidden"
+            >
+              <Menu size={20} />
+            </button>
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               className="hidden md:p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 md:block"
@@ -471,6 +481,291 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
           <span className="text-[10px] font-bold uppercase tracking-tighter">Importar</span>
         </button>
       </nav>
+
+      {/* Mobile Drawer Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/65 backdrop-blur-xs z-[60] md:hidden animate-in fade-in duration-200"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+      
+      {/* Mobile Menu Slide-out (Drawer) */}
+      <aside 
+        className={`fixed top-0 bottom-0 left-0 w-72 bg-slate-900 dark:bg-slate-950 text-white z-[70] transition-transform duration-300 ease-in-out md:hidden flex flex-col shadow-2xl border-r border-slate-800 ${
+          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center font-bold text-lg">TF</div>
+            <span className="font-bold text-xl tracking-tight">TexFlow</span>
+          </div>
+          <button 
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Global Search in Mobile Menu */}
+        <div className="p-4 border-b border-slate-800 bg-slate-950/40">
+          <div className="flex items-center relative w-full">
+            <Search size={16} className="absolute left-3 text-slate-505" />
+            <input
+              type="text"
+              placeholder="Pesquisar Encomenda ou Artigo..."
+              value={globalSearchTerm || ''}
+              onChange={(e) => {
+                onGlobalSearch && onGlobalSearch(e.target.value);
+              }}
+              className="w-full bg-slate-800 border-none rounded-xl py-2 pl-9 pr-4 text-xs text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none"
+            />
+          </div>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+          <ul className="space-y-1">
+            {menuItems.map((item) => (
+              <li key={item.id}>
+                <button
+                  onClick={() => {
+                    setActiveView(item.id);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-sm ${
+                    activeView === item.id || (item.id === 'orders' && activeView === 'order-details')
+                      ? 'bg-blue-600 text-white shadow-lg' 
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <item.icon size={18} />
+                  <span className="font-medium">{item.label}</span>
+                </button>
+              </li>
+            ))}
+
+            {/* Sectores Dropdown */}
+            {visibleSectors.length > 0 && (
+              <li>
+                <button
+                  onClick={() => setIsSectorsOpen(!isSectorsOpen)}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors text-sm ${
+                    activeView.startsWith('sector-')
+                      ? 'text-white bg-slate-800 font-bold' 
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Layers size={18} />
+                    <span className="font-medium">Sectores</span>
+                  </div>
+                  {isSectorsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+
+                {/* Submenu Sectores */}
+                {isSectorsOpen && (
+                  <ul className="mt-1 ml-4 space-y-1 border-l border-slate-700 pl-2 animate-in slide-in-from-top-1 duration-200">
+                    {visibleSectors.map((sector) => {
+                      const SectorIcon = sector.icon;
+                      const isActive = activeView === `sector-${sector.id}`;
+                      return (
+                        <li key={sector.id}>
+                          <button
+                            onClick={() => {
+                              handleSectorClick(sector.id);
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-xs ${
+                              isActive
+                                ? 'text-blue-400 bg-slate-800/50 font-black' 
+                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                            }`}
+                          >
+                            <SectorIcon size={14} />
+                            <span>{sector.name}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </li>
+            )}
+
+            {/* Controlo de Produção - Admin only */}
+            {user?.role === 'admin' && (
+              <li>
+                <button
+                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors text-sm ${
+                    activeView === 'bottleneck' || activeView === 'production-capacity font-bold'
+                      ? 'text-white bg-slate-800'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
+                  onClick={() => setIsProductionOpen(!isProductionOpen)}
+                >
+                  <div className="flex items-center gap-3">
+                    <Target size={18} />
+                    <span className="font-medium">Controlo Produção</span>
+                  </div>
+                  {isProductionOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+                {isProductionOpen && (
+                  <ul className="mt-1 ml-4 space-y-1 border-l border-slate-700 pl-2 animate-in slide-in-from-top-1 duration-200">
+                    <li>
+                      <button
+                        onClick={() => {
+                          setActiveView('bottleneck');
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-xs ${
+                          activeView === 'bottleneck'
+                            ? 'text-blue-400 bg-slate-800/50 font-black'
+                            : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                        }`}
+                      >
+                        <Target size={14} />
+                        <span>Análise de Gargalos</span>
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        onClick={() => {
+                          setActiveView('production-capacity');
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-xs ${
+                          activeView === 'production-capacity'
+                            ? 'text-blue-400 bg-slate-800/50 font-black'
+                            : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                        }`}
+                      >
+                        <Zap size={14} />
+                        <span>Capacidades</span>
+                      </button>
+                    </li>
+                  </ul>
+                )}
+              </li>
+            )}
+
+            {/* Configurações Dropdown */}
+            {hasConfigAccess && (
+              <li>
+                <button
+                  onClick={() => setIsConfigOpen(!isConfigOpen)}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors text-sm ${
+                    activeView.startsWith('config') || activeView === 'stop-reasons'
+                      ? 'text-white bg-slate-800 font-bold' 
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Settings size={18} />
+                    <span className="font-medium">Configurações</span>
+                  </div>
+                  {isConfigOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+
+                {/* Submenu Configurações */}
+                {isConfigOpen && (
+                  <ul className="mt-1 ml-4 space-y-1 border-l border-slate-700 pl-2 animate-in slide-in-from-top-1 duration-200">
+                    {user?.permissions?.config !== 'none' && (
+                      <>
+                        <li>
+                          <button
+                            onClick={() => {
+                              setActiveView('config');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-xs ${
+                              activeView === 'config' || activeView === 'config-general'
+                                ? 'text-blue-400 bg-slate-800/50 font-black'
+                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                            }`}
+                          >
+                            <Settings size={14} />
+                            <span>Geral</span>
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            onClick={() => {
+                              setActiveView('config-users');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-xs ${
+                              activeView === 'config-users'
+                                ? 'text-blue-400 bg-slate-800/50 font-black'
+                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                            }`}
+                          >
+                            <UserIcon size={14} />
+                            <span>Utilizadores</span>
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            onClick={() => {
+                              setActiveView('config-stop-reasons');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-xs ${
+                              activeView === 'config-stop-reasons'
+                                ? 'text-blue-400 bg-slate-800/50 font-black'
+                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                            }`}
+                          >
+                            <AlertTriangle size={14} />
+                            <span>Motivos de Paragem</span>
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            onClick={() => {
+                              setActiveView('config-export-columns');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-xs ${
+                              activeView === 'config-export-columns'
+                                ? 'text-blue-400 bg-slate-800/50 font-black'
+                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                            }`}
+                          >
+                            <Layers size={14} />
+                            <span>Tabelas Editáveis</span>
+                          </button>
+                        </li>
+                      </>
+                    )}
+                  </ul>
+                )}
+              </li>
+            )}
+          </ul>
+        </nav>
+
+        {/* User profile & logout in mobile drawer */}
+        <div className="p-4 border-t border-slate-800 bg-slate-950 flex flex-col gap-3">
+          <div className="flex items-center justify-between pb-1">
+            <div className="min-w-0">
+              <p className="text-xs font-black text-slate-100 truncate">{user?.name || 'Utilizador'}</p>
+              <p className="text-[10px] text-slate-400 uppercase font-black">{user?.role === 'admin' ? 'Administrador' : 'Leitura'}</p>
+            </div>
+            <button 
+              onClick={() => {
+                onLogout();
+                setIsMobileMenuOpen(false);
+              }}
+              className="p-2 rounded-xl text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 transition-colors"
+              title="Terminar Sessão"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        </div>
+      </aside>
     </div>
   );
 };

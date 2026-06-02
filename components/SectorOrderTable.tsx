@@ -11,7 +11,8 @@ import {
   Check,
   AlertCircle,
   AlertTriangle,
-  Zap
+  Zap,
+  Filter
 } from 'lucide-react';
 import { Order, Sector, User, ProductionCapacity } from '../types';
 import { formatDate } from '../utils/formatters';
@@ -64,6 +65,23 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
   const [searchTerm, setSearchTerm] = React.useState('');
   const deferredSearch = React.useDeferredValue(searchTerm);
   const [currentPage, setCurrentPage] = React.useState(1);
+  const [showMobileFilters, setShowMobileFilters] = React.useState(true);
+  const lastScrollTop = React.useRef(0);
+
+  const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (window.innerWidth >= 1280) return;
+    const scrollTop = e.currentTarget.scrollTop;
+    if (scrollTop > lastScrollTop.current && scrollTop > 50) {
+      if (showMobileFilters) {
+        setShowMobileFilters(false);
+      }
+    } else if (scrollTop === 0) {
+      if (!showMobileFilters) {
+        setShowMobileFilters(true);
+      }
+    }
+    lastScrollTop.current = scrollTop;
+  };
   
   // State for column widths
   const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>(() => {
@@ -229,34 +247,77 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
 
   return (
     <div className="flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500">
-      {/* Header / Toolbar */}
-      <div className="flex-shrink-0 p-4 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-        <div className="flex flex-col md:flex-row gap-3 justify-between items-center">
-          <div className="relative flex-1 w-full md:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-            <input 
-              type="text" 
-              placeholder="Pesquisar..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm transition-all dark:text-white"
-            />
-          </div>
-          
+      {/* Mobile/Tablet Header Row */}
+      <div className="xl:hidden flex justify-between items-center p-3.5 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
+        <span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Painel de Pesquisa</span>
+        <button
+          onClick={() => setShowMobileFilters(!showMobileFilters)}
+          className={`p-1.5 rounded-xl border transition-all active:scale-95 flex items-center gap-1.5 ${
+            showMobileFilters 
+              ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-600 dark:border-blue-600' 
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'
+          }`}
+          title={showMobileFilters ? "Ocultar Pesquisa" : "Mostrar Pesquisa"}
+        >
+          <Filter size={14} className={showMobileFilters ? "fill-white/10" : "text-slate-500"} />
+          <span className="text-xs font-bold">{showMobileFilters ? "Ocultar" : "Mostrar"}</span>
           {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl p-2 shadow-sm transition-colors active:scale-95"
-              title="Limpar pesquisa"
-            >
-              <RotateCcw size={16} />
-            </button>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+              showMobileFilters ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
+            }`}>
+              1
+            </span>
+          )}
+        </button>
+      </div>
+
+      <div className={`transition-all duration-300 ease-in-out xl:block ${
+        showMobileFilters 
+          ? 'max-h-[300px] opacity-100' 
+          : 'max-h-0 opacity-0 overflow-hidden pointer-events-none'
+      }`}>
+        {/* Header / Toolbar */}
+        <div className="flex-shrink-0 p-4 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
+          <div className="flex flex-col md:flex-row gap-3 justify-between items-center">
+            <div className="relative flex-1 w-full md:max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <input 
+                type="text" 
+                placeholder="Pesquisar..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm transition-all dark:text-white"
+              />
+            </div>
+            
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl p-2 shadow-sm transition-colors active:scale-95"
+                title="Limpar pesquisa"
+              >
+                <RotateCcw size={16} />
+              </button>
+            )}
+          </div>
+
+          {/* Collapse button at the bottom of the filters inside mobile/tablet */}
+          {showMobileFilters && (
+            <div className="xl:hidden flex justify-center mt-3">
+              <button
+                onClick={() => setShowMobileFilters(false)}
+                className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 dark:hover:bg-slate-850 text-slate-500 dark:text-slate-400 font-bold rounded-lg text-[11px] transition-colors shadow-xs"
+              >
+                <ChevronLeft size={12} className="rotate-90 text-slate-400" />
+                <span>▲ Ocultar Pesquisa</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-y-auto w-full overflow-x-auto relative">
+      <div className="flex-1 overflow-y-auto w-full overflow-x-auto relative" onScroll={handleListScroll}>
         <table className="min-w-full w-max text-left border-collapse table-fixed">
           <thead className="bg-slate-100 dark:bg-slate-900 sticky top-0 z-20 shadow-sm">
             <tr>

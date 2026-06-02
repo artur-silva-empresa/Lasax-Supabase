@@ -90,16 +90,16 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ order, onClose, onUpdateOrd
         </header>
 
         {/* 3-Column Content Layout */}
-        <div className="flex-1 flex overflow-hidden px-6 pb-2 gap-6">
+        <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden px-4 lg:px-6 pb-16 lg:pb-2 gap-6">
 
             {/* Combined Column 1 & 2: FLUXO + OBS (Vertical Scrollable) */}
-            <main className="flex-1 flex flex-col min-w-0">
+            <main className="flex-1 flex flex-col min-w-0 lg:overflow-hidden">
                 <div className="grid grid-cols-[96px_1fr] gap-6 mb-3 px-2">
-                    <h3 className="text-[9px] font-black text-[#94a3b8] dark:text-slate-500 uppercase tracking-widest text-center">Fluxo de Produção</h3>
+                    <h3 className="text-[9px] font-black text-[#94a3b8] dark:text-slate-500 uppercase tracking-widest text-center animate-pulse">Fluxo de Produção</h3>
                     <h3 className="text-xs font-black text-[#1e293b] dark:text-slate-200 uppercase tracking-tight text-center">Histórico de Observações</h3>
                 </div>
 
-                <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar">
+                <div className="flex-1 lg:overflow-y-auto pr-0 lg:pr-4 custom-scrollbar">
                     <div className="space-y-6 pb-4">
                         {SECTORS.map((s) => {
                             const sectorState = getSectorState(order, s.id);
@@ -221,7 +221,7 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ order, onClose, onUpdateOrd
             </main>
 
             {/* Column 3: Info (Right) */}
-            <aside className="w-72 shrink-0 flex flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar">
+            <aside className="w-full lg:w-72 shrink-0 flex flex-col gap-4 lg:overflow-y-auto pr-0 lg:pr-1 custom-scrollbar">
 
                 {/* QTD EM FALTA Card */}
                 <section className="bg-[#0f172a] rounded-3xl p-6 text-white shadow-xl flex flex-col justify-center border border-slate-800">
