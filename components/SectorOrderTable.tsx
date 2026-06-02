@@ -30,11 +30,90 @@ interface SectorOrderTableProps {
 
 const ITEMS_PER_PAGE = 50;
 
+const ResizableHeader = ({ 
+  colId, 
+  title, 
+  width, 
+  onResize, 
+  className = '' 
+}: { 
+  colId: string, 
+  title: React.ReactNode, 
+  width?: number, 
+  onResize: (id: string, e: React.MouseEvent | React.TouchEvent) => void,
+  className?: string 
+}) => {
+  return (
+    <th 
+      className={`relative px-4 py-3 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest group ${className}`}
+      style={width ? { width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` } : {}}
+    >
+      <div className="truncate w-full">{title}</div>
+      <div 
+        onMouseDown={(e) => onResize(colId, e)}
+        onTouchStart={(e) => onResize(colId, e)}
+        className="absolute right-0 top-0 h-full w-4 cursor-col-resize hover:bg-blue-400/50 active:bg-blue-500 z-10"
+        style={{ transform: 'translateX(50%)' }}
+      />
+    </th>
+  );
+};
+
 const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onViewDetails, onUpdateOrder, stopReasonsHierarchy, user, capacities = [] }) => {
   const [searchTerm, setSearchTerm] = React.useState('');
   const deferredSearch = React.useDeferredValue(searchTerm);
   const [currentPage, setCurrentPage] = React.useState(1);
   
+  // State for column widths
+  const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('sector_table_col_widths');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const handleColResize = React.useCallback((colId: string, e: React.MouseEvent | React.TouchEvent) => {
+    // e.preventDefault();
+    const th = (e.target as HTMLElement).closest('th');
+    if (!th) return;
+    
+    // Determine start coordinate
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const startX = clientX;
+    const startWidth = th.offsetWidth;
+    let finalWidth = startWidth;
+
+    const onMove = (moveEvent: MouseEvent | TouchEvent) => {
+      const currentX = 'touches' in moveEvent ? moveEvent.touches[0].clientX : (moveEvent as MouseEvent).clientX;
+      finalWidth = Math.max(60, startWidth + (currentX - startX));
+      setColumnWidths(prev => ({ ...prev, [colId]: finalWidth }));
+    };
+
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchend', onUp);
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = 'auto';
+      
+      setColumnWidths(prev => {
+        const next = { ...prev, [colId]: finalWidth };
+        localStorage.setItem('sector_table_col_widths', JSON.stringify(next));
+        return next;
+      });
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, { passive: true });
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchend', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
   // State for inline editing
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editObs, setEditObs] = React.useState('');
@@ -171,20 +250,20 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-y-auto">
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-100 dark:bg-slate-900 sticky top-0 z-10 shadow-sm">
+      <div className="flex-1 overflow-y-auto w-full overflow-x-auto relative">
+        <table className="min-w-full w-max text-left border-collapse table-fixed">
+          <thead className="bg-slate-100 dark:bg-slate-900 sticky top-0 z-20 shadow-sm">
             <tr>
-              <th className="px-4 py-3 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap">Doc. Nr.</th>
-              <th className="px-4 py-3 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap">Cliente</th>
-              <th className="px-4 py-3 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap">Ref / Cor</th>
-              <th className="px-4 py-3 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap">Medida / Família</th>
-              <th className="px-4 py-3 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Qtd. Ped / Prod</th>
-              <th className="px-4 py-3 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Cap. / Dias Est.</th>
-              <th className="px-4 py-3 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Data Saída</th>
-              <th className="px-4 py-3 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center w-[10%]">Data Prevista</th>
-              <th className="px-4 py-3 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center w-[10%]">Classificação</th>
-              <th className="px-4 py-3 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest w-[15%]">Observações</th>
+              <ResizableHeader colId="doc" title="Doc. Nr." width={columnWidths['doc'] || 100} onResize={handleColResize} className="whitespace-nowrap" />
+              <ResizableHeader colId="client" title="Cliente" width={columnWidths['client'] || 150} onResize={handleColResize} className="whitespace-nowrap" />
+              <ResizableHeader colId="ref" title="Ref / Cor" width={columnWidths['ref'] || 120} onResize={handleColResize} className="whitespace-nowrap" />
+              <ResizableHeader colId="size" title="Medida / Família" width={columnWidths['size'] || 140} onResize={handleColResize} className="whitespace-nowrap" />
+              <ResizableHeader colId="qty" title="Qtd. Ped / Prod" width={columnWidths['qty'] || 120} onResize={handleColResize} className="text-center" />
+              <ResizableHeader colId="cap" title="Cap. / Dias Est." width={columnWidths['cap'] || 120} onResize={handleColResize} className="text-center" />
+              <ResizableHeader colId="exitDate" title="Data Saída" width={columnWidths['exitDate'] || 100} onResize={handleColResize} className="text-center" />
+              <ResizableHeader colId="predDate" title="Data Prevista" width={columnWidths['predDate'] || 120} onResize={handleColResize} className="text-center" />
+              <ResizableHeader colId="class" title="Classificação" width={columnWidths['class'] || 180} onResize={handleColResize} className="text-center" />
+              <ResizableHeader colId="obs" title="Observações" width={columnWidths['obs'] || 200} onResize={handleColResize} />
               <th className="px-2 py-3 w-[50px]"></th>
             </tr>
           </thead>
@@ -203,18 +282,18 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                   onClick={() => !isEditing && onViewDetails(order)}
                   className={`hover:bg-blue-50 dark:hover:bg-slate-900 transition-colors group ${isEditing ? 'bg-blue-50 dark:bg-slate-900' : 'cursor-pointer'}`}
                 >
-                  <td className="px-4 py-3 align-top font-bold text-sm text-slate-800 dark:text-slate-200">{order.docNr}</td>
-                  <td className="px-4 py-3 align-top text-xs font-medium text-slate-600 dark:text-slate-300 truncate max-w-[150px]" title={order.clientName}>{order.clientName}</td>
-                  <td className="px-4 py-3 align-top">
+                  <td className="px-4 py-3 align-top font-bold text-sm text-slate-800 dark:text-slate-200 truncate max-w-0">{order.docNr}</td>
+                  <td className="px-4 py-3 align-top text-xs font-medium text-slate-600 dark:text-slate-300 truncate max-w-0" title={order.clientName}>{order.clientName}</td>
+                  <td className="px-4 py-3 align-top overflow-hidden max-w-0">
                     <div className="flex flex-col">
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{order.reference}</span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[120px]">{order.colorDesc}</span>
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{order.reference}</span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{order.colorDesc}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 align-top">
+                  <td className="px-4 py-3 align-top overflow-hidden max-w-0">
                     <div className="flex flex-col">
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{order.sizeDesc}</span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400">{order.family}</span>
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{order.sizeDesc}</span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{order.family}</span>
                     </div>
                   </td>
                   <td className="px-4 py-3 align-top text-center">

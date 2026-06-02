@@ -121,3 +121,6 @@ $$ language 'plpgsql';
 CREATE TRIGGER update_users_modtime BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 CREATE TRIGGER update_orders_modtime BEFORE UPDATE ON public.orders FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 CREATE TRIGGER update_capacities_modtime BEFORE UPDATE ON public.production_capacities FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+
+-- Enable Realtime for orders table
+ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;

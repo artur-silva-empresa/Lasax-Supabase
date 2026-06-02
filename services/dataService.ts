@@ -1,6 +1,7 @@
 
 import * as XLSX from 'xlsx';
 import initSqlJs from 'sql.js';
+import { supabase } from '../src/services/supabase';
 import { Order, OrderState, SectorState, DashboardKPIs, User, UserRole, PermissionLevel } from '../types';
 import { parseExcelDate, formatDate } from '../utils/formatters';
 import { SECTORS } from '../constants';
@@ -88,36 +89,67 @@ export const hashPassword = async (password: string): Promise<string> => {
 };
 
 export const saveUserToDB = async (user: User) => {
-    const db = await initDB();
-    return new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_USERS, 'readwrite');
-        tx.objectStore(STORE_USERS).put(user);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
+    const { error } = await supabase.from('users').upsert({
+        id: user.id,
+        username: user.username,
+        password_hash: user.passwordHash,
+        role: user.role,
+        name: user.name,
+        permissions: user.permissions
     });
+    if (error) console.error("Error saving user", error);
 };
 
 export const deleteUserFromDB = async (userId: string) => {
-    const db = await initDB();
-    return new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_USERS, 'readwrite');
-        tx.objectStore(STORE_USERS).delete(userId);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
+    const { error } = await supabase.from('users').delete().eq('id', userId);
+    if (error) console.error("Error deleting user", error);
 };
 
 export const loadUsersFromDB = async (): Promise<User[]> => {
-    const db = await initDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_USERS, 'readonly');
-        const req = tx.objectStore(STORE_USERS).getAll();
-        tx.oncomplete = () => resolve(req.result || []);
-        tx.onerror = () => reject(tx.error);
-    });
+    const { data: users, error } = await supabase.from('users').select('*');
+    if (error) {
+        console.error("Error loading users", error);
+        return [];
+    }
+    return (users || []).map((u: any) => ({
+        id: u.id,
+        username: u.username,
+        passwordHash: u.password_hash,
+        role: u.role,
+        name: u.name,
+        permissions: u.permissions
+    }));
 };
 
 export const initializeDefaultUsers = async () => {
+    // Migrate local uses to Supabase first
+    try {
+        const db = await initDB();
+        const localUsers: User[] = await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_USERS, 'readonly');
+            const req = tx.objectStore(STORE_USERS).getAll();
+            tx.oncomplete = () => resolve(req.result || []);
+            tx.onerror = () => reject(tx.error);
+        });
+
+        if (localUsers.length > 0) {
+            console.log(`Migrating ${localUsers.length} local users to Supabase...`);
+            for (const user of localUsers) {
+                await saveUserToDB(user);
+            }
+            // Clear local users to prevent re-migration
+            await new Promise<void>((resolve, reject) => {
+                const tx = db.transaction(STORE_USERS, 'readwrite');
+                tx.objectStore(STORE_USERS).clear();
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+            console.log("Migration complete.");
+        }
+    } catch (e) {
+        console.warn("Could not migrate local users", e);
+    }
+
     const users = await loadUsersFromDB();
     if (users.length === 0) {
         const adminPerms: any = {
@@ -167,92 +199,233 @@ export const initializeDefaultUsers = async () => {
 };
 
 export const saveStopReasonsToDB = async (hierarchy: any[]) => {
-    const db = await initDB();
-    return new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_STOP_REASONS, 'readwrite');
-        tx.objectStore(STORE_STOP_REASONS).put(hierarchy, 'main_hierarchy');
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
+    const { error } = await supabase.from('app_state').upsert({
+        key: 'main_hierarchy',
+        value: hierarchy
     });
+    if(error) console.error("Error saving stop reasons", error);
 };
 
 export const loadStopReasonsFromDB = async (): Promise<any[] | null> => {
-    const db = await initDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_STOP_REASONS, 'readonly');
-        const req = tx.objectStore(STORE_STOP_REASONS).get('main_hierarchy');
-        tx.oncomplete = () => resolve(req.result || null);
-        tx.onerror = () => resolve(null);
-    });
+    const { data, error } = await supabase.from('app_state').select('value').eq('key', 'main_hierarchy').single();
+    if (error || !data) return null;
+    return data.value;
 };
 
 export const saveOrdersToDB = async (orders: Order[], headers: Record<string, string>) => {
-    const db = await initDB();
-    return new Promise<void>((resolve, reject) => {
-        const tx = db.transaction([STORE_ORDERS, STORE_HEADERS], 'readwrite');
-        tx.objectStore(STORE_ORDERS).put(orders, 'main_list');
-        tx.objectStore(STORE_HEADERS).put(headers, 'main_headers');
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
+    // save headers
+    await supabase.from('app_state').upsert({ key: 'main_headers', value: headers });
+    
+    // filter incomplete fields that could cause problems
+    const toInsert = orders.map(o => ({
+        id: o.id,
+        doc_series: o.docSeries || '',
+        doc_nr: o.docNr,
+        client_code: o.clientCode || '',
+        client_name: o.clientName || '',
+        comercial: o.comercial || '',
+        issue_date: o.issueDate,
+        requested_date: o.requestedDate,
+        item_nr: o.itemNr,
+        po: o.po || '',
+        article_code: o.articleCode || '',
+        reference: o.reference || '',
+        color_code: o.colorCode || '',
+        color_desc: o.colorDesc || '',
+        size: o.size || '',
+        family: o.family || '',
+        size_desc: o.sizeDesc || '',
+        ean: o.ean || '',
+        qty_requested: o.qtyRequested || 0,
+        data_tec: o.dataTec,
+        felpo_cru_qty: o.felpoCruQty || 0,
+        felpo_cru_date: o.felpoCruDate,
+        tinturaria_qty: o.tinturariaQty || 0,
+        tinturaria_date: o.tinturariaDate,
+        conf_roupoes_qty: o.confRoupoesQty || 0,
+        conf_felpos_qty: o.confFelposQty || 0,
+        conf_date: o.confDate,
+        emb_acab_qty: o.embAcabQty || 0,
+        arm_exp_date: o.armExpDate,
+        stock_cx_qty: o.stockCxQty || 0,
+        data_ent: o.dataEnt,
+        data_especial: o.dataEspecial,
+        data_printer: o.dataPrinter,
+        data_debuxo: o.dataDebuxo,
+        data_amostras: o.dataAmostras,
+        data_bordados: o.dataBordados,
+        qty_billed: o.qtyBilled || 0,
+        qty_open: o.qtyOpen || 0,
+        priority: o.priority || 0,
+        is_manual: o.isManual || false,
+        is_archived: o.isArchived || false,
+        archived_at: o.archivedAt,
+        archived_by: o.archivedBy,
+        sector_stop_reasons: o.sectorStopReasons || {},
+        sector_observations: o.sectorObservations || {},
+        sector_predicted_dates: o.sectorPredictedDates || {},
+        sector_predicted_dates_pending: o.sectorPredictedDatesPending || {}
+    }));
+
+    // upsert in batches of 250
+    for (let i = 0; i < toInsert.length; i += 250) {
+        const batch = toInsert.slice(i, i + 250);
+        const { error } = await supabase.from('orders').upsert(batch);
+        if (error) console.error("Error saving orders batch", error);
+    }
+};
+
+export const saveOrderToDB = async (order: Order) => {
+    const o = order;
+    const toInsert = {
+        id: o.id,
+        doc_series: o.docSeries || '',
+        doc_nr: o.docNr,
+        client_code: o.clientCode || '',
+        client_name: o.clientName || '',
+        comercial: o.comercial || '',
+        issue_date: o.issueDate,
+        requested_date: o.requestedDate,
+        item_nr: o.itemNr,
+        po: o.po || '',
+        article_code: o.articleCode || '',
+        reference: o.reference || '',
+        color_code: o.colorCode || '',
+        color_desc: o.colorDesc || '',
+        size: o.size || '',
+        family: o.family || '',
+        size_desc: o.sizeDesc || '',
+        ean: o.ean || '',
+        qty_requested: o.qtyRequested || 0,
+        data_tec: o.dataTec,
+        felpo_cru_qty: o.felpoCruQty || 0,
+        felpo_cru_date: o.felpoCruDate,
+        tinturaria_qty: o.tinturariaQty || 0,
+        tinturaria_date: o.tinturariaDate,
+        conf_roupoes_qty: o.confRoupoesQty || 0,
+        conf_felpos_qty: o.confFelposQty || 0,
+        conf_date: o.confDate,
+        emb_acab_qty: o.embAcabQty || 0,
+        arm_exp_date: o.armExpDate,
+        stock_cx_qty: o.stockCxQty || 0,
+        data_ent: o.dataEnt,
+        data_especial: o.dataEspecial,
+        data_printer: o.dataPrinter,
+        data_debuxo: o.dataDebuxo,
+        data_amostras: o.dataAmostras,
+        data_bordados: o.dataBordados,
+        qty_billed: o.qtyBilled || 0,
+        qty_open: o.qtyOpen || 0,
+        priority: o.priority || 0,
+        is_manual: o.isManual || false,
+        is_archived: o.isArchived || false,
+        archived_at: o.archivedAt,
+        archived_by: o.archivedBy,
+        sector_stop_reasons: o.sectorStopReasons || {},
+        sector_observations: o.sectorObservations || {},
+        sector_predicted_dates: o.sectorPredictedDates || {},
+        sector_predicted_dates_pending: o.sectorPredictedDatesPending || {}
+    };
+
+    const { error } = await supabase.from('orders').upsert(toInsert);
+    if (error) console.error("Error saving single order", error);
 };
 
 export const loadOrdersFromDB = async (): Promise<{orders: Order[], headers: Record<string, string>} | null> => {
-    const db = await initDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction([STORE_ORDERS, STORE_HEADERS], 'readonly');
-        const reqOrders = tx.objectStore(STORE_ORDERS).get('main_list');
-        const reqHeaders = tx.objectStore(STORE_HEADERS).get('main_headers');
-        
-        tx.oncomplete = () => {
-            if (reqOrders.result) {
-                const hydratedOrders = (reqOrders.result as any[]).map(o => {
-                    // BUG 5 CORRIGIDO: hidratação completa de todos os campos Date.
-                    // Antes, dataEspecial, dataPrinter, dataDebuxo, dataAmostras, dataBordados,
-                    // archivedAt e as datas dentro de sectorPredictedDates ficavam como strings.
-                    const hydratedPredictedDates: Record<string, Date | null> = {};
-                    if (o.sectorPredictedDates && typeof o.sectorPredictedDates === 'object') {
-                        Object.entries(o.sectorPredictedDates).forEach(([k, v]) => {
-                            hydratedPredictedDates[k] = v ? new Date(v as string) : null;
-                        });
-                    }
-                    return {
-                        ...o,
-                        issueDate:       o.issueDate       ? new Date(o.issueDate)       : null,
-                        requestedDate:   o.requestedDate   ? new Date(o.requestedDate)   : null,
-                        dataTec:         o.dataTec         ? new Date(o.dataTec)         : null,
-                        felpoCruDate:    o.felpoCruDate    ? new Date(o.felpoCruDate)    : null,
-                        tinturariaDate:  o.tinturariaDate  ? new Date(o.tinturariaDate)  : null,
-                        confDate:        o.confDate        ? new Date(o.confDate)        : null,
-                        armExpDate:      o.armExpDate      ? new Date(o.armExpDate)      : null,
-                        dataEnt:         o.dataEnt         ? new Date(o.dataEnt)         : null,
-                        dataEspecial:    o.dataEspecial    ? new Date(o.dataEspecial)    : null,
-                        dataPrinter:     o.dataPrinter     ? new Date(o.dataPrinter)     : null,
-                        dataDebuxo:      o.dataDebuxo      ? new Date(o.dataDebuxo)      : null,
-                        dataAmostras:    o.dataAmostras    ? new Date(o.dataAmostras)    : null,
-                        dataBordados:    o.dataBordados    ? new Date(o.dataBordados)    : null,
-                        archivedAt:      o.archivedAt      ? new Date(o.archivedAt)      : null,
-                        sectorPredictedDates: hydratedPredictedDates,
-                    };
-                });
-                resolve({ orders: hydratedOrders, headers: reqHeaders.result || {} });
-            } else {
-                resolve(null);
-            }
-        };
-        tx.onerror = () => resolve(null);
-    });
+    let allOrdersData: any[] = [];
+    let from = 0;
+    const limit = 1000;
+    let hasMore = true;
+    let ordersError = null;
+    
+    // Pagination for orders
+    while(hasMore) {
+        const { data, error } = await supabase.from('orders').select('*').range(from, from + limit - 1);
+        if(error) {
+            ordersError = error;
+            break;
+        }
+        if(data && data.length > 0) {
+            allOrdersData = allOrdersData.concat(data);
+            from += limit;
+        } else {
+            hasMore = false;
+        }
+        if(data && data.length < limit) hasMore = false;
+    }
+    
+    const { data: headersData } = await supabase.from('app_state').select('value').eq('key', 'main_headers').single();
+    if (ordersError) console.error("Error loading orders", ordersError);
+    
+    const headers = headersData ? headersData.value : {};
+    
+    // Return null completely if there is really no data and it's initialized clean, though empty array is better
+    if (allOrdersData.length === 0) return { orders: [], headers };
+
+    const hydratedOrders = allOrdersData.map(hydrateOrder);
+
+    return { orders: hydratedOrders, headers };
 };
 
+export const hydrateOrder = (o: any): Order => ({
+    id: o.id,
+    docSeries: o.doc_series,
+    docNr: o.doc_nr,
+    clientCode: o.client_code,
+    clientName: o.client_name,
+    comercial: o.comercial,
+    issueDate: o.issue_date ? new Date(o.issue_date) : null,
+    requestedDate: o.requested_date ? new Date(o.requested_date) : null,
+    itemNr: o.item_nr,
+    po: o.po,
+    articleCode: o.article_code,
+    reference: o.reference,
+    colorCode: o.color_code,
+    colorDesc: o.color_desc,
+    size: o.size,
+    family: o.family,
+    sizeDesc: o.size_desc,
+    ean: o.ean,
+    qtyRequested: parseFloat(o.qty_requested) || 0,
+    dataTec: o.data_tec ? new Date(o.data_tec) : null,
+    felpoCruQty: parseFloat(o.felpo_cru_qty) || 0,
+    felpoCruDate: o.felpo_cru_date ? new Date(o.felpo_cru_date) : null,
+    tinturariaQty: parseFloat(o.tinturaria_qty) || 0,
+    tinturariaDate: o.tinturaria_date ? new Date(o.tinturaria_date) : null,
+    confRoupoesQty: parseFloat(o.conf_roupoes_qty) || 0,
+    confFelposQty: parseFloat(o.conf_felpos_qty) || 0,
+    confDate: o.conf_date ? new Date(o.conf_date) : null,
+    embAcabQty: parseFloat(o.emb_acab_qty) || 0,
+    armExpDate: o.arm_exp_date ? new Date(o.arm_exp_date) : null,
+    stockCxQty: parseFloat(o.stock_cx_qty) || 0,
+    dataEnt: o.data_ent ? new Date(o.data_ent) : null,
+    dataEspecial: o.data_especial ? new Date(o.data_especial) : null,
+    dataPrinter: o.data_printer ? new Date(o.data_printer) : null,
+    dataDebuxo: o.data_debuxo ? new Date(o.data_debuxo) : null,
+    dataAmostras: o.data_amostras ? new Date(o.data_amostras) : null,
+    dataBordados: o.data_bordados ? new Date(o.data_bordados) : null,
+    qtyBilled: parseFloat(o.qty_billed) || 0,
+    qtyOpen: parseFloat(o.qty_open) || 0,
+    priority: o.priority,
+    isManual: o.is_manual,
+    isArchived: o.is_archived,
+    archivedAt: o.archived_at ? new Date(o.archived_at) : null,
+    archivedBy: o.archived_by,
+    sectorStopReasons: o.sector_stop_reasons || {},
+    sectorObservations: o.sector_observations || {},
+    sectorPredictedDates: (() => {
+        const raw = o.sector_predicted_dates || {};
+        const result: Record<string, Date | null> = {};
+        Object.entries(raw).forEach(([k, v]) => { result[k] = v ? new Date(v as string) : null; });
+        return result;
+    })(),
+    sectorPredictedDatesPending: o.sector_predicted_dates_pending || {},
+});
+
 export const clearOrdersFromDB = async () => {
-    const db = await initDB();
-    return new Promise<void>((resolve, reject) => {
-        const tx = db.transaction([STORE_ORDERS, STORE_HEADERS], 'readwrite');
-        tx.objectStore(STORE_ORDERS).clear();
-        tx.objectStore(STORE_HEADERS).clear();
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
+    // Note: Due to safe deletes in PostgREST typically requiring a condition, we match non-null IDs.
+    await supabase.from('orders').delete().not('id', 'is', null);
+    await supabase.from('app_state').delete().eq('key', 'main_headers');
 };
 
 // --- FILE HANDLES ---
@@ -1057,23 +1230,17 @@ export const DEFAULT_SELECTED_COLUMNS: string[] = [
 
 // --- PERSISTÊNCIA DE CONFIGURAÇÃO DE COLUNAS ---
 export const saveExportColumnsConfig = async (selectedKeys: string[]) => {
-  const db = await initDB();
-  return new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_EXPORT_COLUMNS, 'readwrite');
-    tx.objectStore(STORE_EXPORT_COLUMNS).put(selectedKeys, 'config');
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+  const { error } = await supabase.from('app_state').upsert({
+    key: 'export_columns_config',
+    value: selectedKeys
   });
+  if (error) console.error("Error saving export columns config", error);
 };
 
 export const loadExportColumnsConfig = async (): Promise<string[] | null> => {
-  const db = await initDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE_EXPORT_COLUMNS, 'readonly');
-    const req = tx.objectStore(STORE_EXPORT_COLUMNS).get('config');
-    tx.oncomplete = () => resolve(req.result || null);
-    tx.onerror = () => resolve(null);
-  });
+  const { data, error } = await supabase.from('app_state').select('value').eq('key', 'export_columns_config').single();
+  if (error || !data) return null;
+  return data.value;
 };
 
 // Helper para obter o valor de uma coluna a partir de uma Order
@@ -1142,25 +1309,43 @@ export const exportCustomColumns = (
 };
 
 export const saveCapacitiesToDB = async (capacities: any[]) => {
-  const db = await initDB();
-  return new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_CAPACITIES, 'readwrite');
-    const store = tx.objectStore(STORE_CAPACITIES);
-    store.clear();
-    capacities.forEach(c => store.put(c));
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  // Clear existing
+  await supabase.from('production_capacities').delete().not('id', 'is', null);
+  
+  // Insert new
+  if (capacities.length > 0) {
+      const toInsert = capacities.map(c => ({
+          id: c.id,
+          sector_id: c.sectorId,
+          label: c.label,
+          article_code: c.articleCode,
+          family: c.family,
+          reference: c.reference,
+          color_code: c.colorCode,
+          size: c.size,
+          pieces_per_hour: c.piecesPerHour,
+          hours_per_day: c.hoursPerDay
+      }));
+      await supabase.from('production_capacities').insert(toInsert);
+  }
 };
 
 export const loadCapacitiesFromDB = async (): Promise<any[]> => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_CAPACITIES, 'readonly');
-    const req = tx.objectStore(STORE_CAPACITIES).getAll();
-    tx.oncomplete = () => resolve(req.result || []);
-    tx.onerror = () => resolve([]);
-  });
+  const { data: caps, error } = await supabase.from('production_capacities').select('*');
+  if (error || !caps) return [];
+  
+  return caps.map((c: any) => ({
+      id: c.id,
+      sectorId: c.sector_id,
+      label: c.label,
+      articleCode: c.article_code,
+      family: c.family,
+      reference: c.reference,
+      colorCode: c.color_code,
+      size: c.size,
+      piecesPerHour: parseFloat(c.pieces_per_hour || 0),
+      hoursPerDay: parseFloat(c.hours_per_day || 0)
+  }));
 };
 
 export const generateMockOrders = (count: number = 20): Order[] => {

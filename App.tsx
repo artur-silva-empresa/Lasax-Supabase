@@ -10,7 +10,8 @@ import Settings from './components/Settings';
 import StopReasons from './components/StopReasons';
 import Login from './components/Login';
 import { Order, User } from './types';
-import { generateMockOrders, loadOrdersFromDB, saveOrdersToDB, clearOrdersFromDB, loadStopReasonsFromDB, saveStopReasonsToDB, loadUsersFromDB, initializeDefaultUsers, saveUserToDB, deleteUserFromDB, loadCapacitiesFromDB, saveCapacitiesToDB } from './services/dataService';
+import { generateMockOrders, loadOrdersFromDB, saveOrdersToDB, saveOrderToDB, clearOrdersFromDB, loadStopReasonsFromDB, saveStopReasonsToDB, loadUsersFromDB, initializeDefaultUsers, saveUserToDB, deleteUserFromDB, loadCapacitiesFromDB, saveCapacitiesToDB, hydrateOrder } from './services/dataService';
+import { supabase } from './src/services/supabase';
 import { WifiOff, CheckCircle2, X, Download, Loader2 } from 'lucide-react';
 import { SECTORS, STOP_REASONS_HIERARCHY } from './constants';
 
@@ -150,127 +151,142 @@ const App: React.FC = () => {
     initData();
   }, []);
 
-  // Save to IndexedDB whenever orders change (Debounced to avoid excessive writes)
+  // Supabase Real-Time Subscriptions
   React.useEffect(() => {
-    if (orders.length > 0 && !isLoading) {
-      const timer = setTimeout(() => {
-          saveOrdersToDB(orders, excelHeaders).catch(err => console.error("Erro ao guardar dados:", err));
-      }, 1000); // Wait 1s after last change before saving
-      return () => clearTimeout(timer);
-    }
-  }, [orders, excelHeaders, isLoading]);
+    const ordersSubscription = supabase
+      .channel('public:orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, payload => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const newOrder = hydrateOrder(payload.new);
+              setOrders(prev => {
+                  const existing = prev.find(o => o.id === newOrder.id);
+                  if (existing) {
+                      return prev.map(o => o.id === newOrder.id ? newOrder : o);
+                  } else {
+                      return [...prev, newOrder];
+                  }
+              });
+          } else if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old.id;
+              setOrders(prev => prev.filter(o => o.id !== deletedId));
+          }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ordersSubscription);
+    };
+  }, []);
 
   const handleUpdateOrder = (updatedOrder: Order) => {
-    setOrders(prev => {
-        const oldOrder = prev.find(o => o.id === updatedOrder.id);
-        if (!oldOrder) return prev;
+    const oldOrder = orders.find(o => o.id === updatedOrder.id);
+    if (!oldOrder) return;
 
-        // Check for predicted date changes
-        const oldDates = oldOrder.sectorPredictedDates || {};
-        const newDates = updatedOrder.sectorPredictedDates || {};
+    let finalOrder = { ...updatedOrder };
+    
+    // Check for predicted date changes
+    const oldDates = oldOrder.sectorPredictedDates || {};
+    const newDates = updatedOrder.sectorPredictedDates || {};
 
-        let finalOrder = { ...updatedOrder };
+    // Find which sector changed
+    const changedSectorId = Object.keys(newDates).find(id => {
+        const oldDate = oldDates[id];
+        const newDate = newDates[id];
+        if (!oldDate && !newDate) return false;
+        if (!oldDate || !newDate) return true;
+        return new Date(oldDate).getTime() !== new Date(newDate).getTime();
+    });
 
-        // Find which sector changed
-        const changedSectorId = Object.keys(newDates).find(id => {
-            const oldDate = oldDates[id];
-            const newDate = newDates[id];
-            if (!oldDate && !newDate) return false;
-            if (!oldDate || !newDate) return true;
-            return new Date(oldDate).getTime() !== new Date(newDate).getTime();
-        });
+    if (changedSectorId) {
+        const sectorIndex = SECTORS.findIndex(s => s.id === changedSectorId);
+        if (sectorIndex !== -1) {
+            const oldDate = oldDates[changedSectorId];
+            const newDate = newDates[changedSectorId];
 
-        if (changedSectorId) {
-            const sectorIndex = SECTORS.findIndex(s => s.id === changedSectorId);
-            if (sectorIndex !== -1) {
-                const oldDate = oldDates[changedSectorId];
-                const newDate = newDates[changedSectorId];
+            // If it was pending, clear it because the user just validated/changed it
+            const pending = { ...(finalOrder.sectorPredictedDatesPending || {}) };
+            delete pending[changedSectorId];
+            finalOrder.sectorPredictedDatesPending = pending;
 
-                // If it was pending, clear it because the user just validated/changed it
-                const pending = { ...(finalOrder.sectorPredictedDatesPending || {}) };
-                delete pending[changedSectorId];
-                finalOrder.sectorPredictedDatesPending = pending;
+            if (newDate) {
+                // Calculate delay relative to the previous predicted date or base date
+                let baseDate: Date | null = null;
+                switch (changedSectorId) {
+                    case 'tecelagem': baseDate = oldOrder.dataTec; break;
+                    case 'felpo_cru': baseDate = oldOrder.felpoCruDate; break;
+                    case 'tinturaria': baseDate = oldOrder.tinturariaDate; break;
+                    case 'confeccao': baseDate = oldOrder.confDate; break;
+                    case 'embalagem': baseDate = oldOrder.armExpDate; break;
+                    case 'expedicao': baseDate = oldOrder.armExpDate; break;
+                }
 
-                if (newDate) {
-                    // Calculate delay relative to the previous predicted date or base date
-                    let baseDate: Date | null = null;
-                    switch (changedSectorId) {
-                        case 'tecelagem': baseDate = oldOrder.dataTec; break;
-                        case 'felpo_cru': baseDate = oldOrder.felpoCruDate; break;
-                        case 'tinturaria': baseDate = oldOrder.tinturariaDate; break;
-                        case 'confeccao': baseDate = oldOrder.confDate; break;
-                        case 'embalagem': baseDate = oldOrder.armExpDate; break;
-                        case 'expedicao': baseDate = oldOrder.armExpDate; break;
-                    }
+                const referenceDate = oldDate || baseDate;
+                if (referenceDate) {
+                    const diffTime = new Date(newDate).getTime() - new Date(referenceDate).getTime();
+                    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-                    const referenceDate = oldDate || baseDate;
-                    if (referenceDate) {
-                        const diffTime = new Date(newDate).getTime() - new Date(referenceDate).getTime();
-                        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                    if (diffDays !== 0) {
+                        // Propagate to subsequent sectors
+                        const updatedPredictedDates = { ...newDates };
+                        const updatedPending = { ...(finalOrder.sectorPredictedDatesPending || {}) };
 
-                        if (diffDays !== 0) {
-                            // Propagate to subsequent sectors
-                            const updatedPredictedDates = { ...newDates };
-                            const updatedPending = { ...(finalOrder.sectorPredictedDatesPending || {}) };
-
-                            for (let i = sectorIndex + 1; i < SECTORS.length; i++) {
-                                const s = SECTORS[i];
-                                let sBaseDate: Date | null = null;
-                                switch (s.id) {
-                                    case 'tecelagem': sBaseDate = oldOrder.dataTec; break;
-                                    case 'felpo_cru': sBaseDate = oldOrder.felpoCruDate; break;
-                                    case 'tinturaria': sBaseDate = oldOrder.tinturariaDate; break;
-                                    case 'confeccao': sBaseDate = oldOrder.confDate; break;
-                                    case 'embalagem': sBaseDate = oldOrder.armExpDate; break;
-                                    case 'expedicao': sBaseDate = oldOrder.armExpDate; break;
-                                }
-
-                                const currentPredDate = updatedPredictedDates[s.id] || sBaseDate;
-
-                                if (currentPredDate) {
-                                    const nextDate = new Date(currentPredDate);
-                                    nextDate.setDate(nextDate.getDate() + diffDays);
-                                    updatedPredictedDates[s.id] = nextDate;
-                                    updatedPending[s.id] = true; // Mark as pending
-                                }
+                        for (let i = sectorIndex + 1; i < SECTORS.length; i++) {
+                            const s = SECTORS[i];
+                            let sBaseDate: Date | null = null;
+                            switch (s.id) {
+                                case 'tecelagem': sBaseDate = oldOrder.dataTec; break;
+                                case 'felpo_cru': sBaseDate = oldOrder.felpoCruDate; break;
+                                case 'tinturaria': sBaseDate = oldOrder.tinturariaDate; break;
+                                case 'confeccao': sBaseDate = oldOrder.confDate; break;
+                                case 'embalagem': sBaseDate = oldOrder.armExpDate; break;
+                                case 'expedicao': sBaseDate = oldOrder.armExpDate; break;
                             }
-                            finalOrder.sectorPredictedDates = updatedPredictedDates;
-                            finalOrder.sectorPredictedDatesPending = updatedPending;
+
+                            const currentPredDate = updatedPredictedDates[s.id] || sBaseDate;
+
+                            if (currentPredDate) {
+                                const nextDate = new Date(currentPredDate);
+                                nextDate.setDate(nextDate.getDate() + diffDays);
+                                updatedPredictedDates[s.id] = nextDate;
+                                updatedPending[s.id] = true; // Mark as pending
+                            }
                         }
+                        finalOrder.sectorPredictedDates = updatedPredictedDates;
+                        finalOrder.sectorPredictedDatesPending = updatedPending;
                     }
                 }
             }
         }
+    }
 
-        return prev.map(o => o.id === finalOrder.id ? finalOrder : o);
-    });
+    setOrders(prev => prev.map(o => o.id === finalOrder.id ? finalOrder : o));
+    saveOrderToDB(finalOrder);
   };
   
   // Função para atualizar prioridade em lote (por Nr Doc)
   const handleUpdatePriority = (docNr: string, priority: number) => {
-    setOrders(prev => prev.map(o => {
-        // Atualiza todos os itens que partilham o mesmo número de documento
-        if (o.docNr === docNr) {
-            return { ...o, priority };
-        }
-        return o;
-    }));
+    const updated = orders.filter(o => o.docNr === docNr).map(o => ({ ...o, priority }));
+    setOrders(prev => prev.map(o => o.docNr === docNr ? { ...o, priority } : o));
+    updated.forEach(saveOrderToDB);
   };
 
   // Função para atualizar flag manual em lote (por Nr Doc)
   const handleUpdateManual = (docNr: string, isManual: boolean) => {
-    setOrders(prev => prev.map(o => {
-        // Atualiza todos os itens que partilham o mesmo número de documento
-        if (o.docNr === docNr) {
-            return { ...o, isManual };
-        }
-        return o;
-    }));
+    const updated = orders.filter(o => o.docNr === docNr).map(o => ({ ...o, isManual }));
+    setOrders(prev => prev.map(o => o.docNr === docNr ? { ...o, isManual } : o));
+    updated.forEach(saveOrderToDB);
   };
 
   // Função para arquivar/desarquivar encomenda (por Nr Doc, apenas admin)
   const handleArchiveOrder = (docNr: string, archive: boolean) => {
     const now = new Date();
+    const updated = orders.filter(o => o.docNr === docNr).map(o => ({
+        ...o,
+        isArchived: archive,
+        archivedAt: archive ? now : null,
+        archivedBy: archive ? (currentUser?.name || 'Admin') : undefined
+    }));
+    
     setOrders(prev => prev.map(o => {
       if (o.docNr === docNr) {
         return {
@@ -282,17 +298,18 @@ const App: React.FC = () => {
       }
       return o;
     }));
+
+    updated.forEach(saveOrderToDB);
   };
 
   // Função para atualizar motivo de paragem em lote (por Nr Doc)
   const handleUpdateStopReason = (docNr: string, sectorId: string, stopReason: string) => {
-    setOrders(prev => prev.map(o => {
-        if (o.docNr === docNr) {
-            const sectorStopReasons = { ...(o.sectorStopReasons || {}), [sectorId]: stopReason };
-            return { ...o, sectorStopReasons };
-        }
-        return o;
+    const updated = orders.filter(o => o.docNr === docNr).map(o => ({
+        ...o,
+        sectorStopReasons: { ...(o.sectorStopReasons || {}), [sectorId]: stopReason }
     }));
+    setOrders(prev => prev.map(o => o.docNr === docNr ? updated.find(u => u.id === o.id)! : o));
+    updated.forEach(saveOrderToDB);
   };
 
   const handleSaveCapacities = (newCapacities: ProductionCapacity[]) => {

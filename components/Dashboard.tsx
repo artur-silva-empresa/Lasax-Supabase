@@ -67,6 +67,58 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders }) => 
     ];
   }, [orders]);
 
+  const sectorCompletionData = React.useMemo(() => {
+    const data = {
+      tecelagem: { req: 0, comp: 0 },
+      felpo_cru: { req: 0, comp: 0 },
+      tinturaria: { req: 0, comp: 0 },
+      confeccao: { req: 0, comp: 0 },
+      embalagem: { req: 0, comp: 0 },
+      expedicao: { req: 0, comp: 0 }
+    };
+
+    orders.forEach(order => {
+      const qReq = order.qtyRequested || 0;
+      if (qReq <= 0) return;
+
+      const pTecelagem = order.felpoCruQty || 0;
+      const pFelpoCru = order.felpoCruQty || 0; 
+      const pTinturaria = order.tinturariaQty || 0;
+      const pConfeccao = (order.confRoupoesQty || 0) + (order.confFelposQty || 0);
+      const pEmbalagem = order.embAcabQty || 0;
+      const pExpedicao = order.stockCxQty || 0;
+
+      data.tecelagem.req += qReq;
+      data.tecelagem.comp += Math.min(qReq, pTecelagem);
+
+      data.felpo_cru.req += qReq;
+      data.felpo_cru.comp += Math.min(qReq, pFelpoCru);
+
+      data.tinturaria.req += qReq;
+      data.tinturaria.comp += Math.min(qReq, pTinturaria);
+
+      data.confeccao.req += qReq;
+      data.confeccao.comp += Math.min(qReq, pConfeccao);
+
+      data.embalagem.req += qReq;
+      data.embalagem.comp += Math.min(qReq, pEmbalagem);
+
+      data.expedicao.req += qReq;
+      data.expedicao.comp += Math.min(qReq, pExpedicao);
+    });
+
+    const getPct = (comp: number, req: number) => req > 0 ? Math.round((comp / req) * 100) : 0;
+
+    return [
+      { name: 'Tecelagem', value: getPct(data.tecelagem.comp, data.tecelagem.req), color: '#3b82f6' },
+      { name: 'Felpo Cru', value: getPct(data.felpo_cru.comp, data.felpo_cru.req), color: '#6366f1' },
+      { name: 'Tinturaria', value: getPct(data.tinturaria.comp, data.tinturaria.req), color: '#8b5cf6' },
+      { name: 'Confecção', value: getPct(data.confeccao.comp, data.confeccao.req), color: '#d946ef' },
+      { name: 'Embalagem', value: getPct(data.embalagem.comp, data.embalagem.req), color: '#ec4899' },
+      { name: 'Expedição', value: getPct(data.expedicao.comp, data.expedicao.req), color: '#14b8a6' },
+    ];
+  }, [orders]);
+
   return (
     <div className="h-full overflow-y-auto p-4 md:p-8 scroll-smooth">
       <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-4">
@@ -114,7 +166,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders }) => 
           />
         </div>
 
-        {/* Charts Grid */}
+        {/* Charts Grid Row 1 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           {/* Gráfico Horizontal de Carga por Sector */}
           <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col transition-colors">
@@ -182,6 +234,36 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders }) => 
                   <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', backgroundColor: '#1e293b', color: '#f1f5f9' }} />
                   <Legend verticalAlign="bottom" height={36} iconType="circle" iconSize={8} wrapperStyle={{fontSize: '10px', fontWeight: 'bold', color: '#94a3b8'}}/>
                 </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* Charts Grid Row 2 */}
+        <div className="grid grid-cols-1 gap-4 md:gap-6">
+          {/* Gráfico de Progresso por Sector (Barras Verticais) */}
+          <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col transition-colors">
+            <h3 className="font-black text-slate-700 dark:text-slate-200 text-xs uppercase tracking-widest mb-1">Taxa de Conclusão por Sector</h3>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-4">Percentagem de peças concluídas face ao total encomendado em cada secção.</p>
+            <div className="h-[250px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={sectorCompletionData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11, fontWeight: 600}} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11}} domain={[0, 100]} tickFormatter={(val) => `${val}%`} />
+                  <Tooltip 
+                    cursor={{fill: 'rgba(255,255,255,0.05)'}}
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', backgroundColor: '#1e293b', color: '#f1f5f9' }}
+                    itemStyle={{ color: '#e2e8f0' }}
+                    labelStyle={{ color: '#94a3b8' }}
+                    formatter={(value: number) => [`${value}%`, 'Concluído']}
+                  />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={32} name="Concluído">
+                    {sectorCompletionData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
