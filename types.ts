@@ -1,0 +1,153 @@
+
+export enum OrderState {
+  IN_PRODUCTION = 'Em Produção',
+  COMPLETED = 'Concluída',
+  LATE = 'Atrasada',
+  BILLED = 'Facturada',
+  OPEN = 'Em Aberto'
+}
+
+export enum SectorState {
+  NOT_STARTED = 'NOT_STARTED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+  LATE = 'LATE'
+}
+
+export type UserRole = 'admin' | 'viewer';
+export type PermissionLevel = 'none' | 'read' | 'write';
+
+export interface UserPermissions {
+  dashboard: PermissionLevel;
+  orders: PermissionLevel;
+  timeline: PermissionLevel;
+  config: PermissionLevel;
+  stopReasons: PermissionLevel;
+  sectors: Record<string, PermissionLevel>;
+}
+
+export interface StoppageReason {
+  id: string;
+  type: string;
+  reason: string;
+}
+
+export interface User {
+  id: string;
+  username: string;
+  passwordHash?: string;
+  role: UserRole;
+  name: string;
+  permissions: UserPermissions;
+}
+
+export interface Sector {
+  id: string;
+  name: string;
+  orderIndex: number;
+}
+
+export interface Order {
+  id:string;
+  docSeries: string;   // Série do documento (coluna A do ERP, ex: "525")
+  docNr: string;
+  clientCode: string;  // Código de cliente (não exportado pelo ERP; preenchido manualmente ou por outras fontes)
+  clientName: string;
+  comercial: string;
+  issueDate: Date | null;
+  requestedDate: Date | null;
+  itemNr: number;
+  po: string;
+  articleCode: string;
+  reference: string;
+  colorCode: string;
+  colorDesc: string;
+  size: string;
+  family: string;
+  sizeDesc: string;
+  ean: string;
+  qtyRequested: number;
+  dataTec: Date | null;
+  
+  // Sectors
+  felpoCruQty: number;
+  felpoCruDate: Date | null;
+  tinturariaQty: number;
+  tinturariaDate: Date | null;
+  confRoupoesQty: number;
+  confFelposQty: number;
+  confDate: Date | null;
+  embAcabQty: number;
+  armExpDate: Date | null;
+  stockCxQty: number;
+  dataEnt: Date | null;
+  
+  // Special Dates
+  dataEspecial: Date | null;
+  dataPrinter: Date | null;
+  dataDebuxo: Date | null;
+  dataAmostras: Date | null;
+  dataBordados: Date | null;
+  
+  // Status
+  qtyBilled: number;
+  qtyOpen: number;
+  
+  // Priority (0=None, 1=High/Red, 2=Medium/Orange, 3=Low/Yellow)
+  priority?: number;
+
+  // Manual Confection Flag
+  isManual?: boolean;
+
+  // Archived flag (Admin only)
+  isArchived?: boolean;
+  archivedAt?: Date | null;
+  archivedBy?: string;
+
+  // Stop Reasons per Sector
+  sectorStopReasons?: Record<string, string>;
+
+  // Observations
+  sectorObservations?: Record<string, string>;
+
+  // Sector Predicted Dates (New field)
+  sectorPredictedDates?: Record<string, Date | null>;
+  
+  // Pending validation for predicted dates
+  sectorPredictedDatesPending?: Record<string, boolean>;
+
+  // Raw data from excel for round-trip capability
+  _raw?: Record<string, any>;
+}
+
+export interface ProductionCapacity {
+  id: string;
+  sectorId: string;
+  label: string;
+  // Filtros de artigo (em branco = wildcard/padrão)
+  articleCode: string;
+  family: string;
+  reference: string;
+  colorCode: string;
+  size: string;
+  // Capacidade
+  piecesPerHour: number;
+  hoursPerDay: number; // default 24 (3 turnos × 8h)
+}
+
+export interface ImportLog {
+  id: string;
+  timestamp: Date;
+  filename: string;
+  user: string;
+  recordsCount: number;
+}
+
+export interface DashboardKPIs {
+  totalActiveDocs: number;
+  totalLate: number;
+  deliveriesThisWeek: number;
+  fulfillmentRateWeek: number;
+  totalInProduction: number;
+  billedVsOpen: { billed: number; open: number };
+}
