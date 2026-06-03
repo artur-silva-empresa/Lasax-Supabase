@@ -732,7 +732,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-3">
               <div className="bg-white/20 p-2 rounded-lg"><Download size={20} /></div>
               <div>
-                <h4 className="font-bold text-xs uppercase tracking-tight">Instalar TexFlow</h4>
+                <h4 className="font-bold text-xs uppercase tracking-tight">Instalar Prod. Lasa</h4>
                 <p className="text-[10px] opacity-80 leading-tight">Aceda mais rápido.</p>
               </div>
             </div>

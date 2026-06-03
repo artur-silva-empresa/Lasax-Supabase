@@ -77,10 +77,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
       {/* Desktop Sidebar */}
       <aside className={`hidden md:flex ${isSidebarOpen ? 'w-64' : 'w-20'} bg-slate-900 dark:bg-slate-900 text-white transition-all duration-300 ease-in-out flex-col z-50 shrink-0`}>
         <div className="p-6 flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center font-bold text-lg shrink-0">TF</div>
+          <img src={`${import.meta.env.BASE_URL}icons/icone.png`} alt="Prod. Lasa" className="w-8 h-8 shrink-0 object-contain" />
           {isSidebarOpen && (
             <div className="flex items-center gap-3 animate-in fade-in duration-300">
-                <span className="font-bold text-xl tracking-tight overflow-hidden whitespace-nowrap">TexFlow</span>
+                <span className="font-bold text-xl tracking-tight overflow-hidden whitespace-nowrap">Prod. Lasa</span>
             </div>
           )}
         </div>
@@ -314,10 +314,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
             >
               {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
-            <div className="md:hidden w-8 h-8 bg-blue-600 rounded flex items-center justify-center font-bold text-white text-sm">TF</div>
+            <img src={`${import.meta.env.BASE_URL}icons/icone.png`} alt="Prod. Lasa" className="md:hidden w-8 h-8 object-contain" />
             
             <div className="md:hidden flex items-center gap-2">
-                <h1 className="font-bold text-slate-800 dark:text-slate-100 text-sm">TexFlow</h1>
+                <h1 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Prod. Lasa</h1>
             </div>
           </div>
 
@@ -498,8 +498,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
       >
         <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center font-bold text-lg">TF</div>
-            <span className="font-bold text-xl tracking-tight">TexFlow</span>
+            <img src={`${import.meta.env.BASE_URL}icons/icone.png`} alt="Prod. Lasa" className="w-8 h-8 object-contain" />
+            <span className="font-bold text-xl tracking-tight">Prod. Lasa</span>
           </div>
           <button 
             onClick={() => setIsMobileMenuOpen(false)}

@@ -1,7 +1,7 @@
 
 // ⚠️ Incrementar a versão a cada deploy para forçar refresh do cache em todos os clientes
-const CACHE_VERSION = 'v7';
-const CACHE_NAME = `texflow-${CACHE_VERSION}`;
+const CACHE_VERSION = 'v8';
+const CACHE_NAME = `prod-lasa-${CACHE_VERSION}`;
 
 // Assets que são pré-cacheados na instalação (shell da aplicação)
 // O Vite gera hashes nos nomes dos ficheiros, por isso cacheamos tudo via fetch intercept
@@ -10,6 +10,7 @@ const PRECACHE_URLS = [
   './index.html',
   './manifest.json',
   './sql-wasm.wasm',
+  './icons/icone.png'
 ];
 
 // -------------------------

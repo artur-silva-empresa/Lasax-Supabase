@@ -53,10 +53,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
         <div className="p-8 bg-slate-50 border-b border-slate-100 flex flex-col items-center">
-            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-blue-600/20">
-                <span className="text-white font-black text-2xl">TF</span>
-            </div>
-            <h1 className="text-2xl font-black text-slate-800">TexFlow</h1>
+            <img src={`${import.meta.env.BASE_URL}icons/icone.png`} alt="Prod. Lasa" className="h-20 w-auto mb-4 object-contain" />
+            <h1 className="text-2xl font-black text-slate-800">Prod. Lasa</h1>
             <p className="text-sm text-slate-500 font-medium">Gestão de Produção Têxtil</p>
         </div>
 
@@ -112,7 +110,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         </form>
         
         <div className="bg-slate-50 p-4 text-center border-t border-slate-100">
-            <p className="text-[10px] text-slate-400 font-medium">© 2026 TexFlow Lasa. Todos os direitos reservados.</p>
+            <p className="text-[10px] text-slate-400 font-medium">© 2026 Prod. Lasa. Todos os direitos reservados.</p>
         </div>
       </div>
     </div>

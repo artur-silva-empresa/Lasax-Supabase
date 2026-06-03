@@ -256,18 +256,18 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ order, onClose, onUpdateOrd
 
                 {/* Additional Badges if needed */}
                 <div className="flex flex-wrap gap-2 mt-2">
-                    {order.priority && (
+                    {order.priority ? (
                         <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 ${getPriorityClasses(order.priority)}`}>
                             <Flag size={12} strokeWidth={3} />
                             <span className="text-[10px] font-black uppercase tracking-wide">Prioridade {order.priority === 1 ? 'Alta' : order.priority === 2 ? 'Média' : 'Baixa'}</span>
                         </div>
-                    )}
-                    {order.isManual && (
+                    ) : null}
+                    {order.isManual ? (
                         <div className="px-3 py-1.5 rounded-xl border bg-indigo-50 border-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800 flex items-center gap-2">
                             <Hand size={12} strokeWidth={3} />
                             <span className="text-[10px] font-black uppercase tracking-wide">Conf. Manual</span>
                         </div>
-                    )}
+                    ) : null}
                 </div>
             </aside>
         </div>

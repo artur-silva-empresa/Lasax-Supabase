@@ -71,7 +71,8 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
   const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (window.innerWidth >= 1280) return;
     const scrollTop = e.currentTarget.scrollTop;
-    if (scrollTop > lastScrollTop.current && scrollTop > 50) {
+    // Only auto-collapse if scrolling down from near the top (e.g., from under 40px)
+    if (scrollTop > lastScrollTop.current && scrollTop > 80 && lastScrollTop.current < 40) {
       if (showMobileFilters) {
         setShowMobileFilters(false);
       }
@@ -331,7 +332,19 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
               <ResizableHeader colId="predDate" title="Data Prevista" width={columnWidths['predDate'] || 120} onResize={handleColResize} className="text-center" />
               <ResizableHeader colId="class" title="Classificação" width={columnWidths['class'] || 180} onResize={handleColResize} className="text-center" />
               <ResizableHeader colId="obs" title="Observações" width={columnWidths['obs'] || 200} onResize={handleColResize} />
-              <th className="px-2 py-3 w-[50px]"></th>
+              <th className="px-2 py-3 w-[50px] text-center sticky right-0 bg-slate-100 dark:bg-slate-900 z-10">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    setShowMobileFilters(!showMobileFilters);
+                  }}
+                  className="xl:hidden p-1 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 rounded-lg shadow-xs transition-transform active:scale-90 flex items-center justify-center mx-auto"
+                  title="Mostrar Filtros"
+                >
+                  <Filter size={11} className={showMobileFilters ? "fill-blue-500 text-blue-500" : "text-slate-400"} />
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-950">

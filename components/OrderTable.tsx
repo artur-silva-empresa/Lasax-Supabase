@@ -86,7 +86,8 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
   const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (window.innerWidth >= 1280) return;
     const scrollTop = e.currentTarget.scrollTop;
-    if (scrollTop > lastScrollTop.current && scrollTop > 50) {
+    // Only auto-collapse if scrolling down from near the top (e.g., from under 40px)
+    if (scrollTop > lastScrollTop.current && scrollTop > 80 && lastScrollTop.current < 40) {
       if (showMobileFilters) {
         setShowMobileFilters(false);
       }
@@ -975,9 +976,24 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 </th>
                 <th className="px-2 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center w-[10%]">Classificação</th>
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center w-[10%]">Estado</th>
-                {user?.role === 'admin' && onArchiveOrder && (
-                  <th className="px-2 py-4 w-[50px]"></th>
-                )}
+                <th className="px-2 py-4 w-[60px] text-center sticky right-0 bg-slate-100 dark:bg-slate-900 z-10">
+                  <div className="flex items-center justify-center gap-1.5 animate-fade-in">
+                    {user?.role === 'admin' && onArchiveOrder && (
+                      <span className="hidden xl:inline text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase transition-colors">Ações</span>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setShowMobileFilters(!showMobileFilters);
+                      }}
+                      className="xl:hidden p-1 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg border border-slate-200 dark:border-slate-700 shadow-xs transition-transform active:scale-90"
+                      title={showMobileFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
+                    >
+                      <Filter size={11} className={showMobileFilters ? "fill-blue-500 text-blue-500" : "text-slate-400"} />
+                    </button>
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-950 transition-colors">
@@ -1102,26 +1118,28 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                   <td className="px-6 py-4 align-middle text-center">
                     {getStatusBadge(order)}
                   </td>
-                  {user?.role === 'admin' && onArchiveOrder && (
-                  <td className="px-2 py-4 align-middle text-center" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        setOrderToArchive(order);
-                      }}
-                      className={`p-1.5 rounded-lg transition-all hover:scale-110 active:scale-95 ${order.isArchived ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' : 'text-slate-300 dark:text-slate-600 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
-                      title={order.isArchived ? `Desarquivar (arquivado por ${order.archivedBy})` : 'Arquivar encomenda'}
-                    >
-                      {order.isArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
-                    </button>
+                  <td className="px-2 py-4 align-middle text-center w-[60px]" onClick={(e) => e.stopPropagation()}>
+                    {user?.role === 'admin' && onArchiveOrder ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setOrderToArchive(order);
+                        }}
+                        className={`p-1.5 rounded-lg transition-all hover:scale-110 active:scale-95 ${order.isArchived ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' : 'text-slate-300 dark:text-slate-600 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
+                        title={order.isArchived ? `Desarquivar (arquivado por ${order.archivedBy})` : 'Arquivar encomenda'}
+                      >
+                        {order.isArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+                      </button>
+                    ) : (
+                      <div className="w-[16px] h-[16px]"></div>
+                    )}
                   </td>
-                  )}
                 </tr>
               ))}
               {paginatedOrders.length === 0 && (
                 <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-400 font-medium">
+                    <td colSpan={10} className="p-8 text-center text-slate-400 font-medium">
                         Nenhum resultado encontrado.
                     </td>
                 </tr>
@@ -1153,9 +1171,9 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                    {/* Mobile Flags Container */}
                     <div className="pt-0.5 flex flex-col gap-1 items-center">
                        <Flag size={16} className={getPriorityColor(order.priority || 0)} strokeWidth={2} />
-                       {order.isManual && (
+                       {order.isManual ? (
                            <div className="w-3.5 h-3.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[8px] font-bold flex items-center justify-center border border-indigo-200 dark:border-indigo-800">M</div>
-                       )}
+                       ) : null}
                     </div>
                     <div>
                         <h3 className="font-black text-slate-800 dark:text-white text-base leading-none">{order.docNr || '-'}</h3>

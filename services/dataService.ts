@@ -7,7 +7,7 @@ import { parseExcelDate, formatDate } from '../utils/formatters';
 import { SECTORS } from '../constants';
 
 // --- PERSISTÊNCIA (IndexedDB) ---
-const DB_NAME = 'TexFlowData';
+const DB_NAME = 'ProdLasaData';
 const DB_VERSION = 6;
 const STORE_HANDLES = 'handles';
 const STORE_ORDERS = 'orders';
@@ -60,7 +60,7 @@ export const hashPassword = async (password: string): Promise<string> => {
         // BUG 9 CORRIGIDO: fallback anterior era trivialmente reversível (soma de charCodes).
         // Este fallback adiciona um salt fixo e faz múltiplas iterações para dificultar
         // ataques de dicionário. NÃO É SEGURO para produção — usar sempre HTTPS.
-        const SALT = 'TexFlow_Lasa_2024_@#$';
+        const SALT = 'ProdLasa_2024_@#$';
         const salted = SALT + password + SALT;
         let hash = 0;
         for (let i = 0; i < salted.length; i++) {
@@ -1010,7 +1010,7 @@ export const exportOrdersToSQLite = async (orders: Order[], headers: Record<stri
   const data = db.export();
   const now = new Date();
   const dateStr = `${String(now.getDate()).padStart(2,'0')}-${String(now.getMonth()+1).padStart(2,'0')}-${now.getFullYear()}`;
-  const fileName = customFileName || `TexFlow_DB_${dateStr}.sqlite`;
+  const fileName = customFileName || `Prod_Lasa_DB_${dateStr}.sqlite`;
 
   if (directoryHandle) {
     try {
@@ -1136,7 +1136,7 @@ export const exportOrdersToExcel = (orders: Order[], headers: Record<string, str
 
     const now = new Date();
     const dateStr = `${String(now.getDate()).padStart(2,'0')}-${String(now.getMonth()+1).padStart(2,'0')}-${now.getFullYear()}`;
-    const fileName = customFileName || `TexFlow_Export_${dateStr}.xlsx`;
+    const fileName = customFileName || `Prod_Lasa_Export_${dateStr}.xlsx`;
     XLSX.writeFile(workbook, fileName);
 };
 
@@ -1304,7 +1304,7 @@ export const exportCustomColumns = (
   const dateStr = `${day}-${month}-${year}`;
   const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
 
-  const fileName = customFileName || `TexFlow_Personalizado_${dateStr}_${timeStr}.xlsx`;
+  const fileName = customFileName || `Prod_Lasa_Personalizado_${dateStr}_${timeStr}.xlsx`;
   XLSX.writeFile(workbook, fileName);
 };
 

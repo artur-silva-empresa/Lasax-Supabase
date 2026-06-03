@@ -7,18 +7,16 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="TexFlow">
-    <meta name="description" content="TexFlow - Gestão e Acompanhamento de Encomendas Têxteis">
+    <meta name="apple-mobile-web-app-title" content="Prod. Lasa">
+    <meta name="description" content="Prod. Lasa - Gestão e Acompanhamento de Encomendas Têxteis">
 
-    <!-- Favicon — paths relativos para o Vite injetar o base: '/lasax/' -->
-    <link rel="icon" type="image/x-icon"  href="icons/favicon.ico">
-    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-    <meta name="msapplication-TileImage" content="icons/icon-144x144.png">
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/icons/icone.png">
+    <link rel="apple-touch-icon" href="/icons/icone.png">
+    <meta name="msapplication-TileImage" content="/icons/icone.png">
     <meta name="msapplication-TileColor" content="#0f172a">
 
-    <title>TexFlow - Gestão de Encomendas</title>
+    <title>Prod. Lasa - Gestão de Encomendas</title>
 
     <!-- manifest com path relativo para o Vite gerir o base -->
     <link rel="manifest" href="manifest.json">
@@ -51,12 +49,12 @@
                 // Caminhos relativos para o SW funcionar em subdiretórios
                 navigator.serviceWorker.register('sw.js', { scope: './' })
                     .then(reg => {
-                        console.log('TexFlow Service Worker registrado com sucesso.');
+                        console.log('Prod. Lasa Service Worker registrado com sucesso.');
                         reg.addEventListener('updatefound', () => {
                             const newWorker = reg.installing;
                             newWorker.addEventListener('statechange', () => {
                                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    if (confirm('Nova versão do TexFlow disponível! Recarregar agora?')) {
+                                    if (confirm('Nova versão do Prod. Lasa disponível! Recarregar agora?')) {
                                         window.location.reload();
                                     }
                                 }

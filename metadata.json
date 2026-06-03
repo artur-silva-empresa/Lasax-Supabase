@@ -1,6 +1,6 @@
 {
-  "name": "Lasax-Supabase",
-  "description": "Lasax-Supabase",
+  "name": "Prod. Lasa",
+  "description": "Prod. Lasa - Gestão de Produção",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

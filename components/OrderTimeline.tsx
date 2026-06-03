@@ -330,14 +330,14 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, onViewDetails }) 
                                <Flag size={10} className={`ml-1 ${getPriorityColor(order.priority || 0)}`} strokeWidth={3} />
                            )}
                            {/* Flag de Confeção Manual */}
-                           {order.isManual && (
+                           {order.isManual ? (
                                <div 
                                    className="ml-0.5 w-3 h-3 rounded-[3px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-[7px] font-black leading-none shrink-0"
                                    title="Confeção Manual"
                                >
                                    M
                                </div>
-                           )}
+                           ) : null}
                         </div>
                         
                         {/* 3 - Nr Documento + Cliente (Lado a Lado) */}
