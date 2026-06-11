@@ -12,9 +12,16 @@ import {
   AlertCircle,
   AlertTriangle,
   Zap,
-  Filter
+  Filter,
+  ListFilter,
+  Flag,
+  FileText,
+  Users,
+  Tag,
+  Archive
 } from 'lucide-react';
-import { Order, Sector, User, ProductionCapacity } from '../types';
+import { Order, Sector, User, ProductionCapacity, OrderState } from '../types';
+import { getOrderState, getWeekRange } from '../services/dataService';
 import { formatDate } from '../utils/formatters';
 import StopReasonSelector from './StopReasonSelector';
 import { calcOrderCapacityInfo } from '../utils/capacityUtils';
@@ -31,6 +38,15 @@ interface SectorOrderTableProps {
 }
 
 const ITEMS_PER_PAGE = 50;
+
+// Helper para número da semana ISO
+const getISOWeek = (d: Date) => {
+  const date = new Date(d.getTime());
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+};
 
 const ResizableHeader = ({ 
   colId, 
@@ -164,8 +180,146 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
     }
   };
 
+  // Filtros
+  const [filterDocSeries, setFilterDocSeries] = React.useState('All');
+  const [filterComercial, setFilterComercial] = React.useState('All');
+  const [filterReference, setFilterReference] = React.useState('All');
+  const [filterStatus, setFilterStatus] = React.useState('All');
+  const [filterPriority, setFilterPriority] = React.useState('All'); 
+  const [filterArchived, setFilterArchived] = React.useState<'all' | 'active' | 'archived'>('active');
+  const [filterDate, setFilterDate] = React.useState<Date | null>(null);
+
+  const statusOptions = [
+    { id: 'All', label: 'Todos os Estados' },
+    { id: 'Atrasadas', label: 'Atrasadas' },
+    { id: 'Em produção', label: 'Em produção' },
+    { id: 'Concluídas', label: 'Concluídas' },
+    { id: 'Em Aberto', label: 'Em Aberto' },
+  ];
+
+  const priorityOptions = [
+    { id: 'All', label: 'Todas Prioridades' },
+    { id: '1', label: 'Prioridade 1 (Alta)' },
+    { id: '2', label: 'Prioridade 2 (Média)' },
+    { id: '3', label: 'Prioridade 3 (Baixa)' },
+    { id: '0', label: 'Sem Prioridade' },
+  ];
+
+  const getDocSeries = (docNr: string) => {
+    if (!docNr) return null;
+    const parts = docNr.split('-');
+    if (parts.length > 1) {
+        return parts.slice(0, -1).join('-');
+    }
+    return null;
+  };
+
+  const seriesOptions = React.useMemo(() => {
+    const set = new Set(orders.map(o => getDocSeries(o.docNr)).filter((v): v is string => v !== null));
+    return Array.from(set).sort();
+  }, [orders]);
+
+  const comercialOptions = React.useMemo(() => {
+    let filtered = orders;
+    if (filterDocSeries !== 'All') {
+        filtered = filtered.filter(o => getDocSeries(o.docNr) === filterDocSeries);
+    }
+    const set = new Set(filtered.map(o => o.comercial).filter(Boolean));
+    return Array.from(set).sort();
+  }, [orders, filterDocSeries]);
+
+  const referenceOptions = React.useMemo(() => {
+    let filtered = orders;
+    if (filterDocSeries !== 'All') {
+        filtered = filtered.filter(o => getDocSeries(o.docNr) === filterDocSeries);
+    }
+    if (filterComercial !== 'All') {
+        filtered = filtered.filter(o => o.comercial === filterComercial);
+    }
+    const set = new Set(filtered.map(o => o.reference).filter(Boolean));
+    return Array.from(set).sort();
+  }, [orders, filterDocSeries, filterComercial]);
+
+  const handlePrevWeek = () => {
+    if (filterDate) {
+      const newDate = new Date(filterDate);
+      newDate.setDate(newDate.getDate() - 7);
+      setFilterDate(newDate);
+    }
+  };
+
+  const handleNextWeek = () => {
+    if (filterDate) {
+      const newDate = new Date(filterDate);
+      newDate.setDate(newDate.getDate() + 7);
+      setFilterDate(newDate);
+    }
+  };
+
+  const hasActiveFilters = filterDocSeries !== 'All' || 
+                           filterComercial !== 'All' || 
+                           filterReference !== 'All' || 
+                           filterStatus !== 'All' || 
+                           filterPriority !== 'All' || 
+                           filterDate !== null || 
+                           filterArchived !== 'active' ||
+                           !!searchTerm;
+
+  const handleResetFilters = () => {
+      setFilterDocSeries('All');
+      setFilterComercial('All');
+      setFilterReference('All');
+      setFilterStatus('All');
+      setFilterPriority('All');
+      setFilterDate(null);
+      setFilterArchived('active');
+      setSearchTerm('');
+  };
+
   const filteredOrders = React.useMemo(() => {
+    let weekStart: Date, weekEnd: Date;
+    if (filterDate) {
+      const range = getWeekRange(filterDate);
+      weekStart = range.start;
+      weekEnd = range.end;
+    }
+
     return orders.filter(o => {
+      const matchesDocSeries = filterDocSeries === 'All' || getDocSeries(o.docNr) === filterDocSeries;
+      const matchesComercial = filterComercial === 'All' || o.comercial === filterComercial;
+      const matchesReference = filterReference === 'All' || o.reference === filterReference;
+
+      let matchesStatus = true;
+      if (filterStatus !== 'All') {
+        const state = getOrderState(o);
+        switch (filterStatus) {
+          case 'Atrasadas': matchesStatus = state === OrderState.LATE; break;
+          case 'Em produção': matchesStatus = state === OrderState.IN_PRODUCTION; break;
+          case 'Concluídas': matchesStatus = state === OrderState.COMPLETED; break;
+          case 'Em Aberto': matchesStatus = state === OrderState.OPEN; break;
+        }
+      }
+      
+      const hasPriorityFilter = filterPriority !== 'All';
+
+      let matchesPriority = true;
+      if (hasPriorityFilter) {
+         const p = o.priority || 0;
+         matchesPriority = p.toString() === filterPriority;
+      }
+
+      let matchesDate = true;
+      if (filterDate && weekStart! && weekEnd!) {
+        const reqDate = o.requestedDate;
+        matchesDate = !!(reqDate && reqDate >= weekStart && reqDate <= weekEnd);
+      }
+
+      let matchesArchived = true;
+      if (filterArchived !== 'all') {
+         if (filterArchived === 'active') matchesArchived = !o.isArchived;
+         if (filterArchived === 'archived') matchesArchived = !!o.isArchived;
+      }
+
       const search = deferredSearch.toLowerCase().trim();
       const matchesSearch = !search || 
         (o.docNr || '').toLowerCase().includes(search) || 
@@ -178,9 +332,17 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                                   (o.docNr || '').toLowerCase().includes(globalSearch) ||
                                   (o.itemNr !== undefined && o.itemNr.toString().includes(globalSearch));
 
-      return matchesSearch && matchesGlobalSearch;
+      return matchesDocSeries && 
+             matchesComercial && 
+             matchesReference && 
+             matchesStatus && 
+             matchesPriority && 
+             matchesDate &&
+             matchesArchived &&
+             matchesSearch && 
+             matchesGlobalSearch;
     });
-  }, [orders, deferredSearch, globalSearchTerm]);
+  }, [orders, filterDocSeries, filterComercial, filterReference, filterStatus, filterPriority, filterDate, filterArchived, deferredSearch, globalSearchTerm]);
 
   const totalPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
   const paginatedOrders = React.useMemo(() => {
@@ -272,34 +434,142 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
         </button>
       </div>
 
-      <div className={`transition-all duration-300 ease-in-out xl:block ${
+      <div className={`transition-all duration-300 ease-in-out xl:max-h-none xl:opacity-100 xl:overflow-visible xl:pointer-events-auto ${
         showMobileFilters 
-          ? 'max-h-[300px] opacity-100' 
+          ? 'max-h-[800px] opacity-100' 
           : 'max-h-0 opacity-0 overflow-hidden pointer-events-none'
       }`}>
         {/* Header / Toolbar */}
         <div className="flex-shrink-0 p-4 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-          <div className="flex flex-col md:flex-row gap-3 justify-between items-center">
-            <div className="relative flex-1 w-full md:max-w-md">
+          <div className="flex flex-col xl:flex-row gap-3">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
               <input 
                 type="text" 
-                placeholder="Pesquisar..." 
+                placeholder="Pesquisar texto..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm transition-all dark:text-white"
+                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm transition-all h-full dark:text-white"
               />
             </div>
-            
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl p-2 shadow-sm transition-colors active:scale-95"
-                title="Limpar pesquisa"
-              >
-                <RotateCcw size={16} />
-              </button>
-            )}
+
+            <div className="flex flex-wrap gap-2 items-center">
+              {hasActiveFilters && (
+                <button
+                  onClick={handleResetFilters}
+                  className="bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl p-2 shadow-sm transition-colors active:scale-95 flex items-center justify-center"
+                  title="Limpar todos os filtros e pesquisa"
+                >
+                  <RotateCcw size={16} />
+                </button>
+              )}
+              
+              {!filterDate ? (
+                <button 
+                  onClick={() => setFilterDate(new Date())}
+                  className="flex items-center gap-2 border rounded-xl px-3 py-2 shadow-sm grow md:grow-0 transition-colors bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  title="Filtrar por Semana"
+                >
+                   <Calendar size={14} className="text-slate-400" />
+                   <span className="text-xs font-bold">Filtrar Semana</span>
+                </button>
+              ) : (
+                <div className="flex items-center bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-xl shadow-sm overflow-hidden grow md:grow-0">
+                  <button onClick={handlePrevWeek} className="px-2 py-2 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors">
+                    <ChevronLeft size={16} />
+                  </button>
+                  <div className="px-2 flex flex-col items-center justify-center min-w-[100px]">
+                    <span className="text-[10px] font-black uppercase text-blue-500 dark:text-blue-400 leading-none">Semana {getISOWeek(filterDate)}</span>
+                    <span className="text-[10px] font-medium text-blue-700 dark:text-blue-200 leading-none mt-0.5">
+                       {(() => {
+                         const {start, end} = getWeekRange(filterDate);
+                         return `${start.getDate()} ${start.toLocaleString('pt-PT', {month: 'short'})} - ${end.getDate()} ${end.toLocaleString('pt-PT', {month: 'short'})}`;
+                       })()}
+                    </span>
+                  </div>
+                  <button onClick={handleNextWeek} className="px-2 py-2 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors">
+                    <ChevronRight size={16} />
+                  </button>
+                  <div className="w-px h-6 bg-blue-200 dark:bg-blue-800 mx-1"></div>
+                  <button onClick={() => setFilterDate(null)} className="px-2 py-2 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-blue-400 dark:text-blue-300 hover:text-rose-500 dark:hover:text-rose-400 transition-colors">
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
+                <Flag size={14} className="text-slate-400" />
+                <select 
+                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[110px] w-full md:w-auto"
+                  value={filterPriority}
+                  onChange={(e) => setFilterPriority(e.target.value)}
+                >
+                  {priorityOptions.map(opt => <option key={opt.id} value={opt.id} className="dark:bg-slate-900">{opt.label}</option>)}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
+                <FileText size={14} className="text-slate-400" />
+                <select 
+                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[80px] w-full md:w-auto"
+                  value={filterDocSeries}
+                  onChange={(e) => setFilterDocSeries(e.target.value)}
+                >
+                  <option value="All" className="dark:bg-slate-900">Todas as Séries</option>
+                  {seriesOptions.map(opt => <option key={opt} value={opt} className="dark:bg-slate-900">{opt}</option>)}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
+                <Users size={14} className="text-slate-400" />
+                <select 
+                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[120px] max-w-[200px] w-full md:w-auto truncate"
+                  value={filterComercial}
+                  onChange={(e) => setFilterComercial(e.target.value)}
+                  disabled={comercialOptions.length === 0 && filterDocSeries === 'All'}
+                >
+                  <option value="All" className="dark:bg-slate-900">Todos os Comerciais</option>
+                  {comercialOptions.map(opt => <option key={opt} value={opt} className="dark:bg-slate-900">{opt}</option>)}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
+                <Tag size={14} className="text-slate-400" />
+                <select 
+                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[120px] max-w-[200px] w-full md:w-auto truncate"
+                  value={filterReference}
+                  onChange={(e) => setFilterReference(e.target.value)}
+                  disabled={referenceOptions.length === 0}
+                >
+                  <option value="All" className="dark:bg-slate-900">Todas as Referências</option>
+                  {referenceOptions.map(opt => <option key={opt} value={opt} className="dark:bg-slate-900">{opt}</option>)}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
+                <ListFilter size={14} className="text-slate-400" />
+                <select 
+                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[110px] w-full md:w-auto"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                >
+                  {statusOptions.map(opt => <option key={opt.id} value={opt.id} className="dark:bg-slate-900">{opt.label}</option>)}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
+                <Archive size={14} className="text-slate-400 shrink-0" />
+                <select 
+                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[80px] w-full md:w-auto"
+                  value={filterArchived}
+                  onChange={(e) => setFilterArchived(e.target.value as any)}
+                >
+                  <option value="active" className="dark:bg-slate-900">Ativas</option>
+                  <option value="archived" className="dark:bg-slate-900">Arquivadas</option>
+                  <option value="all" className="dark:bg-slate-900">Todas</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* Collapse button at the bottom of the filters inside mobile/tablet */}
