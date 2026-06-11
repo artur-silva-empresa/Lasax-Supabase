@@ -35,6 +35,8 @@ interface SectorOrderTableProps {
   user: User | null;
   capacities?: ProductionCapacity[];
   globalSearchTerm?: string;
+  globalFilterDate?: Date | null;
+  onGlobalFilterDateChange?: (date: Date | null) => void;
 }
 
 const ITEMS_PER_PAGE = 50;
@@ -77,7 +79,7 @@ const ResizableHeader = ({
   );
 };
 
-const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onViewDetails, onUpdateOrder, stopReasonsHierarchy, user, capacities = [], globalSearchTerm }) => {
+const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onViewDetails, onUpdateOrder, stopReasonsHierarchy, user, capacities = [], globalSearchTerm, globalFilterDate, onGlobalFilterDateChange }) => {
   const [searchTerm, setSearchTerm] = React.useState('');
   const deferredSearch = React.useDeferredValue(searchTerm);
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -187,7 +189,10 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
   const [filterStatus, setFilterStatus] = React.useState('All');
   const [filterPriority, setFilterPriority] = React.useState('All'); 
   const [filterArchived, setFilterArchived] = React.useState<'all' | 'active' | 'archived'>('active');
-  const [filterDate, setFilterDate] = React.useState<Date | null>(null);
+  const [internalFilterDate, setInternalFilterDate] = React.useState<Date | null>(null);
+
+  const filterDate = globalFilterDate !== undefined ? globalFilterDate : internalFilterDate;
+  const setFilterDate = onGlobalFilterDateChange || setInternalFilterDate;
 
   const statusOptions = [
     { id: 'All', label: 'Todos os Estados' },
@@ -471,16 +476,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                   title="Filtrar por Semana"
                 >
                    <Calendar size={14} className="text-slate-400" />
-                   <span className="text-xs font-bold">Filtrar Semana ({
-                     {
-                       'tecelagem': 'Data Tec.',
-                       'felpo_cru': 'Data F.Cru',
-                       'tinturaria': 'Data Tint.',
-                       'confeccao': 'Data Conf.',
-                       'embalagem': 'Data Emb.',
-                       'expedicao': 'Data S/Exp.'
-                     }[sector.id] || 'Data'
-                   })</span>
+                   <span className="text-xs font-bold">Filtrar Semana</span>
                 </button>
               ) : (
                 <div className="flex items-center bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-xl shadow-sm overflow-hidden grow md:grow-0">

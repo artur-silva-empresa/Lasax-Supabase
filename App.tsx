@@ -44,6 +44,8 @@ const App: React.FC = () => {
   
   // Global search state
   const [globalSearchTerm, setGlobalSearchTerm] = React.useState('');
+  // Global filter date state for sector tables
+  const [globalFilterDate, setGlobalFilterDate] = React.useState<Date | null>(null);
   
   // PWA Installation support
   const [deferredPrompt, setDeferredPrompt] = React.useState<any>(null);
@@ -507,6 +509,8 @@ const App: React.FC = () => {
                         user={currentUser}
                         capacities={capacities}
                         globalSearchTerm={globalSearchTerm}
+                        globalFilterDate={globalFilterDate}
+                        onGlobalFilterDateChange={setGlobalFilterDate}
                     />
                 </div>
             </div>
