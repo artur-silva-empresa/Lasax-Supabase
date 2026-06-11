@@ -498,6 +498,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex-1 overflow-hidden">
                     <SectorOrderTable 
+                        key={sector.id}
                         orders={orders} 
                         sector={sector!}
                         onViewDetails={handleViewDetails} 

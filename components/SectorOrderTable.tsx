@@ -310,8 +310,8 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
 
       let matchesDate = true;
       if (filterDate && weekStart! && weekEnd!) {
-        const reqDate = o.requestedDate;
-        matchesDate = !!(reqDate && reqDate >= weekStart && reqDate <= weekEnd);
+        const sectorDate = getSectorDate(o);
+        matchesDate = !!(sectorDate && sectorDate >= weekStart && sectorDate <= weekEnd);
       }
 
       let matchesArchived = true;
@@ -471,7 +471,16 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                   title="Filtrar por Semana"
                 >
                    <Calendar size={14} className="text-slate-400" />
-                   <span className="text-xs font-bold">Filtrar Semana</span>
+                   <span className="text-xs font-bold">Filtrar Semana ({
+                     {
+                       'tecelagem': 'Data Tec.',
+                       'felpo_cru': 'Data F.Cru',
+                       'tinturaria': 'Data Tint.',
+                       'confeccao': 'Data Conf.',
+                       'embalagem': 'Data Emb.',
+                       'expedicao': 'Data S/Exp.'
+                     }[sector.id] || 'Data'
+                   })</span>
                 </button>
               ) : (
                 <div className="flex items-center bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-xl shadow-sm overflow-hidden grow md:grow-0">
