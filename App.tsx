@@ -620,17 +620,18 @@ const App: React.FC = () => {
   };
 
   const alertCount = React.useMemo(() => {
-    const lateCount = orders.filter(o => {
-        const now = new Date();
-        return o.requestedDate && o.requestedDate < now && o.qtyOpen > 0;
-    }).length;
-
-    const pendingCount = orders.reduce((acc, o) => {
-        const pending = o.sectorPredictedDatesPending || {};
-        return acc + Object.values(pending).filter(v => v === true).length;
-    }, 0);
-
-    return lateCount + pendingCount;
+    const alertOrders = orders.filter(o => {
+        const hasObs = o.sectorObservations && Object.values(o.sectorObservations).some(v => typeof v === 'string' && v.trim() !== '');
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const isLate = o.requestedDate && o.requestedDate < today && o.qtyOpen > 0;
+        
+        return hasObs || isLate;
+    });
+    
+    const uniqueDocs = new Set(alertOrders.map(o => o.docNr));
+    return uniqueDocs.size;
   }, [orders]);
 
   // Estado para o aviso de base de dados existente no login

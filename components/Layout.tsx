@@ -18,7 +18,8 @@ import {
   Calendar,
   Target,
   Zap,
-  Search
+  Search,
+  MessageSquare
 } from 'lucide-react';
 import { User, Order } from '../types';
 import { SECTORS } from '../constants';
@@ -337,7 +338,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
             <button
               onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
               className={`relative p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors ${isNotificationsOpen ? 'bg-slate-100 dark:bg-slate-800 text-blue-600' : 'text-slate-500 dark:text-slate-400'}`}
-              title={`${alertCount} Notificações (Atrasos e Datas Pendentes)`}
+              title={`${alertCount} Notificações (Atrasos e Notas)`}
             >
               <Bell size={20} />
               {alertCount > 0 && (
@@ -363,52 +364,77 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                   </div>
 
                   <div className="max-h-[400px] overflow-y-auto overflow-x-hidden py-2">
-                    {orders.filter(o => {
+                    {Object.values(orders.filter(o => {
+                      const hasObs = o.sectorObservations && Object.values(o.sectorObservations).some(v => typeof v === 'string' && v.trim() !== '');
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
                       const isLate = o.requestedDate && o.requestedDate < today && o.qtyOpen > 0;
-                      const hasPending = o.sectorPredictedDatesPending && Object.values(o.sectorPredictedDatesPending).some(v => v === true);
-                      return isLate || hasPending;
-                    }).map(order => {
+                      return hasObs || isLate;
+                    }).reduce((acc, order) => {
+                      if (!acc[order.docNr]) {
+                        acc[order.docNr] = {
+                          mainOrder: order,
+                          count: 0,
+                          isLate: false,
+                          obsSectors: new Set<string>()
+                        };
+                      }
+                      
+                      acc[order.docNr].count++;
+                      
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
-                      const isLate = order.requestedDate && order.requestedDate < today && order.qtyOpen > 0;
-                      const pendingSectors = Object.entries(order.sectorPredictedDatesPending || {})
-                        .filter(([_, v]) => v === true)
-                        .map(([id, _]) => SECTORS.find(s => s.id === id)?.name || id);
+                      if (order.requestedDate && order.requestedDate < today && order.qtyOpen > 0) {
+                        acc[order.docNr].isLate = true;
+                      }
+
+                      Object.entries(order.sectorObservations || {}).forEach(([id, v]) => {
+                        if (typeof v === 'string' && v.trim() !== '') {
+                          acc[order.docNr].obsSectors.add(SECTORS.find(s => s.id === id)?.name || id);
+                        }
+                      });
+
+                      return acc;
+                    }, {} as Record<string, {mainOrder: Order, count: number, isLate: boolean, obsSectors: Set<string>}>)).map(({mainOrder, count, isLate, obsSectors}) => {
+                      const obsEntries = Array.from(obsSectors);
 
                       return (
                         <button
-                          key={order.id}
+                          key={mainOrder.docNr}
                           onClick={() => {
-                            onViewDetails(order);
+                            if (onGlobalSearch) {
+                              onGlobalSearch(mainOrder.docNr);
+                              if (activeView !== 'dashboard') {
+                                setActiveView('orders');
+                              }
+                            } else {
+                              onViewDetails(mainOrder);
+                            }
                             setIsNotificationsOpen(false);
                           }}
                           className="w-full text-left p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-50 dark:border-slate-800 last:border-0 group"
                         >
                           <div className="flex justify-between items-start mb-1">
                             <span className="font-bold text-sm text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                              {order.clientName}
+                              {mainOrder.clientName} {count > 1 && <span className="text-xs font-normal text-slate-400 ml-1">({count} linhas)</span>}
                             </span>
-                            <span className="text-[10px] font-bold text-slate-400">{order.docNr}</span>
+                            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">Doc: {mainOrder.docNr}</span>
                           </div>
                           <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2 truncate">
-                            {order.reference} • {order.colorDesc}
+                            {count > 1 ? 'Várias referências / cores' : `${mainOrder.reference} • ${mainOrder.colorDesc}`}
                           </p>
 
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-col gap-1.5 mt-2">
                             {isLate && (
-                              <div className="flex items-center gap-1 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 px-2 py-0.5 rounded-md">
-                                <AlertTriangle size={10} />
-                                <span className="text-[10px] font-black uppercase tracking-tighter">Entrega Atrasada</span>
+                              <div className="flex w-fit items-center gap-1.5 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 px-2 py-1 rounded-md">
+                                <AlertTriangle size={12} />
+                                <span className="text-[10px] font-black uppercase tracking-tighter">Data Pedida Ultrapassada</span>
                               </div>
                             )}
-                            {pendingSectors.length > 0 && (
-                              <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-0.5 rounded-md">
-                                <Calendar size={10} />
-                                <span className="text-[10px] font-black uppercase tracking-tighter">
-                                  Validar: {pendingSectors.join(', ')}
-                                </span>
+                            {obsEntries.length > 0 && (
+                              <div className="flex w-fit items-center gap-1.5 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-md">
+                                <MessageSquare size={12} />
+                                <span className="text-[10px] font-black uppercase tracking-tighter">Notas: {obsEntries.join(', ')}</span>
                               </div>
                             )}
                           </div>
