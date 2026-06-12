@@ -342,7 +342,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
             >
               <Bell size={20} />
               {alertCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-rose-500 text-white text-[9px] font-black flex items-center justify-center rounded-full border-2 border-white dark:border-slate-900">
+                <span className="absolute -top-1.5 -right-3 min-w-[20px] h-[20px] px-2 bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white dark:border-slate-900 leading-none shadow-sm">
                   {alertCount}
                 </span>
               )}
