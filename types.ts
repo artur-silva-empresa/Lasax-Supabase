@@ -146,6 +146,7 @@ export interface ImportLog {
 export interface DashboardKPIs {
   totalActiveDocs: number;
   totalLate: number;
+  totalLateDocs: number;
   deliveriesThisWeek: number;
   fulfillmentRateWeek: number;
   totalInProduction: number;

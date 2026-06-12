@@ -594,30 +594,33 @@ export const calculateKPIs = (orders: Order[]): DashboardKPIs => {
 
   // 2. Atrasadas (Qualquer sector)
   const late = orders.filter(o => getOrderState(o) === OrderState.LATE);
+  const uniqueLateDocs = new Set(late.map(o => o.docNr));
 
-  // 3. Entregas da Semana (Baseado na Data de Pedido/Expedição)
-  // Considera orders com data pedida dentro da semana corrente
+  // 3. Entregas da Semana (Baseado na Data de Expedição)
+  // Considera orders com data prevista de expedição dentro da semana corrente
   const ordersThisWeek = orders.filter(o => {
-    // Usa requestedDate como data principal de entrega, fallback para armExpDate
-    const dateToCheck = o.requestedDate || o.armExpDate; 
+    const dateToCheck = o.armExpDate; 
     return dateToCheck && dateToCheck >= weekStart && dateToCheck <= weekEnd;
   });
   
-  const deliveriesThisWeek = ordersThisWeek.length;
+  const uniqueOrdersThisWeek = new Set(ordersThisWeek.map(o => o.docNr));
+  const deliveriesThisWeek = uniqueOrdersThisWeek.size;
 
-  // 4. Taxa de Conclusão Semanal
-  // (Encomendas desta semana que estão Concluídas) / (Total de encomendas desta semana)
+  // 4. Taxa de Conclusão Semanal (Sector Stock/Expedição)
+  // (Encomendas desta semana que estão Concluídas na expedição) / (Total de encomendas desta semana)
   const completedThisWeek = ordersThisWeek.filter(o => {
       const state = getOrderState(o);
-      // Se estado for COMPLETED ou se já estiverem em Expedição (último setor antes de faturar)
-      return state === OrderState.COMPLETED || getSectorState(o, 'expedicao') === SectorState.COMPLETED || getSectorState(o, 'expedicao') === SectorState.IN_PROGRESS;
-  }).length;
+      return state === OrderState.COMPLETED || getSectorState(o, 'expedicao') === SectorState.COMPLETED;
+  });
+  
+  const uniqueCompletedThisWeek = new Set(completedThisWeek.map(o => o.docNr));
 
-  const fulfillmentRateWeek = deliveriesThisWeek > 0 ? (completedThisWeek / deliveriesThisWeek) * 100 : 0;
+  const fulfillmentRateWeek = deliveriesThisWeek > 0 ? (uniqueCompletedThisWeek.size / deliveriesThisWeek) * 100 : 0;
 
   return {
     totalActiveDocs: uniqueActiveDocs.size,
     totalLate: late.length,
+    totalLateDocs: uniqueLateDocs.size,
     deliveriesThisWeek: deliveriesThisWeek,
     fulfillmentRateWeek: fulfillmentRateWeek,
     totalInProduction: activeOrders.length,

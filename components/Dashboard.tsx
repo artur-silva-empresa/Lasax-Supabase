@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import { TrendingUp, AlertCircle, Calendar, CheckCircle2 } from 'lucide-react';
 import { Order, DashboardKPIs } from '../types';
-import { calculateKPIs } from '../services/dataService';
+import { calculateKPIs, getWeekRange } from '../services/dataService';
 import { SECTORS } from '../constants';
 import { ActiveFilterType } from './OrderTable';
 
@@ -28,43 +28,79 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders }) => 
     { name: 'Concluídas', value: orders.filter(o => o.qtyOpen === 0).length },
   ];
 
-  const sectorLoadData = React.useMemo(() => {
-    const load = {
-      tecelagem: 0,
-      felpo_cru: 0,
-      tinturaria: 0,
-      confeccao: 0,
-      embalagem: 0,
-      expedicao: 0
-    };
-
-    orders.forEach(order => {
-      const qReq = order.qtyRequested || 0;
-      if (qReq <= 0) return;
-
-      const pTecelagem = order.felpoCruQty || 0;
-      const pFelpoCru = order.felpoCruQty || 0; 
-      const pTinturaria = order.tinturariaQty || 0;
-      const pConfeccao = (order.confRoupoesQty || 0) + (order.confFelposQty || 0);
-      const pEmbalagem = order.embAcabQty || 0;
-      const pExpedicao = order.stockCxQty || 0;
-
-      load.tecelagem += Math.max(0, qReq - pTecelagem);
-      load.felpo_cru += Math.max(0, qReq - pFelpoCru);
-      load.tinturaria += Math.max(0, qReq - pTinturaria);
-      load.confeccao += Math.max(0, qReq - pConfeccao);
-      load.embalagem += Math.max(0, qReq - pEmbalagem);
-      load.expedicao += Math.max(0, qReq - pExpedicao);
+  const weeklyLoadData = React.useMemo(() => {
+    const now = new Date();
+    const weekRanges = [0, 1, 2, 3].map(wIndex => {
+        const d = new Date(now);
+        d.setDate(d.getDate() + wIndex * 7);
+        const { start, end } = getWeekRange(d);
+        
+        // Calcular número da semana
+        const dateForWeek = new Date(Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()));
+        const dayNum = dateForWeek.getUTCDay() || 7;
+        dateForWeek.setUTCDate(dateForWeek.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(dateForWeek.getUTCFullYear(), 0, 1));
+        const weekNum = Math.ceil((((dateForWeek.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+        
+        return { start, end, label: `Sem. ${weekNum}` };
     });
 
-    return [
-      { name: 'Tecelagem', value: load.tecelagem, color: '#3b82f6' },
-      { name: 'Felpo Cru', value: load.felpo_cru, color: '#6366f1' },
-      { name: 'Tinturaria', value: load.tinturaria, color: '#8b5cf6' },
-      { name: 'Confecção', value: load.confeccao, color: '#d946ef' },
-      { name: 'Embalagem', value: load.embalagem, color: '#ec4899' },
-      { name: 'Expedição', value: load.expedicao, color: '#14b8a6' },
-    ];
+    const dataBySector = Object.fromEntries(
+        SECTORS.map(s => [s.id, { w0: new Set<string>(), w1: new Set<string>(), w2: new Set<string>(), w3: new Set<string>() }])
+    );
+
+    orders.forEach(o => {
+        if (o.qtyOpen <= 0) return; // Só verificar encomendas ativas/não fechadas
+
+        const getSectorDate = (id: string) => {
+            switch (id) {
+              case 'tecelagem': return o.dataTec;
+              case 'felpo_cru': return o.felpoCruDate;
+              case 'tinturaria': return o.tinturariaDate;
+              case 'confeccao': return o.confDate;
+              case 'embalagem': return o.armExpDate;
+              case 'expedicao': return o.armExpDate;
+              default: return null;
+            }
+        };
+
+        const isSectorCompleted = (id: string) => {
+             let qty = 0;
+             switch (id) {
+                case 'tecelagem': qty = o.felpoCruQty || 0; break;
+                case 'felpo_cru': qty = o.felpoCruQty || 0; break;
+                case 'tinturaria': qty = o.tinturariaQty || 0; break;
+                case 'confeccao': qty = (o.confRoupoesQty || 0) + (o.confFelposQty || 0); break;
+                case 'embalagem': qty = o.embAcabQty || 0; break;
+                case 'expedicao': qty = o.stockCxQty || 0; break;
+             }
+             return o.qtyRequested && o.qtyRequested > 0 && qty >= o.qtyRequested;
+        };
+
+        SECTORS.forEach(s => {
+            const date = getSectorDate(s.id);
+            if (!date) return;
+            if (isSectorCompleted(s.id)) return; // Ignora se já estiver executado no setor
+
+            weekRanges.forEach((range, idx) => {
+                if (date >= range.start && date <= range.end) {
+                    const key = `w${idx}` as keyof typeof dataBySector[string];
+                    dataBySector[s.id][key].add(o.docNr);
+                }
+            });
+        });
+    });
+
+    return {
+        columns: weekRanges,
+        data: SECTORS.map(s => ({
+            name: s.name,
+            w0: dataBySector[s.id].w0.size,
+            w1: dataBySector[s.id].w1.size,
+            w2: dataBySector[s.id].w2.size,
+            w3: dataBySector[s.id].w3.size,
+        }))
+    };
   }, [orders]);
 
   const sectorCompletionData = React.useMemo(() => {
@@ -139,7 +175,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders }) => 
           />
           <KPICard 
             title="Encomendas Atrasadas" 
-            value={kpis.totalLate} 
+            value={kpis.totalLateDocs} 
             subtitle="Qualquer sector"
             icon={<AlertCircle size={16} className="text-rose-600 dark:text-rose-400" />}
             color="rose"
@@ -168,46 +204,51 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders }) => 
 
         {/* Charts Grid Row 1 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-          {/* Gráfico Horizontal de Carga por Sector */}
           <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col transition-colors">
             <h3 className="font-black text-slate-700 dark:text-slate-200 text-xs uppercase tracking-widest mb-1">Carga por Sector (Em Falta)</h3>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-4">Total de peças que ainda faltam produzir em cada secção (Base: Quantidade Pedida).</p>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart 
-                  data={sectorLoadData} 
-                  layout="vertical"
-                  margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#334155" opacity={0.2} />
-                  <XAxis type="number" hide />
-                  <YAxis 
-                    dataKey="name" 
-                    type="category" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{fill: '#64748b', fontSize: 11, fontWeight: 600}} 
-                    width={80}
-                  />
-                  <Tooltip 
-                    cursor={{fill: 'rgba(255,255,255,0.05)'}}
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', backgroundColor: '#1e293b', color: '#f1f5f9' }}
-                    itemStyle={{ color: '#e2e8f0' }}
-                    labelStyle={{ color: '#94a3b8' }}
-                    formatter={(value: number) => [value.toLocaleString('pt-PT'), 'Peças em Falta']}
-                  />
-                  <Bar 
-                    dataKey="value" 
-                    radius={[0, 4, 4, 0]} 
-                    barSize={24}
-                    name="Peças em Falta"
-                  >
-                    {sectorLoadData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-4">Total de encomendas para execução em cada secção nas próximas 4 semanas (Documentos Únicos).</p>
+            <div className="w-full overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+              <table className="w-full min-w-max text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800/50">
+                    <th className="px-4 py-3 text-xs font-bold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">Sector</th>
+                    {weeklyLoadData.columns.map((col, i) => (
+                      <th key={i} className="px-4 py-3 text-xs font-bold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                        {col.label}
+                      </th>
                     ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                  {weeklyLoadData.data.map((row, i) => (
+                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        {row.name}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                        <span className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 py-1 px-2 rounded-md font-medium text-xs">
+                           {row.w0} Docs
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                        <span className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 py-1 px-2 rounded-md font-medium text-xs">
+                           {row.w1} Docs
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                        <span className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 py-1 px-2 rounded-md font-medium text-xs">
+                           {row.w2} Docs
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                        <span className="bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300 py-1 px-2 rounded-md font-medium text-xs">
+                           {row.w3} Docs
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 
