@@ -620,19 +620,37 @@ const App: React.FC = () => {
   };
 
   const alertCount = React.useMemo(() => {
+    let currentSectorId: string | null = null;
+    if (activeView.startsWith('sector-')) {
+        currentSectorId = activeView.replace('sector-', '');
+    }
+
     const alertOrders = orders.filter(o => {
         const hasObs = o.sectorObservations && Object.values(o.sectorObservations).some(v => typeof v === 'string' && v.trim() !== '');
         
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const isLate = o.requestedDate && o.requestedDate < today && o.qtyOpen > 0;
+
+        let dateToCheck = o.requestedDate;
+        if (currentSectorId) {
+            switch (currentSectorId) {
+              case 'tecelagem': dateToCheck = o.dataTec; break;
+              case 'felpo_cru': dateToCheck = o.felpoCruDate; break;
+              case 'tinturaria': dateToCheck = o.tinturariaDate; break;
+              case 'confeccao': dateToCheck = o.confDate; break;
+              case 'embalagem': dateToCheck = o.armExpDate; break;
+              case 'expedicao': dateToCheck = o.armExpDate; break;
+            }
+        }
+        
+        const isLate = dateToCheck && dateToCheck < today && o.qtyOpen > 0;
         
         return hasObs || isLate;
     });
     
     const uniqueDocs = new Set(alertOrders.map(o => o.docNr));
     return uniqueDocs.size;
-  }, [orders]);
+  }, [orders, activeView]);
 
   // Estado para o aviso de base de dados existente no login
   const [pendingLoginUser, setPendingLoginUser] = React.useState<User | null>(null);

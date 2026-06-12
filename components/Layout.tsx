@@ -365,10 +365,28 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
 
                   <div className="max-h-[400px] overflow-y-auto overflow-x-hidden py-2">
                     {Object.values(orders.filter(o => {
+                      let currentSectorId: string | null = null;
+                      if (activeView && activeView.startsWith('sector-')) {
+                          currentSectorId = activeView.replace('sector-', '');
+                      }
+
                       const hasObs = o.sectorObservations && Object.values(o.sectorObservations).some(v => typeof v === 'string' && v.trim() !== '');
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
-                      const isLate = o.requestedDate && o.requestedDate < today && o.qtyOpen > 0;
+
+                      let dateToCheck = o.requestedDate;
+                      if (currentSectorId) {
+                          switch (currentSectorId) {
+                            case 'tecelagem': dateToCheck = o.dataTec; break;
+                            case 'felpo_cru': dateToCheck = o.felpoCruDate; break;
+                            case 'tinturaria': dateToCheck = o.tinturariaDate; break;
+                            case 'confeccao': dateToCheck = o.confDate; break;
+                            case 'embalagem': dateToCheck = o.armExpDate; break;
+                            case 'expedicao': dateToCheck = o.armExpDate; break;
+                          }
+                      }
+
+                      const isLate = dateToCheck && dateToCheck < today && o.qtyOpen > 0;
                       return hasObs || isLate;
                     }).reduce((acc, order) => {
                       if (!acc[order.docNr]) {
@@ -382,9 +400,27 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                       
                       acc[order.docNr].count++;
                       
+                      let currentSectorId: string | null = null;
+                      if (activeView && activeView.startsWith('sector-')) {
+                          currentSectorId = activeView.replace('sector-', '');
+                      }
+
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
-                      if (order.requestedDate && order.requestedDate < today && order.qtyOpen > 0) {
+
+                      let dateToCheck = order.requestedDate;
+                      if (currentSectorId) {
+                          switch (currentSectorId) {
+                            case 'tecelagem': dateToCheck = order.dataTec; break;
+                            case 'felpo_cru': dateToCheck = order.felpoCruDate; break;
+                            case 'tinturaria': dateToCheck = order.tinturariaDate; break;
+                            case 'confeccao': dateToCheck = order.confDate; break;
+                            case 'embalagem': dateToCheck = order.armExpDate; break;
+                            case 'expedicao': dateToCheck = order.armExpDate; break;
+                          }
+                      }
+
+                      if (dateToCheck && dateToCheck < today && order.qtyOpen > 0) {
                         acc[order.docNr].isLate = true;
                       }
 
