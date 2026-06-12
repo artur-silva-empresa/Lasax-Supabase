@@ -512,7 +512,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
         </header>
 
         {/* ÁREA DE CONTEÚDO */}
-        <main className="flex-1 overflow-hidden">
+        <main className="flex-1 overflow-hidden relative pb-24 md:pb-0">
           <div className="max-w-[1600px] mx-auto h-full">
             {children}
           </div>
@@ -520,7 +520,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
       </div>
 
       {/* Mobile Bottom Navigation - Fixa na base */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 h-16 flex items-center justify-around px-2 z-50 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+      <nav 
+        className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around px-2 z-50 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]"
+        style={{ height: 'calc(4rem + env(safe-area-inset-bottom))', paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
         {menuItems.map((item) => (
           <button
             key={item.id}

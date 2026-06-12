@@ -18,13 +18,15 @@ import {
   FileText,
   Users,
   Tag,
-  Archive
+  Archive,
+  Trash2
 } from 'lucide-react';
 import { Order, Sector, User, ProductionCapacity, OrderState } from '../types';
 import { getOrderState, getWeekRange } from '../services/dataService';
 import { formatDate } from '../utils/formatters';
 import StopReasonSelector from './StopReasonSelector';
 import { calcOrderCapacityInfo } from '../utils/capacityUtils';
+import { SECTORS } from '../constants';
 
 interface SectorOrderTableProps {
   orders: Order[];
@@ -385,6 +387,28 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
     };
     delete updatedPending[sector.id];
 
+    const currentPredictedDate = order.sectorPredictedDates?.[sector.id] 
+        ? new Date(order.sectorPredictedDates[sector.id]!).toISOString().split('T')[0] 
+        : '';
+    const dateChanged = editDate !== currentPredictedDate;
+
+    if (dateChanged) {
+        const sectorIdx = SECTORS.findIndex(s => s.id === sector.id);
+        if (sectorIdx !== -1) {
+            for (let i = sectorIdx + 1; i < SECTORS.length; i++) {
+                const nextSectorId = SECTORS[i].id;
+                if (updatedPredictedDates[nextSectorId]) {
+                    if (updatedPending[nextSectorId]) {
+                        updatedPredictedDates[nextSectorId] = null;
+                        delete updatedPending[nextSectorId];
+                    } else {
+                        updatedPending[nextSectorId] = true;
+                    }
+                }
+            }
+        }
+    }
+
     onUpdateOrder({
         ...order,
         sectorObservations: updatedObservations,
@@ -593,9 +617,10 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-y-auto w-full overflow-x-auto relative" onScroll={handleListScroll}>
-        <table className="min-w-full w-max text-left border-collapse table-fixed">
-          <thead className="bg-slate-100 dark:bg-slate-900 sticky top-0 z-20 shadow-sm">
+      <div className="flex-1 overflow-y-auto w-full relative" onScroll={handleListScroll}>
+        <div className="hidden md:block overflow-x-auto h-full min-h-[300px]">
+          <table className="min-w-full w-max text-left border-collapse table-fixed">
+            <thead className="bg-slate-100 dark:bg-slate-900 sticky top-0 z-20 shadow-sm">
             <tr>
               <ResizableHeader colId="doc" title="Doc. Nr." width={columnWidths['doc'] || 100} onResize={handleColResize} className="whitespace-nowrap" />
               <ResizableHeader colId="client" title="Cliente" width={columnWidths['client'] || 150} onResize={handleColResize} className="whitespace-nowrap" />
@@ -692,12 +717,21 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                   {/* Editable Predicted Date */}
                   <td className="px-4 py-3 align-top text-center" onClick={e => e.stopPropagation()}>
                     {isEditing ? (
-                        <input
-                            type="date"
-                            value={editDate}
-                            onChange={(e) => setEditDate(e.target.value)}
-                            className="w-full text-xs p-1 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 dark:border-slate-600 dark:text-white"
-                        />
+                        <div className="flex items-center gap-1">
+                            <input
+                                type="date"
+                                value={editDate}
+                                onChange={(e) => setEditDate(e.target.value)}
+                                className="w-full text-xs p-1 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 dark:border-slate-600 dark:text-white"
+                            />
+                            <button
+                                onClick={() => setEditDate('')}
+                                className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"
+                                title="Limpar data"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
                     ) : (
                         <div className="flex flex-col items-center gap-1">
                             <span className={`text-xs font-bold ${order.sectorPredictedDatesPending?.[sector.id] ? 'text-orange-500 animate-pulse' : (predictedDate ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400')}`}>
@@ -788,6 +822,168 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
             )}
           </tbody>
         </table>
+        </div>
+
+        {/* Mobile Grid */}
+        <div className="md:hidden grid grid-cols-1 gap-3 p-4">
+          {paginatedOrders.map((order) => {
+            const isEditing = editingId === order.id;
+            const producedQty = getSectorProducedQty(order);
+            const exitDate = getSectorDate(order);
+            const predictedDate = order.sectorPredictedDates?.[sector.id];
+            const obs = order.sectorObservations?.[sector.id];
+            const capInfo = capacities.length > 0 ? calcOrderCapacityInfo(order, sector.id, capacities) : null;
+
+            return (
+              <div 
+                key={order.id}
+                onClick={() => !isEditing && onViewDetails(order)}
+                className={`p-4 rounded-2xl border transition-colors space-y-4 ${isEditing ? 'border-blue-300 dark:border-blue-700 bg-blue-50/20 dark:bg-slate-900' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800'}`}
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-black text-slate-800 dark:text-white text-base leading-none">{order.docNr}</h3>
+                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-1">{order.clientName || 'Sem Cliente'}</p>
+                  </div>
+                  
+                  <div className="flex flex-col items-end gap-2" onClick={e => e.stopPropagation()}>
+                    {isEditing ? (
+                      <div className="flex gap-1">
+                        <button onClick={(e) => handleSaveClick(order, e)} className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg shadow-sm">
+                            <Check size={14} />
+                        </button>
+                        <button onClick={handleCancelClick} className="p-1.5 bg-slate-100 text-slate-600 rounded-lg shadow-sm">
+                            <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      canEdit && (
+                        <button onClick={(e) => handleEditClick(order, e)} className="p-1.5 text-slate-500 bg-slate-100 dark:bg-slate-800 rounded-lg shadow-sm">
+                          <Edit2 size={14} />
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase">Referência / Cor</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{order.reference}</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{order.colorDesc}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase">Medida / Família</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{order.sizeDesc}</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{order.family}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-0.5">Qtd / Prod</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                      {order.qtyRequested.toLocaleString('pt-PT')} / <span className="font-black text-slate-900 dark:text-white">{producedQty.toLocaleString('pt-PT')}</span>
+                    </p>
+                  </div>
+                  
+                  <div className="text-right">
+                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-0.5">Cap / Est</p>
+                    {capInfo ? (
+                      capInfo.remainingQty === 0 ? (
+                        <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400">✓ Concluído</span>
+                      ) : (
+                        <span className={`text-[10px] font-black ${capInfo.estimatedDays > 10 ? 'text-rose-600' : capInfo.estimatedDays > 5 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                          {capInfo.estimatedDays}d est.
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5">Previsão Entrega</p>
+                    {isEditing ? (
+                        <div className="flex items-center gap-1">
+                            <input
+                                type="date"
+                                value={editDate}
+                                onChange={(e) => setEditDate(e.target.value)}
+                                className="w-full text-xs p-1.5 border border-blue-300 rounded-lg outline-none bg-white dark:bg-slate-800 dark:text-white shadow-sm"
+                            />
+                            <button
+                                onClick={() => setEditDate('')}
+                                className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors shadow-sm"
+                                title="Limpar data"
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
+                    ) : (
+                      <div className="flex flex-col gap-1">
+                        <span className={`text-xs font-bold ${order.sectorPredictedDatesPending?.[sector.id] ? 'text-orange-500 animate-pulse' : (predictedDate ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400')}`}>
+                            {predictedDate ? formatDate(predictedDate) : '-'}
+                        </span>
+                        {order.sectorPredictedDatesPending?.[sector.id] && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-[8px] font-black text-orange-500 uppercase flex items-center gap-0.5">
+                                    <AlertCircle size={8} /> Pendente
+                                </span>
+                                {canEdit && (
+                                    <button
+                                        onClick={(e) => handleQuickValidate(order, e)}
+                                        className="bg-emerald-500 hover:bg-emerald-600 text-white p-1 rounded-full shadow-sm"
+                                    >
+                                        <Check size={10} strokeWidth={4} />
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5">Classificação</p>
+                    <StopReasonSelector 
+                        currentReason={order.sectorStopReasons?.[sector.id]} 
+                        onSelect={(reason) => onUpdateOrder({ 
+                          ...order, 
+                          sectorStopReasons: { ...(order.sectorStopReasons || {}), [sector.id]: reason } 
+                        })}
+                        hierarchy={stopReasonsHierarchy}
+                        disabled={!canEdit}
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2" onClick={e => e.stopPropagation()}>
+                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1">Observações</p>
+                    {isEditing ? (
+                        <textarea
+                            value={editObs}
+                            onChange={(e) => setEditObs(e.target.value)}
+                            className="w-full text-xs p-2 border border-blue-300 rounded-lg outline-none bg-white dark:bg-slate-800 dark:text-white shadow-sm"
+                            rows={2}
+                            placeholder="Adicionar observação..."
+                        />
+                    ) : (
+                        <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-tight">
+                            {obs || '-'}
+                        </p>
+                    )}
+                </div>
+
+              </div>
+            );
+          })}
+          {paginatedOrders.length === 0 && (
+              <div className="p-8 text-center text-slate-400 font-medium">Nenhum resultado encontrado.</div>
+          )}
+        </div>
+
       </div>
 
       {/* Pagination */}

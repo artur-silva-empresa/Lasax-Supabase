@@ -1287,7 +1287,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
 
       {/* Floating Bulk Actions Bar */}
       {selectedOrderIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] w-[92%] md:w-auto max-w-4xl bg-slate-900 border border-slate-800 shadow-2xl rounded-2xl flex flex-col md:flex-row items-center gap-4 py-3.5 pb-4 md:pb-3.5 px-5 text-white animate-in slide-in-from-bottom-5 duration-300 transition-all font-sans text-xs">
+        <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[45] w-[92%] md:w-auto max-w-4xl bg-slate-900 border border-slate-800 shadow-2xl rounded-2xl flex flex-col md:flex-row items-center gap-4 py-3.5 pb-4 md:pb-3.5 px-5 text-white animate-in slide-in-from-bottom-5 duration-300 transition-all font-sans text-xs">
           {/* Left item: Selection Info */}
           <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
             <div className="flex items-center gap-2">
