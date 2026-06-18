@@ -19,10 +19,12 @@ import {
   Users,
   Tag,
   Archive,
-  Trash2
+  Trash2,
+  Download,
+  Loader2
 } from 'lucide-react';
 import { Order, Sector, User, ProductionCapacity, OrderState } from '../types';
-import { getOrderState, getWeekRange } from '../services/dataService';
+import { getOrderState, getWeekRange, exportCustomColumns, loadExportColumnsConfig, DEFAULT_SELECTED_COLUMNS } from '../services/dataService';
 import { formatDate } from '../utils/formatters';
 import StopReasonSelector from './StopReasonSelector';
 import { calcOrderCapacityInfo } from '../utils/capacityUtils';
@@ -87,6 +89,10 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
   const [currentPage, setCurrentPage] = React.useState(1);
   const [showMobileFilters, setShowMobileFilters] = React.useState(true);
   const lastScrollTop = React.useRef(0);
+
+  // Estados para exportação Tabela Personalizada
+  const [isExportingTable, setIsExportingTable] = React.useState(false);
+  const [tableExportSuccess, setTableExportSuccess] = React.useState(false);
 
   const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (window.innerWidth >= 1280) return;
@@ -437,8 +443,76 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
     });
   };
 
+  const handleTableExport = async () => {
+    if (filteredOrders.length === 0) return;
+    setIsExportingTable(true);
+    setTableExportSuccess(false);
+    try {
+        const savedConfig = await loadExportColumnsConfig();
+        const selectedKeys = savedConfig && savedConfig.length > 0
+            ? savedConfig
+            : DEFAULT_SELECTED_COLUMNS;
+        
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        const prefix = "Exportacao_" + sector.name;
+        
+        const dateStr = `${day}-${month}-${year}`;
+        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
+
+        const fileName = `${prefix} ${dateStr} ${timeStr}.xlsx`;
+
+        exportCustomColumns(filteredOrders, selectedKeys, fileName);
+        setTableExportSuccess(true);
+        setTimeout(() => setTableExportSuccess(false), 3000);
+    } catch (error) {
+        console.error(error);
+        alert("Erro ao exportar Tabela.");
+    } finally {
+        setIsExportingTable(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500">
+      <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400">
+                  {sector?.icon && React.createElement(sector.icon, { size: 24 })}
+              </div>
+              <div>
+                  <h2 className="text-lg font-bold text-slate-800 dark:text-white">Sector: {sector?.name}</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Listagem de encomendas</p>
+              </div>
+          </div>
+          <button
+            onClick={handleTableExport}
+            disabled={isExportingTable}
+            className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[150px] justify-center ${
+              tableExportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
+            }`}
+            title="Exportar Tabela (Colunas Personalizadas)"
+          >
+             {isExportingTable ? (
+                <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span className="text-xs font-bold uppercase">A Gerar...</span>
+                </>
+             ) : tableExportSuccess ? (
+                <>
+                    <Check size={16} />
+                    <span className="text-xs font-bold uppercase">Sucesso</span>
+                </>
+             ) : (
+                <>
+                    <Download size={16} />
+                    <span className="text-xs font-bold uppercase">Exportar Tabela Editável</span>
+                </>
+             )}
+          </button>
+      </div>
       {/* Mobile/Tablet Header Row */}
       <div className="xl:hidden flex justify-between items-center p-3.5 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
         <span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Painel de Pesquisa</span>

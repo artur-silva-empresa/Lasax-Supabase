@@ -631,7 +631,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                    ) : (
                       <>
                           <Download size={16} />
-                          <span className="text-xs font-bold uppercase">Exportar Tabela</span>
+                          <span className="text-xs font-bold uppercase">Exportar Tabela Editável</span>
                       </>
                    )}
                 </button>
@@ -875,7 +875,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                   onClick={handleTableExport}
                   disabled={isExportingTable}
                   className="p-2 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:bg-green-400 transition-all shadow-sm active:scale-95"
-                  title="Exportar Tabela"
+                  title="Exportar Tabela Editável"
                 >
                   {isExportingTable ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
                 </button>

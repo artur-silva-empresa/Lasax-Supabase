@@ -489,15 +489,6 @@ const App: React.FC = () => {
 
         return (
             <div className="flex flex-col h-full">
-                <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
-                    <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400">
-                        {sector?.icon && React.createElement(sector.icon, { size: 24 })}
-                    </div>
-                    <div>
-                        <h2 className="text-lg font-bold text-slate-800 dark:text-white">Sector: {sector?.name}</h2>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Listagem de encomendas</p>
-                    </div>
-                </div>
                 <div className="flex-1 overflow-hidden">
                     <SectorOrderTable 
                         key={sector.id}
