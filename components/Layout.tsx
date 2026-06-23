@@ -123,8 +123,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                   {isSidebarOpen && <span className="font-medium whitespace-nowrap">{item.label}</span>}
                 </button>
                 {!isSidebarOpen && (
-                  <div className="absolute left-full top-0 ml-2 px-3 py-2 bg-slate-800 text-white text-sm rounded-lg shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 whitespace-nowrap border border-slate-700">
-                    {item.label}
+                  <div className="absolute left-full top-0 pl-2 z-50 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity whitespace-nowrap">
+                    <div className="px-3 py-2 bg-slate-800 text-white text-sm rounded-lg shadow-xl border border-slate-700">
+                      {item.label}
+                    </div>
                   </div>
                 )}
               </li>
@@ -150,10 +152,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
               </button>
 
               {!isSidebarOpen && (
-                <div className="absolute left-full top-0 ml-2 w-48 bg-slate-800 rounded-lg shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 border border-slate-700 py-2">
-                  <h3 className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Sectores</h3>
-                  <ul>
-                    {visibleSectors.map((sector) => {
+                <div className="absolute left-full top-0 pl-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50">
+                  <div className="w-48 bg-slate-800 rounded-lg shadow-xl border border-slate-700 py-2">
+                    <h3 className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Sectores</h3>
+                    <ul>
+                      {visibleSectors.map((sector) => {
                       const SectorIcon = sector.icon;
                       const isActive = activeView === `sector-${sector.id}`;
                       return (
@@ -173,6 +176,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                       );
                     })}
                   </ul>
+                 </div>
                 </div>
               )}
 
@@ -221,10 +225,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                 </button>
 
                 {!isSidebarOpen && (
-                  <div className="absolute left-full top-0 ml-2 w-56 bg-slate-800 rounded-lg shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 border border-slate-700 py-2">
-                    <h3 className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Controlo Produção</h3>
-                    <ul>
-                      <li className="px-2">
+                  <div className="absolute left-full top-0 pl-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50">
+                    <div className="w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 py-2">
+                      <h3 className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Controlo Produção</h3>
+                      <ul>
+                        <li className="px-2">
                         <button
                           onClick={() => setActiveView('bottleneck')}
                           className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
@@ -249,8 +254,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                           <Zap size={16} />
                           <span>Capacidades</span>
                         </button>
-                      </li>
-                    </ul>
+                        </li>
+                      </ul>
+                    </div>
                   </div>
                 )}
 
@@ -308,10 +314,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                 </button>
 
                 {!isSidebarOpen && (
-                  <div className="absolute left-full top-0 ml-2 w-56 bg-slate-800 rounded-lg shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 border border-slate-700 py-2">
-                    <h3 className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Configurações</h3>
-                    <ul>
-                      {user?.permissions?.config !== 'none' && (
+                  <div className="absolute left-full top-0 pl-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50">
+                    <div className="w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 py-2">
+                      <h3 className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Configurações</h3>
+                      <ul>
+                        {user?.permissions?.config !== 'none' && (
                         <>
                           <li className="px-2">
                             <button
@@ -367,7 +374,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                           </li>
                         </>
                       )}
-                    </ul>
+                      </ul>
+                    </div>
                   </div>
                 )}
 
