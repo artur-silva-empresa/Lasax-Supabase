@@ -284,6 +284,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
           </ul>
         </nav>
 
+        {user?.role === 'admin' && (
         <div className="p-4 border-t border-slate-800 space-y-2">
            {/* Botão de Importar */}
           <button
@@ -294,6 +295,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
             {isSidebarOpen && <span className="font-medium">Importar</span>}
           </button>
         </div>
+        )}
       </aside>
 
       {/* Main Content Container */}
@@ -536,6 +538,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
             <span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span>
           </button>
         ))}
+        {user?.role === 'admin' && (
         <button
           onClick={onImportClick}
           className="flex flex-col items-center justify-center gap-1 min-w-[64px] text-emerald-600 dark:text-emerald-500"
@@ -545,6 +548,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
           </div>
           <span className="text-[10px] font-bold uppercase tracking-tighter">Importar</span>
         </button>
+        )}
       </nav>
 
       {/* Mobile Drawer Overlay */}

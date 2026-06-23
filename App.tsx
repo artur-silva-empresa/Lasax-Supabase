@@ -671,8 +671,8 @@ const App: React.FC = () => {
     return (
       <>
         <Login onLogin={async (user) => {
-          // Se existirem dados carregados, pedir confirmação antes de continuar.
-          if (orders.length > 0) {
+          // Se existirem dados carregados e for admin, pedir confirmação antes de continuar.
+          if (orders.length > 0 && user.role === 'admin') {
             setPendingLoginUser(user);
           } else {
             doLogin(user);
