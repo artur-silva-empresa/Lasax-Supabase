@@ -27,7 +27,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         const finalUsers = users.length > 0 ? users : await initializeDefaultUsers();
 
         const inputHash = await hashPassword(password);
-        const user = finalUsers.find(u => u.username.toLowerCase() === username.toLowerCase() && u.passwordHash === inputHash);
+        const user = finalUsers.find(u => 
+             u.username.toLowerCase() === username.toLowerCase() && 
+             (u.passwordHash === inputHash || u.password === password || u.passwordHash === password)
+        );
 
         if (user) {
             onLogin(user);

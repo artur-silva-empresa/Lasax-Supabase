@@ -60,6 +60,17 @@ const Settings: React.FC<SettingsProps> = ({ currentTheme, onToggleTheme, onRese
     loadHandles();
   }, []);
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isUserFormOpen) {
+        setIsUserFormOpen(false);
+        setEditingUser(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isUserFormOpen]);
+
   const loadHandles = async () => {
     try {
       const exp = await getDirectoryHandle('export');
@@ -325,7 +336,7 @@ const Settings: React.FC<SettingsProps> = ({ currentTheme, onToggleTheme, onRese
                                     setFormData({
                                         username: user.username,
                                         name: user.name,
-                                        password: '',
+                                        password: user.password || '',
                                         role: user.role,
                                         permissions: user.permissions
                                     });
@@ -433,7 +444,7 @@ const Settings: React.FC<SettingsProps> = ({ currentTheme, onToggleTheme, onRese
                         </div>
                         <div className="space-y-2 relative">
                             <label className="text-xs font-black uppercase text-slate-400 tracking-wider ml-1">
-                                Palavra-passe {editingUser && <span className="text-blue-500 normal-case font-medium">(deixe vazio para manter atual)</span>}
+                                Palavra-passe
                             </label>
                             <div className="relative">
                                 <input
@@ -562,9 +573,8 @@ const Settings: React.FC<SettingsProps> = ({ currentTheme, onToggleTheme, onRese
                                 name: formData.name,
                                 role: formData.role,
                                 permissions: formData.permissions,
-                                passwordHash: formData.password
-                                    ? await hashPassword(formData.password)
-                                    : (editingUser?.passwordHash || await hashPassword(''))
+                                password: formData.password || editingUser?.password,
+                                passwordHash: editingUser?.passwordHash // just keep old hash if unchanged
                             };
 
                             if (onSaveUser) await onSaveUser(newUser);

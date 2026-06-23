@@ -20,7 +20,9 @@ import {
   X,
   Archive,
   ArchiveRestore,
-  Download
+  Download,
+  CheckCircle2,
+  Clock
 } from 'lucide-react';
 import { Order, OrderState, SectorState, User } from '../types';
 import { getOrderState, getSectorState, exportOrdersToSQLite, getDirectoryHandle, getWeekRange, exportOrdersToExcel, loadExportColumnsConfig, exportCustomColumns, DEFAULT_SELECTED_COLUMNS } from '../services/dataService';
@@ -436,17 +438,34 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
   };
 
   const getStatusBadge = (order: Order) => {
+    const badges = [];
     const state = getOrderState(order);
+
     switch (state) {
       case OrderState.COMPLETED: 
-        return <span className="px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-black uppercase tracking-wider border border-emerald-200 dark:border-emerald-800">Concluída</span>;
+        badges.push(<span key="status" className="px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-black uppercase tracking-wider border border-emerald-200 dark:border-emerald-800 flex items-center justify-center gap-1 w-full"><CheckCircle2 size={10} /> Concluída</span>);
+        break;
       case OrderState.LATE: 
-        return <span className="px-2.5 py-1 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 text-[10px] font-black uppercase tracking-wider border border-rose-200 dark:border-rose-800 inline-flex items-center justify-center gap-1"><AlertTriangle size={10} /> Atrasada</span>;
+        badges.push(<span key="status" className="px-2.5 py-1 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 text-[10px] font-black uppercase tracking-wider border border-rose-200 dark:border-rose-800 flex items-center justify-center gap-1 w-full"><AlertTriangle size={10} /> Atrasada</span>);
+        break;
       case OrderState.IN_PRODUCTION: 
-        return <span className="px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-black uppercase tracking-wider border border-amber-200 dark:border-amber-800">Em Produção</span>;
+        badges.push(<span key="status" className="px-2.5 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-[10px] font-black uppercase tracking-wider border border-blue-200 dark:border-blue-800 flex items-center justify-center gap-1 w-full"><Clock size={10} /> No Prazo</span>);
+        break;
       default: 
-        return <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-black uppercase tracking-wider border border-slate-200 dark:border-slate-700">Em Aberto</span>;
+        badges.push(<span key="status" className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-black uppercase tracking-wider border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1 w-full">Em Aberto</span>);
     }
+
+    if (order.priority === 1) {
+       badges.push(<span key="priority" className="px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-[10px] font-black uppercase tracking-wider border border-red-200 dark:border-red-800 flex items-center justify-center gap-1 w-full"><Flag size={10} /> Alta Prioridade</span>);
+    } else if (order.priority === 2) {
+       badges.push(<span key="priority" className="px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 text-[10px] font-black uppercase tracking-wider border border-orange-200 dark:border-orange-800 flex items-center justify-center gap-1 w-full"><Flag size={10} /> Prioridade Média</span>);
+    }
+
+    return (
+        <div className="flex flex-col items-center gap-1.5 w-full">
+            {badges}
+        </div>
+    );
   };
 
   const getPriorityColor = (p: number) => {
@@ -464,6 +483,51 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     return finalFilteredOrders.slice(start, start + ITEMS_PER_PAGE);
   }, [finalFilteredOrders, currentPage]);
+
+  const [focusedRowIndex, setFocusedRowIndex] = React.useState(-1);
+
+  React.useEffect(() => {
+    setFocusedRowIndex(-1);
+  }, [paginatedOrders]);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input/textarea
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName || '')) return;
+
+      if (e.key === 'ArrowDown') {
+        setFocusedRowIndex(prev => {
+          if (paginatedOrders.length === 0) return prev;
+          e.preventDefault();
+          const next = Math.min(prev === -1 ? 0 : prev + 1, paginatedOrders.length - 1);
+          const tr = document.getElementById(`order-row-${paginatedOrders[next].id}`);
+          const card = document.getElementById(`order-card-${paginatedOrders[next].id}`);
+          if (window.innerWidth >= 768 && tr) tr.scrollIntoView({ block: 'nearest' });
+          else if (card) card.scrollIntoView({ block: 'nearest' });
+          return next;
+        });
+      } else if (e.key === 'ArrowUp') {
+        setFocusedRowIndex(prev => {
+          if (paginatedOrders.length === 0 || prev <= 0) return prev;
+          e.preventDefault();
+          const next = Math.max(prev - 1, 0);
+          const tr = document.getElementById(`order-row-${paginatedOrders[next].id}`);
+          const card = document.getElementById(`order-card-${paginatedOrders[next].id}`);
+          if (window.innerWidth >= 768 && tr) tr.scrollIntoView({ block: 'nearest' });
+          else if (card) card.scrollIntoView({ block: 'nearest' });
+          return next;
+        });
+      } else if (e.key === 'Enter') {
+        if (focusedRowIndex >= 0 && focusedRowIndex < paginatedOrders.length) {
+          e.preventDefault();
+          onViewDetails(paginatedOrders[focusedRowIndex]);
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [paginatedOrders, focusedRowIndex, onViewDetails]);
 
   const handlePriorityClick = (e: React.MouseEvent, orderId: string) => {
       e.stopPropagation();
@@ -997,11 +1061,12 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-950 transition-colors">
-              {paginatedOrders.map((order) => (
+              {paginatedOrders.map((order, index) => (
                 <tr 
                   key={order.id} 
+                  id={`order-row-${order.id}`}
                   onClick={() => onViewDetails(order)}
-                  className={`hover:bg-blue-50 dark:hover:bg-slate-900 transition-colors group cursor-pointer ${order.isArchived ? 'opacity-50 bg-slate-50 dark:bg-slate-900/50' : ''} ${selectedOrderIds.has(order.id) ? 'bg-blue-50/50 dark:bg-slate-900/40' : ''}`}
+                  className={`hover:bg-blue-50 dark:hover:bg-slate-900 transition-colors group cursor-pointer ${order.isArchived ? 'opacity-50 bg-slate-50 dark:bg-slate-900/50' : ''} ${selectedOrderIds.has(order.id) ? 'bg-blue-50/50 dark:bg-slate-900/40' : ''} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500 bg-blue-50/30' : ''}`}
                 >
                   {user?.permissions?.orders === 'write' && (
                     <td className="px-4 py-4 align-middle text-center" onClick={(e) => e.stopPropagation()}>
@@ -1150,11 +1215,12 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
         
         {/* Mobile Grid */}
         <div className="md:hidden grid grid-cols-1 gap-3 p-4">
-          {paginatedOrders.map((order) => (
+          {paginatedOrders.map((order, index) => (
             <div 
               key={order.id}
+              id={`order-card-${order.id}`}
               onClick={() => onViewDetails(order)}
-              className={`p-4 rounded-2xl border transition-colors space-y-4 ${selectedOrderIds.has(order.id) ? 'border-blue-300 dark:border-blue-700 bg-blue-50/20 dark:bg-blue-900/10' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800'}`}
+              className={`p-4 rounded-2xl border transition-colors space-y-4 ${selectedOrderIds.has(order.id) ? 'border-blue-300 dark:border-blue-700 bg-blue-50/20 dark:bg-blue-900/10' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800'} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500' : ''}`}
             >
               <div className="flex justify-between items-start">
                 <div className="flex items-start gap-2">
@@ -1169,11 +1235,40 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                      </div>
                    )}
                    {/* Mobile Flags Container */}
-                    <div className="pt-0.5 flex flex-col gap-1 items-center">
-                       <Flag size={16} className={getPriorityColor(order.priority || 0)} strokeWidth={2} />
-                       {order.isManual ? (
-                           <div className="w-3.5 h-3.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[8px] font-bold flex items-center justify-center border border-indigo-200 dark:border-indigo-800">M</div>
-                       ) : null}
+                    <div className="pt-0.5 flex flex-col gap-1 items-center relative">
+                        <button 
+                            onClick={(e) => user?.permissions?.orders === 'write' ? handlePriorityClick(e, order.id) : null}
+                            className={`transition-all ${user?.permissions?.orders === 'write' ? 'cursor-pointer' : 'cursor-default'}`}
+                        >
+                           <Flag size={16} className={getPriorityColor(order.priority || 0)} strokeWidth={2} />
+                        </button>
+                        
+                        {/* Priority Menu Mobile */}
+                        {openPriorityMenuId === order.id && (
+                            <div 
+                                ref={menuRef}
+                                onClick={(e) => e.stopPropagation()}
+                                className="absolute top-6 left-0 bg-white dark:bg-slate-800 shadow-xl border border-slate-200 dark:border-slate-700 rounded-xl p-2 z-50 flex flex-col gap-1 min-w-[140px] animate-in fade-in zoom-in-95"
+                            >
+                                <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase px-2 mb-1">Definir Prioridade</p>
+                                <button onClick={() => handleSetPriority(order.docNr, 1)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg text-xs font-bold text-red-900 dark:text-red-400">
+                                    <Flag size={12} className="fill-red-900 dark:fill-red-400"/> Alta
+                                </button>
+                                <button onClick={() => handleSetPriority(order.docNr, 2)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-orange-50 dark:hover:bg-orange-900/30 rounded-lg text-xs font-bold text-orange-600 dark:text-orange-400">
+                                    <Flag size={12} className="fill-orange-500 dark:fill-orange-400"/> Média
+                                </button>
+                                <button onClick={() => handleSetPriority(order.docNr, 3)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 rounded-lg text-xs font-bold text-yellow-500 dark:text-yellow-400">
+                                    <Flag size={12} className="fill-yellow-400 dark:fill-yellow-400"/> Baixa
+                                </button>
+                                <div className="h-px bg-slate-100 dark:bg-slate-700 my-0.5"></div>
+                                <button onClick={() => handleSetPriority(order.docNr, 0)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400">
+                                    <Flag size={12} className="text-slate-300 dark:text-slate-600"/> Remover
+                                </button>
+                            </div>
+                        )}
+                        {order.isManual ? (
+                            <div className="w-3.5 h-3.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[8px] font-bold flex items-center justify-center border border-indigo-200 dark:border-indigo-800">M</div>
+                        ) : null}
                     </div>
                     <div>
                         <h3 className="font-black text-slate-800 dark:text-white text-base leading-none">{order.docNr || '-'}</h3>

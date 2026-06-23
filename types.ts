@@ -35,7 +35,8 @@ export interface StoppageReason {
 export interface User {
   id: string;
   username: string;
-  passwordHash?: string;
+  password?: string;
+  passwordHash?: string; // Keep for backwards compatibility with old records if needed, or just replace
   role: UserRole;
   name: string;
   permissions: UserPermissions;
@@ -115,6 +116,15 @@ export interface Order {
   
   // Pending validation for predicted dates
   sectorPredictedDatesPending?: Record<string, boolean>;
+
+  // Audit History for predicted dates
+  predictedDatesHistory?: {
+    sectorId: string;
+    oldDate: Date | null;
+    newDate: Date | null;
+    changedBy: string;
+    changedAt: Date;
+  }[];
 
   // Raw data from excel for round-trip capability
   _raw?: Record<string, any>;

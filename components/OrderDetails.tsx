@@ -3,7 +3,7 @@ import React from 'react';
 import { X, User, ShoppingBag, Palette, Ruler, CheckCircle, Package, MessageSquare, Save, FileText as FileIcon, Trash2, Lock, Flag, Hand, AlertCircle } from 'lucide-react';
 import { Order, Sector, SectorState, User as UserType } from '../types';
 import { getSectorState } from '../services/dataService';
-import { formatDate } from '../utils/formatters';
+import { formatDate, formatDateTime } from '../utils/formatters';
 import { SECTORS, STATUS_COLORS } from '../constants';
 import StopReasonSelector from './StopReasonSelector';
 
@@ -39,6 +39,26 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ order, onClose, onUpdateOrd
     });
     setEditingSector(null);
   };
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (editingSector) {
+          setEditingSector(null);
+        } else {
+          onClose();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        if (editingSector) {
+          e.preventDefault();
+          handleSaveObservation();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingSector, onClose, handleSaveObservation]);
   
   const getSectorProducedQty = (sectorId: string): number => {
       switch (sectorId) {
@@ -215,6 +235,40 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ order, onClose, onUpdateOrd
                             >
                                 <Save size={16} /> Guardar Alterações
                             </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Audit History (Admin Only) */}
+                {user?.role === 'admin' && order.predictedDatesHistory && order.predictedDatesHistory.length > 0 && (
+                    <div className="mt-8 border-t border-slate-200 dark:border-slate-800 pt-6 animate-in fade-in">
+                        <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase flex items-center gap-2 mb-4">
+                            <FileIcon size={16} /> Histórico de Alterações de Datas
+                        </h4>
+                        <div className="space-y-3">
+                            {[...order.predictedDatesHistory].sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime()).map((h, i) => {
+                                const sectorName = SECTORS.find(s => s.id === h.sectorId)?.name || h.sectorId;
+                                return (
+                                    <div key={i} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 flex justify-between items-center text-sm">
+                                        <div className="flex flex-col gap-1.5">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold uppercase">{sectorName}</span>
+                                                <span className="text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 rounded-full font-bold uppercase flex items-center gap-1"><User size={10} /> {h.changedBy}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                                                <span>Data anterior: <span className="font-bold text-slate-800 dark:text-slate-200 break-words">{h.oldDate ? formatDate(h.oldDate) : 'N/A'}</span></span>
+                                                <span className="text-slate-300 dark:text-slate-600">→</span>
+                                                <span>Nova data: <span className="font-bold text-slate-800 dark:text-slate-200 break-words">{h.newDate ? formatDate(h.newDate) : 'N/A'}</span></span>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                                                {formatDateTime(h.changedAt)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 )}

@@ -363,6 +363,51 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
     return filteredOrders.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredOrders, currentPage]);
 
+  const [focusedRowIndex, setFocusedRowIndex] = React.useState(-1);
+
+  React.useEffect(() => {
+    setFocusedRowIndex(-1);
+  }, [paginatedOrders]);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input/textarea
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName || '')) return;
+
+      if (e.key === 'ArrowDown') {
+        setFocusedRowIndex(prev => {
+          if (paginatedOrders.length === 0) return prev;
+          e.preventDefault();
+          const next = Math.min(prev === -1 ? 0 : prev + 1, paginatedOrders.length - 1);
+          const tr = document.getElementById(`sector-order-row-${paginatedOrders[next].id}`);
+          const card = document.getElementById(`sector-order-card-${paginatedOrders[next].id}`);
+          if (window.innerWidth >= 1280 && tr) tr.scrollIntoView({ block: 'nearest' });
+          else if (card) card.scrollIntoView({ block: 'nearest' });
+          return next;
+        });
+      } else if (e.key === 'ArrowUp') {
+        setFocusedRowIndex(prev => {
+          if (paginatedOrders.length === 0 || prev <= 0) return prev;
+          e.preventDefault();
+          const next = Math.max(prev - 1, 0);
+          const tr = document.getElementById(`sector-order-row-${paginatedOrders[next].id}`);
+          const card = document.getElementById(`sector-order-card-${paginatedOrders[next].id}`);
+          if (window.innerWidth >= 1280 && tr) tr.scrollIntoView({ block: 'nearest' });
+          else if (card) card.scrollIntoView({ block: 'nearest' });
+          return next;
+        });
+      } else if (e.key === 'Enter') {
+        if (focusedRowIndex >= 0 && focusedRowIndex < paginatedOrders.length) {
+          e.preventDefault();
+          onViewDetails(paginatedOrders[focusedRowIndex]);
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [paginatedOrders, focusedRowIndex, onViewDetails]);
+
   const canEdit = user?.permissions?.sectors?.[sector.id] === 'write';
 
   const handleEditClick = (order: Order, e: React.MouseEvent) => {
@@ -722,7 +767,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-950">
-            {paginatedOrders.map((order) => {
+            {paginatedOrders.map((order, index) => {
               const isEditing = editingId === order.id;
               const producedQty = getSectorProducedQty(order);
               const exitDate = getSectorDate(order);
@@ -733,8 +778,9 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
               return (
                 <tr 
                   key={order.id} 
+                  id={`sector-order-row-${order.id}`}
                   onClick={() => !isEditing && onViewDetails(order)}
-                  className={`hover:bg-blue-50 dark:hover:bg-slate-900 transition-colors group ${isEditing ? 'bg-blue-50 dark:bg-slate-900' : 'cursor-pointer'}`}
+                  className={`hover:bg-blue-50 dark:hover:bg-slate-900 transition-colors group ${isEditing ? 'bg-blue-50 dark:bg-slate-900' : 'cursor-pointer'} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500 bg-blue-50/30' : ''}`}
                 >
                   <td className="px-4 py-3 align-top font-bold text-sm text-slate-800 dark:text-slate-200 truncate max-w-0">{order.docNr}</td>
                   <td className="px-4 py-3 align-top text-xs font-medium text-slate-600 dark:text-slate-300 truncate max-w-0" title={order.clientName}>{order.clientName}</td>
@@ -900,7 +946,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
 
         {/* Mobile Grid */}
         <div className="md:hidden grid grid-cols-1 gap-3 p-4">
-          {paginatedOrders.map((order) => {
+          {paginatedOrders.map((order, index) => {
             const isEditing = editingId === order.id;
             const producedQty = getSectorProducedQty(order);
             const exitDate = getSectorDate(order);
@@ -911,8 +957,9 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
             return (
               <div 
                 key={order.id}
+                id={`sector-order-card-${order.id}`}
                 onClick={() => !isEditing && onViewDetails(order)}
-                className={`p-4 rounded-2xl border transition-colors space-y-4 ${isEditing ? 'border-blue-300 dark:border-blue-700 bg-blue-50/20 dark:bg-slate-900' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800'}`}
+                className={`p-4 rounded-2xl border transition-colors space-y-4 ${isEditing ? 'border-blue-300 dark:border-blue-700 bg-blue-50/20 dark:bg-slate-900' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800'} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500' : ''}`}
               >
                 <div className="flex justify-between items-start">
                   <div>

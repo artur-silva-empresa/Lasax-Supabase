@@ -49,6 +49,17 @@ const ProductionCapacityPage: React.FC<ProductionCapacityPageProps> = ({ capacit
 
   React.useEffect(() => { setItems(capacities); }, [capacities]);
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showForm) {
+        setShowForm(false);
+        setEditingId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showForm]);
+
   const filtered = React.useMemo(() => {
     return items.filter(c => {
       if (filterSector !== 'all' && c.sectorId !== filterSector) return false;

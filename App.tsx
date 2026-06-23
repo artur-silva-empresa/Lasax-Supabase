@@ -10,7 +10,7 @@ import Settings from './components/Settings';
 import StopReasons from './components/StopReasons';
 import Login from './components/Login';
 import { Order, User } from './types';
-import { generateMockOrders, loadOrdersFromDB, saveOrdersToDB, saveOrderToDB, clearOrdersFromDB, loadStopReasonsFromDB, saveStopReasonsToDB, loadUsersFromDB, initializeDefaultUsers, saveUserToDB, deleteUserFromDB, loadCapacitiesFromDB, saveCapacitiesToDB, hydrateOrder } from './services/dataService';
+import { generateMockOrders, loadOrdersFromDB, saveOrdersToDB, saveOrderToDB, clearOrdersFromDB, loadStopReasonsFromDB, saveStopReasonsToDB, loadUsersFromDB, initializeDefaultUsers, saveUserToDB, deleteUserFromDB, loadCapacitiesFromDB, saveCapacitiesToDB, hydrateOrder, processSyncQueue } from './services/dataService';
 import { supabase } from './src/services/supabase';
 import { WifiOff, CheckCircle2, X, Download, Loader2 } from 'lucide-react';
 import { SECTORS, STOP_REASONS_HIERARCHY } from './constants';
@@ -44,8 +44,8 @@ const App: React.FC = () => {
   
   // Global search state
   const [globalSearchTerm, setGlobalSearchTerm] = React.useState('');
-  // Global filter date state for sector tables
-  const [globalFilterDate, setGlobalFilterDate] = React.useState<Date | null>(null);
+  // Global filter date range for all views
+  const [globalDateRange, setGlobalDateRange] = React.useState<{ start: string; end: string } | null>(null);
   
   // PWA Installation support
   const [deferredPrompt, setDeferredPrompt] = React.useState<any>(null);
@@ -75,10 +75,20 @@ const App: React.FC = () => {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     
     // Monitor network status
-    const handleOnline = () => setIsOnline(true);
+    const handleOnline = () => {
+      setIsOnline(true);
+      processSyncQueue().then(() => {
+        // Automatically reload data from DB just in case sync affected anything locally or to fetch new stuff
+      }).catch(console.error);
+    };
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // Initial check and queue processing
+    if (navigator.onLine) {
+      processSyncQueue().catch(console.error);
+    }
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -260,6 +270,35 @@ const App: React.FC = () => {
                         finalOrder.sectorPredictedDatesPending = updatedPending;
                     }
                 }
+            }
+        }
+        
+        // Record Audit History for all changed sectors
+        if (currentUser) {
+            const finalDates = finalOrder.sectorPredictedDates || {};
+            const historyObj = { ...(finalOrder.predictedDatesHistory || []) };
+            const historyArray = Object.values(historyObj);
+            let hasChanges = false;
+            
+            // Collect changes from final order vs old order
+            SECTORS.forEach(s => {
+                const oDate = oldDates[s.id] ? new Date(oldDates[s.id]).getTime() : null;
+                const fDate = finalDates[s.id] ? new Date(finalDates[s.id]).getTime() : null;
+                
+                if (oDate !== fDate) {
+                    historyArray.push({
+                        sectorId: s.id,
+                        oldDate: oldDates[s.id] || null,
+                        newDate: finalDates[s.id] || null,
+                        changedBy: currentUser.username,
+                        changedAt: new Date()
+                    });
+                    hasChanges = true;
+                }
+            });
+            
+            if (hasChanges) {
+                finalOrder.predictedDatesHistory = historyArray;
             }
         }
     }
@@ -462,6 +501,22 @@ const App: React.FC = () => {
       setActiveView(view);
   };
 
+  const globalFilteredOrders = React.useMemo(() => {
+     if (!globalDateRange?.start || !globalDateRange?.end) return orders;
+     
+     const start = new Date(globalDateRange.start);
+     start.setHours(0, 0, 0, 0);
+     const end = new Date(globalDateRange.end);
+     end.setHours(23, 59, 59, 999);
+
+     return orders.filter(o => {
+         const dateToCheck = o.requestedDate || o.dataEnt || o.issueDate;
+         if (!dateToCheck) return false;
+         const d = new Date(dateToCheck);
+         return d >= start && d <= end;
+     });
+  }, [orders, globalDateRange]);
+
   const renderContent = () => {
     if (isLoading) {
       return (
@@ -492,7 +547,7 @@ const App: React.FC = () => {
                 <div className="flex-1 overflow-hidden">
                     <SectorOrderTable 
                         key={sector.id}
-                        orders={orders} 
+                        orders={globalFilteredOrders} 
                         sector={sector!}
                         onViewDetails={handleViewDetails} 
                         onUpdateOrder={handleUpdateOrder}
@@ -500,8 +555,6 @@ const App: React.FC = () => {
                         user={currentUser}
                         capacities={capacities}
                         globalSearchTerm={globalSearchTerm}
-                        globalFilterDate={globalFilterDate}
-                        onGlobalFilterDateChange={setGlobalFilterDate}
                     />
                 </div>
             </div>
@@ -514,14 +567,14 @@ const App: React.FC = () => {
             const fallback = getFirstAvailableView(currentUser);
             if (fallback !== 'dashboard') { setActiveView(fallback); return null; }
         }
-        return <Dashboard orders={orders} onNavigateToOrders={handleNavigateToOrders} />;
+        return <Dashboard orders={globalFilteredOrders} onNavigateToOrders={handleNavigateToOrders} />;
       case 'orders':
         if (!currentUser?.permissions?.orders || currentUser?.permissions?.orders === 'none') {
             const fallback = getFirstAvailableView(currentUser);
             if (fallback !== 'orders') { setActiveView(fallback); return null; }
         }
         return <OrderTable 
-          orders={orders} 
+          orders={globalFilteredOrders} 
           onViewDetails={handleViewDetails} 
           excelHeaders={excelHeaders} 
           activeFilter={activeDashboardFilter}
@@ -538,7 +591,7 @@ const App: React.FC = () => {
             const fallback = getFirstAvailableView(currentUser);
             if (fallback !== 'timeline') { setActiveView(fallback); return null; }
         }
-        return <OrderTimeline orders={orders} onViewDetails={handleViewDetails} />;
+        return <OrderTimeline orders={globalFilteredOrders} onViewDetails={handleViewDetails} />;
       case 'config':
       case 'config-general':
       case 'config-users':
@@ -561,14 +614,14 @@ const App: React.FC = () => {
             onDeleteUser={handleDeleteUser}
             stopReasonsHierarchy={stopReasons}
             onUpdateStopReasonsHierarchy={handleUpdateStopReasonsHierarchy}
-            orders={orders}
+            orders={globalFilteredOrders}
             activeTab={resolvedTabConfig as any}
             onTabChange={(t) => setActiveView(`config-${t}`)}
           />
         );
       case 'bottleneck':
         if (currentUser?.role !== 'admin') return null;
-        return <BottleneckAnalysis orders={orders} capacities={capacities} />;
+        return <BottleneckAnalysis orders={globalFilteredOrders} capacities={capacities} />;
       case 'production-capacity':
         if (currentUser?.role !== 'admin') return null;
         return <ProductionCapacityPage capacities={capacities} onSave={handleSaveCapacities} />;
@@ -606,7 +659,7 @@ const App: React.FC = () => {
       // BUG 7 CORRIGIDO: o case 'default' omitia a prop onNavigateToOrders,
       // o que causaria erro em runtime se o Dashboard tentasse navegar para as encomendas.
       default:
-        return <Dashboard orders={orders} onNavigateToOrders={handleNavigateToOrders} />;
+        return <Dashboard orders={globalFilteredOrders} onNavigateToOrders={handleNavigateToOrders} />;
     }
   };
 
@@ -786,10 +839,12 @@ const App: React.FC = () => {
         alertCount={alertCount}
         user={currentUser}
         onLogout={() => setCurrentUser(null)}
-        orders={orders}
+        orders={globalFilteredOrders}
         onViewDetails={handleViewDetails}
         globalSearchTerm={globalSearchTerm}
         onGlobalSearch={handleGlobalSearch}
+        globalDateRange={globalDateRange}
+        onGlobalDateRangeChange={setGlobalDateRange}
       >
         {renderContent()}
       </Layout>

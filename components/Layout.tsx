@@ -37,15 +37,36 @@ interface LayoutProps {
   onViewDetails: (order: Order) => void;
   globalSearchTerm?: string;
   onGlobalSearch?: (term: string) => void;
+  globalDateRange?: { start: string; end: string } | null;
+  onGlobalDateRangeChange?: (range: { start: string; end: string } | null) => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, onImportClick, alertCount, user, onLogout, orders, onViewDetails, globalSearchTerm, onGlobalSearch }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, onImportClick, alertCount, user, onLogout, orders, onViewDetails, globalSearchTerm, onGlobalSearch, globalDateRange, onGlobalDateRangeChange }) => {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(window.innerWidth > 1024);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isSectorsOpen, setIsSectorsOpen] = React.useState(false);
   const [isConfigOpen, setIsConfigOpen] = React.useState(false);
   const [isProductionOpen, setIsProductionOpen] = React.useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        // Focus the visible search input (desktop or mobile)
+        const inputs = document.querySelectorAll<HTMLInputElement>('input[placeholder="Pesquisar Encomenda ou Artigo..."]');
+        for (const input of inputs) {
+          if (input.offsetParent !== null) { // visible
+            input.focus();
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Itens dinâmicos baseados em permissões
   const menuItems = React.useMemo(() => {
@@ -86,10 +107,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
           )}
         </div>
 
-        <nav className="flex-1 mt-6 overflow-y-auto scrollbar-hide">
+        <nav className={`flex-1 mt-6 scrollbar-hide ${isSidebarOpen ? 'overflow-y-auto' : 'overflow-visible z-50'}`}>
           <ul className="space-y-1 px-3">
             {menuItems.map((item) => (
-              <li key={item.id}>
+              <li key={item.id} className="relative group">
                 <button
                   onClick={() => setActiveView(item.id)}
                   className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
@@ -101,11 +122,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                   <item.icon size={20} />
                   {isSidebarOpen && <span className="font-medium whitespace-nowrap">{item.label}</span>}
                 </button>
+                {!isSidebarOpen && (
+                  <div className="absolute left-full top-0 ml-2 px-3 py-2 bg-slate-800 text-white text-sm rounded-lg shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 whitespace-nowrap border border-slate-700">
+                    {item.label}
+                  </div>
+                )}
               </li>
             ))}
 
             {/* Sectores Dropdown */}
-            <li>
+            <li className="relative group">
               <button
                 onClick={() => setIsSectorsOpen(!isSectorsOpen)}
                 className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
@@ -122,6 +148,33 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                   isSectorsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
                 )}
               </button>
+
+              {!isSidebarOpen && (
+                <div className="absolute left-full top-0 ml-2 w-48 bg-slate-800 rounded-lg shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 border border-slate-700 py-2">
+                  <h3 className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Sectores</h3>
+                  <ul>
+                    {visibleSectors.map((sector) => {
+                      const SectorIcon = sector.icon;
+                      const isActive = activeView === `sector-${sector.id}`;
+                      return (
+                        <li key={sector.id} className="px-2">
+                          <button
+                            onClick={() => handleSectorClick(sector.id)}
+                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                              isActive
+                                ? 'text-blue-400 bg-slate-700 font-bold' 
+                                : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                            }`}
+                          >
+                            <SectorIcon size={16} />
+                            <span>{sector.name}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
 
               {/* Submenu Sectores */}
               {isSectorsOpen && isSidebarOpen && visibleSectors.length > 0 && (
@@ -151,7 +204,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
 
             {/* Controlo de Produção - Admin only */}
             {user?.role === 'admin' && (
-              <li>
+              <li className="relative group">
                 <button
                   className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
                     activeView === 'bottleneck' || activeView === 'production-capacity'
@@ -166,6 +219,41 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                   </div>
                   {isSidebarOpen && (isProductionOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
                 </button>
+
+                {!isSidebarOpen && (
+                  <div className="absolute left-full top-0 ml-2 w-56 bg-slate-800 rounded-lg shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 border border-slate-700 py-2">
+                    <h3 className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Controlo Produção</h3>
+                    <ul>
+                      <li className="px-2">
+                        <button
+                          onClick={() => setActiveView('bottleneck')}
+                          className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                            activeView === 'bottleneck'
+                              ? 'text-blue-400 bg-slate-700 font-bold'
+                              : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                          }`}
+                        >
+                          <Target size={16} />
+                          <span>Análise de Gargalos</span>
+                        </button>
+                      </li>
+                      <li className="px-2">
+                        <button
+                          onClick={() => setActiveView('production-capacity')}
+                          className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                            activeView === 'production-capacity'
+                              ? 'text-blue-400 bg-slate-700 font-bold'
+                              : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                          }`}
+                        >
+                          <Zap size={16} />
+                          <span>Capacidades</span>
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                )}
+
                 {isProductionOpen && isSidebarOpen && (
                   <ul className="mt-1 ml-4 space-y-1 border-l border-slate-700 pl-2 animate-in slide-in-from-top-2 duration-200">
                     <li>
@@ -201,7 +289,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
 
             {/* Configurações Dropdown */}
             {hasConfigAccess && (
-              <li>                <button
+              <li className="relative group">
+                 <button
                   onClick={() => setIsConfigOpen(!isConfigOpen)}
                   className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
                     activeView.startsWith('config') || activeView === 'stop-reasons'
@@ -217,6 +306,70 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                     isConfigOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
                   )}
                 </button>
+
+                {!isSidebarOpen && (
+                  <div className="absolute left-full top-0 ml-2 w-56 bg-slate-800 rounded-lg shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 border border-slate-700 py-2">
+                    <h3 className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Configurações</h3>
+                    <ul>
+                      {user?.permissions?.config !== 'none' && (
+                        <>
+                          <li className="px-2">
+                            <button
+                              onClick={() => setActiveView('config')}
+                              className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                                activeView === 'config' || activeView === 'config-general'
+                                  ? 'text-blue-400 bg-slate-700 font-bold'
+                                  : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                              }`}
+                            >
+                              <Settings size={16} />
+                              <span>Geral</span>
+                            </button>
+                          </li>
+                          <li className="px-2">
+                            <button
+                              onClick={() => setActiveView('config-users')}
+                              className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                                activeView === 'config-users'
+                                  ? 'text-blue-400 bg-slate-700 font-bold'
+                                  : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                              }`}
+                            >
+                              <UserIcon size={16} />
+                              <span>Utilizadores</span>
+                            </button>
+                          </li>
+                          <li className="px-2">
+                            <button
+                              onClick={() => setActiveView('config-stop-reasons')}
+                              className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                                activeView === 'config-stop-reasons'
+                                  ? 'text-blue-400 bg-slate-700 font-bold'
+                                  : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                              }`}
+                            >
+                              <AlertTriangle size={16} />
+                              <span>Motivos de Paragem</span>
+                            </button>
+                          </li>
+                          <li className="px-2">
+                            <button
+                              onClick={() => setActiveView('config-export-columns')}
+                              className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                                activeView === 'config-export-columns'
+                                  ? 'text-blue-400 bg-slate-700 font-bold'
+                                  : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                              }`}
+                            >
+                              <Layers size={16} />
+                              <span>Tabelas Editáveis</span>
+                            </button>
+                          </li>
+                        </>
+                      )}
+                    </ul>
+                  </div>
+                )}
 
                 {/* Submenu Configurações */}
                 {isConfigOpen && isSidebarOpen && (
@@ -324,16 +477,63 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
             </div>
           </div>
 
-          {/* Global Search Bar */}
-          <div className="flex-1 max-w-md mx-4 hidden md:flex items-center relative">
-            <Search size={18} className="absolute left-3 text-slate-400 dark:text-slate-500" />
-            <input
-              type="text"
-              placeholder="Pesquisar Encomenda ou Artigo..."
-              value={globalSearchTerm || ''}
-              onChange={(e) => onGlobalSearch && onGlobalSearch(e.target.value)}
-              className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-full py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-200 outline-none transition-shadow"
-            />
+          {/* Global Search Bar & Global Date Filter*/}
+          <div className="flex-1 max-w-2xl mx-4 hidden md:flex items-center gap-4">
+            <div className="relative flex-1 group">
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 group-focus-within:text-blue-500 transition-colors" />
+                <input
+                type="text"
+                placeholder="Pesquisar Encomenda ou Artigo..."
+                value={globalSearchTerm || ''}
+                onChange={(e) => onGlobalSearch && onGlobalSearch(e.target.value)}
+                className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-full py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-200 outline-none transition-shadow placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                />
+            </div>
+            {onGlobalDateRangeChange && (
+            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-1.5 focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                <Calendar size={16} className="text-slate-400 dark:text-slate-500" />
+                <div className="flex items-center gap-1 text-sm">
+                    <input
+                        type="date"
+                        value={globalDateRange?.start || ''}
+                        onChange={(e) => {
+                            const newStart = e.target.value;
+                            if (!newStart && !globalDateRange?.end) {
+                                onGlobalDateRangeChange(null);
+                            } else {
+                                onGlobalDateRangeChange({ start: newStart, end: globalDateRange?.end || '' });
+                            }
+                        }}
+                        className="bg-transparent border-none outline-none text-slate-700 dark:text-slate-200 w-28 text-xs cursor-pointer"
+                        title="Data de Início"
+                    />
+                    <span className="text-slate-400 dark:text-slate-500 text-xs font-medium">até</span>
+                    <input
+                        type="date"
+                        value={globalDateRange?.end || ''}
+                        onChange={(e) => {
+                            const newEnd = e.target.value;
+                            if (!newEnd && !globalDateRange?.start) {
+                                onGlobalDateRangeChange(null);
+                            } else {
+                                onGlobalDateRangeChange({ start: globalDateRange?.start || '', end: newEnd });
+                            }
+                        }}
+                        className="bg-transparent border-none outline-none text-slate-700 dark:text-slate-200 w-28 text-xs cursor-pointer"
+                        title="Data de Fim"
+                    />
+                    {globalDateRange && (
+                        <button 
+                            onClick={() => onGlobalDateRangeChange(null)}
+                            className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-400 hover:text-rose-500 transition-colors ml-1"
+                            title="Limpar Datas"
+                        >
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
+            </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 md:gap-4 relative">

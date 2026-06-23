@@ -20,6 +20,29 @@ const StopReasons: React.FC<StopReasonsProps> = ({ hierarchy, onUpdateHierarchy,
   const [addingReasonToCatIdx, setAddingReasonToCatIdx] = React.useState<number | null>(null);
   const [newReasonText, setNewReasonText] = React.useState('');
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isAddingCategory) {
+          setIsAddingCategory(false);
+          setNewCategoryName('');
+        }
+        if (editingCategoryIndex !== null) {
+          setEditingCategoryIndex(null);
+        }
+        if (addingReasonToCatIdx !== null) {
+          setAddingReasonToCatIdx(null);
+          setNewReasonText('');
+        }
+        if (editingReason !== null) {
+          setEditingReason(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAddingCategory, editingCategoryIndex, addingReasonToCatIdx, editingReason]);
+
   const handleAddCategory = (e: React.FormEvent) => {
     e.preventDefault();
     if (newCategoryName.trim()) {

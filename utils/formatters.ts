@@ -8,6 +8,19 @@ export const formatDate = (date: Date | null | undefined): string => {
   }).format(date);
 };
 
+export const formatDateTime = (date: Date | null | undefined | string): string => {
+  if (!date) return '-';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '-';
+  return new Intl.DateTimeFormat('pt-PT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(d);
+};
+
 export const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('pt-PT', {
     style: 'decimal',

@@ -8,7 +8,7 @@ import { SECTORS } from '../constants';
 
 // --- PERSISTÊNCIA (IndexedDB) ---
 const DB_NAME = 'ProdLasaData';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 const STORE_HANDLES = 'handles';
 const STORE_ORDERS = 'orders';
 const STORE_HEADERS = 'headers';
@@ -16,6 +16,7 @@ const STORE_STOP_REASONS = 'stop_reasons';
 const STORE_USERS = 'users';
 const STORE_EXPORT_COLUMNS = 'export_columns';
 const STORE_CAPACITIES = 'production_capacities';
+const STORE_SYNC_QUEUE = 'sync_queue';
 
 const initDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
@@ -43,6 +44,9 @@ const initDB = (): Promise<IDBDatabase> => {
       }
       if (!db.objectStoreNames.contains(STORE_CAPACITIES)) {
         db.createObjectStore(STORE_CAPACITIES, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(STORE_SYNC_QUEUE)) {
+        db.createObjectStore(STORE_SYNC_QUEUE, { keyPath: 'id', autoIncrement: true });
       }
     };
     
@@ -92,7 +96,7 @@ export const saveUserToDB = async (user: User) => {
     const { error } = await supabase.from('users').upsert({
         id: user.id,
         username: user.username,
-        password_hash: user.passwordHash,
+        password_hash: user.password || user.passwordHash,
         role: user.role,
         name: user.name,
         permissions: user.permissions
@@ -108,48 +112,47 @@ export const deleteUserFromDB = async (userId: string) => {
 export const loadUsersFromDB = async (): Promise<User[]> => {
     const { data: users, error } = await supabase.from('users').select('*');
     if (error) {
-        console.error("Error loading users", error);
-        return [];
+        console.error("Error loading users, falling back to local cache", error);
+        // Fallback to local cache
+        try {
+            const db = await initDB();
+            const localUsers: User[] = await new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_USERS, 'readonly');
+                const req = tx.objectStore(STORE_USERS).getAll();
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => reject(tx.error);
+            });
+            return localUsers;
+        } catch (e) {
+            console.error("Failed to load users from local cache", e);
+            return [];
+        }
     }
-    return (users || []).map((u: any) => ({
+    
+    const parsedUsers = (users || []).map((u: any) => ({
         id: u.id,
         username: u.username,
+        password: u.password_hash,
         passwordHash: u.password_hash,
         role: u.role,
         name: u.name,
         permissions: u.permissions
     }));
+
+    // Cache users locally for offline access
+    try {
+        const db = await initDB();
+        const tx = db.transaction(STORE_USERS, 'readwrite');
+        tx.objectStore(STORE_USERS).clear();
+        parsedUsers.forEach(u => tx.objectStore(STORE_USERS).add(u));
+    } catch(e) {
+        console.error("Error caching users locally", e);
+    }
+
+    return parsedUsers;
 };
 
 export const initializeDefaultUsers = async () => {
-    // Migrate local uses to Supabase first
-    try {
-        const db = await initDB();
-        const localUsers: User[] = await new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_USERS, 'readonly');
-            const req = tx.objectStore(STORE_USERS).getAll();
-            tx.oncomplete = () => resolve(req.result || []);
-            tx.onerror = () => reject(tx.error);
-        });
-
-        if (localUsers.length > 0) {
-            console.log(`Migrating ${localUsers.length} local users to Supabase...`);
-            for (const user of localUsers) {
-                await saveUserToDB(user);
-            }
-            // Clear local users to prevent re-migration
-            await new Promise<void>((resolve, reject) => {
-                const tx = db.transaction(STORE_USERS, 'readwrite');
-                tx.objectStore(STORE_USERS).clear();
-                tx.oncomplete = () => resolve();
-                tx.onerror = () => reject(tx.error);
-            });
-            console.log("Migration complete.");
-        }
-    } catch (e) {
-        console.warn("Could not migrate local users", e);
-    }
-
     const users = await loadUsersFromDB();
     if (users.length === 0) {
         const adminPerms: any = {
@@ -176,6 +179,7 @@ export const initializeDefaultUsers = async () => {
             id: '1',
             username: 'Plan',
             name: 'Planeamento',
+            password: 'Lasa',
             passwordHash: await hashPassword('Lasa'),
             role: 'admin',
             permissions: adminPerms
@@ -185,6 +189,7 @@ export const initializeDefaultUsers = async () => {
             id: '2',
             username: 'Lasa',
             name: 'Utilizador Lasa',
+            password: '',
             // Password vazia intencional para o utilizador de leitura Lasa.
             passwordHash: await hashPassword(''),
             role: 'viewer',
@@ -203,7 +208,12 @@ export const saveStopReasonsToDB = async (hierarchy: any[]) => {
         key: 'main_hierarchy',
         value: hierarchy
     });
-    if(error) console.error("Error saving stop reasons", error);
+    if (error) {
+        console.error("Error saving stop reasons", error);
+        if (!navigator.onLine || error.message?.includes('fetch') || error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+            await enqueueSyncOperation('stop_reasons', hierarchy);
+        }
+    }
 };
 
 export const loadStopReasonsFromDB = async (): Promise<any[] | null> => {
@@ -268,10 +278,19 @@ export const saveOrdersToDB = async (orders: Order[], headers: Record<string, st
     }));
 
     // upsert in batches of 250
+    let failedBatch = false;
     for (let i = 0; i < toInsert.length; i += 250) {
+        if (failedBatch) break; // Skip the rest if one fails, to add all to queue or maybe just queue the whole thing?
         const batch = toInsert.slice(i, i + 250);
         const { error } = await supabase.from('orders').upsert(batch);
-        if (error) console.error("Error saving orders batch", error);
+        if (error) {
+            console.error("Error saving orders batch", error);
+            if (!navigator.onLine || error.message?.includes('fetch') || error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+                // If any batch fails, we queue all of toInsert to be safe so they get updated eventually
+                await enqueueSyncOperation('orders_bulk', toInsert);
+                failedBatch = true;
+            }
+        }
     }
 };
 
@@ -328,7 +347,12 @@ export const saveOrderToDB = async (order: Order) => {
     };
 
     const { error } = await supabase.from('orders').upsert(toInsert);
-    if (error) console.error("Error saving single order", error);
+    if (error) {
+        console.error("Error saving single order", error);
+        if (!navigator.onLine || error.message?.includes('fetch') || error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+            await enqueueSyncOperation('order', toInsert);
+        }
+    }
 };
 
 export const loadOrdersFromDB = async (): Promise<{orders: Order[], headers: Record<string, string>} | null> => {
@@ -1312,11 +1336,31 @@ export const exportCustomColumns = (
 };
 
 export const saveCapacitiesToDB = async (capacities: any[]) => {
-  // Clear existing
-  await supabase.from('production_capacities').delete().not('id', 'is', null);
-  
-  // Insert new
-  if (capacities.length > 0) {
+  try {
+    // Clear existing
+    const { error: delError } = await supabase.from('production_capacities').delete().not('id', 'is', null);
+    if (delError) throw delError;
+
+    // Insert new
+    if (capacities.length > 0) {
+        const toInsert = capacities.map(c => ({
+            id: c.id,
+            sector_id: c.sectorId,
+            label: c.label,
+            article_code: c.articleCode,
+            family: c.family,
+            reference: c.reference,
+            color_code: c.colorCode,
+            size: c.size,
+            pieces_per_hour: c.piecesPerHour,
+            hours_per_day: c.hoursPerDay
+        }));
+        const { error: insError } = await supabase.from('production_capacities').insert(toInsert);
+        if (insError) throw insError;
+    }
+  } catch (error: any) {
+    console.error("Error saving capacities", error);
+    if (!navigator.onLine || error.message?.includes('fetch') || error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
       const toInsert = capacities.map(c => ({
           id: c.id,
           sector_id: c.sectorId,
@@ -1329,7 +1373,8 @@ export const saveCapacitiesToDB = async (capacities: any[]) => {
           pieces_per_hour: c.piecesPerHour,
           hours_per_day: c.hoursPerDay
       }));
-      await supabase.from('production_capacities').insert(toInsert);
+      await enqueueSyncOperation('capacities', toInsert);
+    }
   }
 };
 
@@ -1392,4 +1437,88 @@ export const parseDataFile = async (file: File): Promise<{ orders: Order[], head
         return parseSQLiteFile(file);
     }
     return parseExcelFile(file);
+};
+
+// --- BACKGROUND SYNC ---
+
+export interface SyncOperation {
+  id?: number;
+  type: 'order' | 'capacities' | 'orders_bulk' | 'stop_reasons';
+  payload: any;
+  timestamp: number;
+}
+
+export const enqueueSyncOperation = async (type: SyncOperation['type'], payload: any) => {
+  const db = await initDB();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_SYNC_QUEUE, 'readwrite');
+    tx.objectStore(STORE_SYNC_QUEUE).add({
+      type,
+      payload,
+      timestamp: Date.now()
+    });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+};
+
+export const processSyncQueue = async () => {
+  if (!navigator.onLine) return; // Only process when online
+  
+  const db = await initDB();
+  const operations: SyncOperation[] = await new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SYNC_QUEUE, 'readonly');
+    const req = tx.objectStore(STORE_SYNC_QUEUE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(tx.error);
+  });
+
+  if (operations.length === 0) return;
+
+  console.log(`Processing ${operations.length} background sync operations...`);
+  
+  for (const op of operations) {
+    if (!navigator.onLine) break; // Network lost during sync
+    
+    try {
+      if (op.type === 'order') {
+        const { error } = await supabase.from('orders').upsert(op.payload);
+        if (error) throw error;
+      } else if (op.type === 'orders_bulk') {
+        // Upsert in batches
+        for (let i = 0; i < op.payload.length; i += 250) {
+            const batch = op.payload.slice(i, i + 250);
+            const { error } = await supabase.from('orders').upsert(batch);
+            if (error) throw error;
+        }
+      } else if (op.type === 'capacities') {
+        await supabase.from('production_capacities').delete().not('id', 'is', null);
+        for (let i = 0; i < op.payload.length; i += 250) {
+            const batch = op.payload.slice(i, i + 250);
+            const { error } = await supabase.from('production_capacities').insert(batch);
+            if (error) throw error;
+        }
+      } else if (op.type === 'stop_reasons') {
+        const { error } = await supabase.from('app_state').upsert({
+            key: 'main_hierarchy',
+            value: op.payload
+        });
+        if (error) throw error;
+      }
+
+      // If successful, remove from queue
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE_SYNC_QUEUE, 'readwrite');
+        tx.objectStore(STORE_SYNC_QUEUE).delete(op.id!);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject();
+      });
+      console.log(`Sync operation ${op.id} of type ${op.type} completed.`);
+    } catch (error) {
+      console.error(`Failed to sync operation ${op.id} of type ${op.type}`, error);
+      // We break on first failure to maintain in-order application, 
+      // or at least wait until the next online event.
+      break;
+    }
+  }
 };

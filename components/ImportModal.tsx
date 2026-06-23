@@ -19,7 +19,16 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) => {
 
   React.useEffect(() => {
     checkImportFolder();
-  }, []);
+    
+    // Add Escape key listener to close modal
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isProcessing) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isProcessing, onClose]);
 
   const checkImportFolder = async () => {
     try {
