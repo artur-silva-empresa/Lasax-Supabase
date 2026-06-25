@@ -582,6 +582,7 @@ const App: React.FC = () => {
   };
 
   const globalFilteredOrders = React.useMemo(() => {
+     if (globalSearchTerm && globalSearchTerm.trim().length > 0) return orders;
      if (!globalDateRange?.start || !globalDateRange?.end) return orders;
      
      const start = new Date(globalDateRange.start);
@@ -595,7 +596,7 @@ const App: React.FC = () => {
          const d = new Date(dateToCheck);
          return d >= start && d <= end;
      });
-  }, [orders, globalDateRange]);
+  }, [orders, globalDateRange, globalSearchTerm]);
 
   const renderContent = () => {
     if (isLoading) {
@@ -671,7 +672,7 @@ const App: React.FC = () => {
             const fallback = getFirstAvailableView(currentUser);
             if (fallback !== 'timeline') { setActiveView(fallback); return null; }
         }
-        return <OrderTimeline orders={globalFilteredOrders} onViewDetails={handleViewDetails} />;
+        return <OrderTimeline orders={globalFilteredOrders} onViewDetails={handleViewDetails} globalSearchTerm={globalSearchTerm} />;
       case 'config':
       case 'config-general':
       case 'config-users':

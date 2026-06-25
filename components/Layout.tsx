@@ -49,6 +49,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
   const [isProductionOpen, setIsProductionOpen] = React.useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
 
+  const [localSearchTerm, setLocalSearchTerm] = React.useState(globalSearchTerm || '');
+
+  React.useEffect(() => {
+    setLocalSearchTerm(globalSearchTerm || '');
+  }, [globalSearchTerm]);
+
+  React.useEffect(() => {
+    const handler = setTimeout(() => {
+      if (onGlobalSearch) {
+        onGlobalSearch(localSearchTerm);
+      }
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [localSearchTerm, onGlobalSearch]);
+
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -492,10 +507,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                 <input
                 type="text"
                 placeholder="Pesquisar Encomenda ou Artigo..."
-                value={globalSearchTerm || ''}
-                onChange={(e) => onGlobalSearch && onGlobalSearch(e.target.value)}
-                className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-full py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-200 outline-none transition-shadow placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                value={localSearchTerm}
+                onChange={(e) => setLocalSearchTerm(e.target.value)}
+                className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-full py-2 pl-10 pr-10 text-sm focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-200 outline-none transition-shadow placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
+                {localSearchTerm && (
+                  <button
+                    onClick={() => {
+                      setLocalSearchTerm('');
+                      if (onGlobalSearch) onGlobalSearch('');
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
             </div>
             {onGlobalDateRangeChange && (
             <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-1.5 focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
@@ -789,16 +815,25 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
         {/* Global Search in Mobile Menu */}
         <div className="p-4 border-b border-slate-800 bg-slate-950/40">
           <div className="flex items-center relative w-full">
-            <Search size={16} className="absolute left-3 text-slate-505" />
+            <Search size={16} className="absolute left-3 text-slate-500" />
             <input
               type="text"
               placeholder="Pesquisar Encomenda ou Artigo..."
-              value={globalSearchTerm || ''}
-              onChange={(e) => {
-                onGlobalSearch && onGlobalSearch(e.target.value);
-              }}
-              className="w-full bg-slate-800 border-none rounded-xl py-2 pl-9 pr-4 text-xs text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              value={localSearchTerm}
+              onChange={(e) => setLocalSearchTerm(e.target.value)}
+              className="w-full bg-slate-800 border-none rounded-xl py-2 pl-9 pr-9 text-xs text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none"
             />
+            {localSearchTerm && (
+              <button
+                onClick={() => {
+                  setLocalSearchTerm('');
+                  if (onGlobalSearch) onGlobalSearch('');
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
         </div>
 

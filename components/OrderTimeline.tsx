@@ -19,11 +19,12 @@ import {
 interface OrderTimelineProps {
   orders: Order[];
   onViewDetails: (order: Order) => void;
+  globalSearchTerm?: string;
 }
 
 const ITEMS_PER_PAGE = 50;
 
-const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, onViewDetails }) => {
+const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, onViewDetails, globalSearchTerm }) => {
   // Estados dos Filtros
   const [searchTerm, setSearchTerm] = React.useState('');
   const deferredSearch = React.useDeferredValue(searchTerm);
@@ -98,6 +99,26 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, onViewDetails }) 
         }
       }
 
+      const globalSearch = (globalSearchTerm || '').toLowerCase().trim();
+      if (globalSearch) {
+          const requestedDateStr = formatDate(o.requestedDate);
+          const predictedDateStr = Object.values(o.sectorPredictedDates || {}).filter(Boolean).map(d => formatDate(d)).join(' ');
+          const classStr = Object.values(o.sectorStopReasons || {}).filter(Boolean).join(' ');
+          const obsStr = Object.values(o.sectorObservations || {}).filter(Boolean).join(' ');
+
+          return (o.docNr || '').toLowerCase().includes(globalSearch) ||
+                 (o.itemNr !== undefined && o.itemNr.toString().includes(globalSearch)) ||
+                 (o.po || '').toLowerCase().includes(globalSearch) ||
+                 (o.reference || '').toLowerCase().includes(globalSearch) ||
+                 (o.clientName || '').toLowerCase().includes(globalSearch) ||
+                 (o.family || '').toLowerCase().includes(globalSearch) ||
+                 (o.sizeDesc || '').toLowerCase().includes(globalSearch) ||
+                 requestedDateStr.includes(globalSearch) ||
+                 predictedDateStr.includes(globalSearch) ||
+                 classStr.toLowerCase().includes(globalSearch) ||
+                 obsStr.toLowerCase().includes(globalSearch);
+      }
+
       const search = deferredSearch.toLowerCase().trim();
       const matchesSearch = !search || 
                             (o.docNr || '').toLowerCase().includes(search) || 
@@ -109,7 +130,7 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, onViewDetails }) 
       
       return matchesDocSeries && matchesClient && matchesReference && matchesStatus && matchesSearch;
     });
-  }, [orders, deferredSearch, filterStatus, filterDocSeries, filterClient, filterReference]);
+  }, [orders, deferredSearch, filterStatus, filterDocSeries, filterClient, filterReference, globalSearchTerm]);
 
   // Reset pagination on filter change
   React.useEffect(() => {

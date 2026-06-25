@@ -333,17 +333,30 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
          if (filterArchived === 'archived') matchesArchived = !!o.isArchived;
       }
 
+      const globalSearch = (globalSearchTerm || '').toLowerCase().trim();
+      if (globalSearch) {
+          const exitDateStr = formatDate(getSectorDate(o));
+          const predictedDateStr = formatDate(o.sectorPredictedDates?.[sector.id]);
+          const classStr = o.sectorStopReasons?.[sector.id] || '';
+          const obsStr = o.sectorObservations?.[sector.id] || '';
+
+          return (o.docNr || '').toLowerCase().includes(globalSearch) ||
+                 (o.itemNr !== undefined && o.itemNr.toString().includes(globalSearch)) ||
+                 (o.clientName || '').toLowerCase().includes(globalSearch) ||
+                 (o.reference || '').toLowerCase().includes(globalSearch) ||
+                 (o.colorDesc || '').toLowerCase().includes(globalSearch) ||
+                 exitDateStr.includes(globalSearch) ||
+                 predictedDateStr.includes(globalSearch) ||
+                 classStr.toLowerCase().includes(globalSearch) ||
+                 obsStr.toLowerCase().includes(globalSearch);
+      }
+
       const search = deferredSearch.toLowerCase().trim();
       const matchesSearch = !search || 
         (o.docNr || '').toLowerCase().includes(search) || 
         (o.clientName || '').toLowerCase().includes(search) ||
         (o.reference || '').toLowerCase().includes(search) ||
         (o.colorDesc || '').toLowerCase().includes(search);
-        
-      const globalSearch = (globalSearchTerm || '').toLowerCase().trim();
-      const matchesGlobalSearch = !globalSearch || 
-                                  (o.docNr || '').toLowerCase().includes(globalSearch) ||
-                                  (o.itemNr !== undefined && o.itemNr.toString().includes(globalSearch));
 
       return matchesDocSeries && 
              matchesComercial && 
@@ -352,8 +365,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
              matchesPriority && 
              matchesDate &&
              matchesArchived &&
-             matchesSearch && 
-             matchesGlobalSearch;
+             matchesSearch;
     });
   }, [orders, filterDocSeries, filterComercial, filterReference, filterStatus, filterPriority, filterDate, filterArchived, deferredSearch, globalSearchTerm]);
 

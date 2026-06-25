@@ -284,6 +284,27 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
       if (filterArchived === 'active') matchesArchived = !o.isArchived;
       else if (filterArchived === 'archived') matchesArchived = !!o.isArchived;
 
+      const globalSearch = (globalSearchTerm || '').toLowerCase().trim();
+      if (globalSearch) {
+          const requestedDateStr = formatDate(o.requestedDate);
+          const predictedDateStr = Object.values(o.sectorPredictedDates || {}).filter(Boolean).map(d => formatDate(d)).join(' ');
+          const classStr = Object.values(o.sectorStopReasons || {}).filter(Boolean).join(' ');
+          const obsStr = Object.values(o.sectorObservations || {}).filter(Boolean).join(' ');
+
+          return (o.docNr || '').toLowerCase().includes(globalSearch) ||
+                 (o.itemNr !== undefined && o.itemNr.toString().includes(globalSearch)) ||
+                 (o.po || '').toLowerCase().includes(globalSearch) ||
+                 (o.reference || '').toLowerCase().includes(globalSearch) ||
+                 (o.comercial || '').toLowerCase().includes(globalSearch) ||
+                 (o.clientName || '').toLowerCase().includes(globalSearch) ||
+                 (o.family || '').toLowerCase().includes(globalSearch) ||
+                 (o.sizeDesc || '').toLowerCase().includes(globalSearch) ||
+                 requestedDateStr.includes(globalSearch) ||
+                 predictedDateStr.includes(globalSearch) ||
+                 classStr.toLowerCase().includes(globalSearch) ||
+                 obsStr.toLowerCase().includes(globalSearch);
+      }
+
       const search = deferredSearch.toLowerCase().trim();
       const matchesSearch = !search || 
                             (o.docNr || '').toLowerCase().includes(search) || 
@@ -293,13 +314,8 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                             (o.clientName || '').toLowerCase().includes(search) ||
                             (o.family || '').toLowerCase().includes(search) ||
                             (o.sizeDesc || '').toLowerCase().includes(search);
-                            
-      const globalSearch = (globalSearchTerm || '').toLowerCase().trim();
-      const matchesGlobalSearch = !globalSearch || 
-                                  (o.docNr || '').toLowerCase().includes(globalSearch) ||
-                                  (o.itemNr !== undefined && o.itemNr.toString().includes(globalSearch));
       
-      return matchesDocSeries && matchesComercial && matchesReference && matchesStatus && matchesSearch && matchesGlobalSearch && matchesObservations && matchesWeek && matchesFlags && matchesArchived;
+      return matchesDocSeries && matchesComercial && matchesReference && matchesStatus && matchesSearch && matchesObservations && matchesWeek && matchesFlags && matchesArchived;
     });
   }, [orders, deferredSearch, globalSearchTerm, filterStatus, filterDocSeries, filterComercial, filterReference, filterHasObservations, filterDate, filterPriority, filterManual, activeFilter, filterArchived]);
 
