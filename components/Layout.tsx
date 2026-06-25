@@ -723,7 +723,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
 
         {/* ÁREA DE CONTEÚDO */}
         <main className="flex-1 overflow-hidden relative pb-24 md:pb-0">
-          <div className="max-w-[1600px] mx-auto h-full">
+          <div className="w-full h-full">
             {children}
           </div>
         </main>
