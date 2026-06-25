@@ -642,168 +642,173 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
 
   return (
     <div className="flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500">
-      <div className="flex-shrink-0 p-4 md:p-6 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 transition-colors">
-        <div className="flex flex-col gap-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white transition-colors">Listagem de Encomendas</h2>
-              <div className="flex items-center gap-2">
-                <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">{finalFilteredOrders.length} registos encontrados</p>
-                {filterDate && (
-                    <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-in fade-in">
-                        Filtro: Semana {getISOWeek(filterDate)}
-                    </span>
-                )}
-                {filterManual && (
-                    <span className="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 animate-in fade-in">
-                        Filtro: Conf. Manual
-                    </span>
-                )}
-                {filterArchived === 'archived' && (
-                    <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 animate-in fade-in flex items-center gap-1">
-                        <Archive size={10} /> Arquivadas
-                    </span>
-                )}
-                {filterArchived === 'all' && (
-                    <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 animate-in fade-in">
-                        A mostrar tudo
-                    </span>
-                )}
-              </div>
-            </div>
-            
-            <div className="hidden md:flex items-center gap-2">
-                {/* Botão Exportar Tabela (Personalizada) */}
-                <button
-                  onClick={handleTableExport}
-                  disabled={isExportingTable}
-                  className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[150px] justify-center ${
-                    tableExportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
-                  }`}
-                  title="Exportar Tabela (Colunas Personalizadas)"
-                >
-                   {isExportingTable ? (
-                      <>
-                          <Loader2 size={16} className="animate-spin" />
-                          <span className="text-xs font-bold uppercase">A Gerar...</span>
-                      </>
-                   ) : tableExportSuccess ? (
-                      <>
-                          <Check size={16} />
-                          <span className="text-xs font-bold uppercase">Sucesso</span>
-                      </>
-                   ) : (
-                      <>
-                          <Download size={16} />
-                          <span className="text-xs font-bold uppercase">Exportar Tabela Editável</span>
-                      </>
-                   )}
-                </button>
-
-                {/* Botão Exportar Excel */}
-                <button 
-                  onClick={handleExcelExport}
-                  disabled={isExportingExcel}
-                  className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[150px] justify-center ${
-                    excelExportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
-                  }`}
-                  title="Exportar Lista para Excel"
-                >
-                   {isExportingExcel ? (
-                      <>
-                          <Loader2 size={16} className="animate-spin" />
-                          <span className="text-xs font-bold uppercase">A Gerar...</span>
-                      </>
-                   ) : excelExportSuccess ? (
-                      <>
-                          <Check size={16} />
-                          <span className="text-xs font-bold uppercase">Sucesso</span>
-                      </>
-                   ) : (
-                      <>
-                          <FileSpreadsheet size={16} />
-                          <span className="text-xs font-bold uppercase">Exportar Excel</span>
-                      </>
-                   )}
-                </button>
-
-                {/* Botão Exportar BD */}
-                {user?.permissions?.config === 'write' && (
-                <button 
-                    onClick={handleExport}
-                    disabled={isExporting}
-                    className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[140px] justify-center ${
-                        exportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400'
-                    }`}
-                    title="Exportar Base de Dados (SQLite)"
-                    >
-                    {isExporting ? (
-                        <>
-                            <Loader2 size={16} className="animate-spin" />
-                            <span className="text-xs font-bold uppercase">A Gerar...</span>
-                        </>
-                    ) : exportSuccess ? (
-                        <>
-                            <Check size={16} />
-                            <span className="text-xs font-bold uppercase">Guardado</span>
-                        </>
-                    ) : (
-                        <>
-                            <Database size={16} />
-                            <span className="text-xs font-bold uppercase">Exportar BD</span>
-                        </>
-                    )}
-                </button>
-                )}
-            </div>
-
-            {/* Small filter button on Mobile/Tablet */}
-            <div className="xl:hidden flex items-center">
-              <button
-                onClick={() => setShowMobileFilters(!showMobileFilters)}
-                className={`p-2 rounded-xl transition-all shadow-sm shrink-0 active:scale-95 border flex items-center gap-1.5 ${
-                  showMobileFilters 
-                    ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-600 dark:border-blue-600' 
-                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'
-                }`}
-                title={showMobileFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
-              >
-                <Filter size={15} className={showMobileFilters ? "fill-white/10" : "text-slate-400"} />
-                <span className="text-xs font-bold">{showMobileFilters ? "Ocultar" : "Filtros"}</span>
-                {/* Active filter count indicator */}
-                {(() => {
-                  let count = 0;
-                  if (searchTerm) count++;
-                  if (filterDate) count++;
-                  if (filterPriority !== 'All') count++;
-                  if (filterDocSeries !== 'All') count++;
-                  if (filterComercial !== 'All') count++;
-                  if (filterReference !== 'All') count++;
-                  if (filterStatus !== 'All') count++;
-                  if (filterArchived !== 'active') count++;
-                  if (filterManual) count++;
-                  if (filterHasObservations) count++;
-                  if (count > 0) {
-                    return (
-                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
-                        showMobileFilters ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
-                      }`}>
-                        {count}
-                      </span>
-                    );
-                  }
-                  return null;
-                })()}
-              </button>
+      <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400">
+            <ListFilter size={24} />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white transition-colors">Listagem de Encomendas</h2>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400">{finalFilteredOrders.length} registos encontrados</p>
+              {filterDate && (
+                  <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-in fade-in">
+                      Filtro: Semana {getISOWeek(filterDate)}
+                  </span>
+              )}
+              {filterManual && (
+                  <span className="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 animate-in fade-in">
+                      Filtro: Conf. Manual
+                  </span>
+              )}
+              {filterArchived === 'archived' && (
+                  <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 animate-in fade-in flex items-center gap-1">
+                      <Archive size={10} /> Arquivadas
+                  </span>
+              )}
+              {filterArchived === 'all' && (
+                  <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 animate-in fade-in">
+                      A mostrar tudo
+                  </span>
+              )}
             </div>
           </div>
-          
-          <div className={`transition-all duration-300 ease-in-out xl:block ${
+        </div>
+        
+        <div className="hidden xl:flex items-center gap-2">
+            {/* Botão Exportar Tabela (Personalizada) */}
+            <button
+              onClick={handleTableExport}
+              disabled={isExportingTable}
+              className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[150px] justify-center ${
+                tableExportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
+              }`}
+              title="Exportar Tabela (Colunas Personalizadas)"
+            >
+               {isExportingTable ? (
+                  <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span className="text-xs font-bold uppercase">A Gerar...</span>
+                  </>
+               ) : tableExportSuccess ? (
+                  <>
+                      <Check size={16} />
+                      <span className="text-xs font-bold uppercase">Sucesso</span>
+                  </>
+               ) : (
+                  <>
+                      <Download size={16} />
+                      <span className="text-xs font-bold uppercase">Exportar Tabela Editável</span>
+                  </>
+               )}
+            </button>
+
+            {/* Botão Exportar Excel */}
+            <button 
+              onClick={handleExcelExport}
+              disabled={isExportingExcel}
+              className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[150px] justify-center ${
+                excelExportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
+              }`}
+              title="Exportar Lista para Excel"
+            >
+               {isExportingExcel ? (
+                  <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span className="text-xs font-bold uppercase">A Gerar...</span>
+                  </>
+               ) : excelExportSuccess ? (
+                  <>
+                      <Check size={16} />
+                      <span className="text-xs font-bold uppercase">Sucesso</span>
+                  </>
+               ) : (
+                  <>
+                      <FileSpreadsheet size={16} />
+                      <span className="text-xs font-bold uppercase">Exportar Excel</span>
+                  </>
+               )}
+            </button>
+
+            {/* Botão Exportar BD */}
+            {user?.permissions?.config === 'write' && (
+            <button 
+                onClick={handleExport}
+                disabled={isExporting}
+                className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[140px] justify-center ${
+                    exportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400'
+                }`}
+                title="Exportar Base de Dados (SQLite)"
+                >
+                {isExporting ? (
+                    <>
+                        <Loader2 size={16} className="animate-spin" />
+                        <span className="text-xs font-bold uppercase">A Gerar...</span>
+                    </>
+                ) : exportSuccess ? (
+                    <>
+                        <Check size={16} />
+                        <span className="text-xs font-bold uppercase">Guardado</span>
+                    </>
+                ) : (
+                    <>
+                        <Database size={16} />
+                        <span className="text-xs font-bold uppercase">Exportar BD</span>
+                    </>
+                )}
+            </button>
+            )}
+        </div>
+      </div>
+
+      {/* Mobile/Tablet Header Row */}
+      <div className="xl:hidden flex justify-between items-center p-3.5 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
+        <span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Painel de Pesquisa</span>
+        <button
+          onClick={() => setShowMobileFilters(!showMobileFilters)}
+          className={`p-1.5 rounded-xl border transition-all active:scale-95 flex items-center gap-1.5 ${
             showMobileFilters 
-              ? 'max-h-[1400px] opacity-100 mt-2' 
-              : 'max-h-0 opacity-0 overflow-hidden mt-0 pointer-events-none'
-          }`}>
-            <div className="flex flex-col xl:flex-row gap-3 pt-3">
+              ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-600 dark:border-blue-600' 
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'
+          }`}
+          title={showMobileFilters ? "Ocultar Pesquisa" : "Mostrar Pesquisa"}
+        >
+          <Filter size={14} className={showMobileFilters ? "fill-white/10" : "text-slate-500"} />
+          <span className="text-xs font-bold">{showMobileFilters ? "Ocultar" : "Mostrar"}</span>
+          {(() => {
+            let count = 0;
+            if (searchTerm) count++;
+            if (filterDate) count++;
+            if (filterPriority !== 'All') count++;
+            if (filterDocSeries !== 'All') count++;
+            if (filterComercial !== 'All') count++;
+            if (filterReference !== 'All') count++;
+            if (filterStatus !== 'All') count++;
+            if (filterArchived !== 'active') count++;
+            if (filterManual) count++;
+            if (filterHasObservations) count++;
+            if (count > 0) {
+              return (
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                  showMobileFilters ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
+                }`}>
+                  {count}
+                </span>
+              );
+            }
+            return null;
+          })()}
+        </button>
+      </div>
+
+      <div className={`transition-all duration-300 ease-in-out xl:max-h-none xl:opacity-100 xl:overflow-visible xl:pointer-events-auto ${
+        showMobileFilters 
+          ? 'max-h-[1400px] opacity-100' 
+          : 'max-h-0 opacity-0 overflow-hidden pointer-events-none'
+      }`}>
+        {/* Header / Toolbar */}
+        <div className="flex-shrink-0 p-4 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
+          <div className="flex flex-col xl:flex-row gap-3">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
               <input 
@@ -980,10 +985,9 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
           </div>
         </div>
       </div>
-    </div>
       
-      <div className="flex-1 overflow-y-auto" onScroll={handleListScroll}>
-        <div className="hidden md:block">
+      <div className="flex-1 overflow-y-auto w-full relative" onScroll={handleListScroll}>
+        <div className="hidden md:block overflow-x-auto h-full min-h-[300px]">
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-100 dark:bg-slate-900 sticky top-0 z-10 shadow-sm transition-colors">
               <tr>
