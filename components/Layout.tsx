@@ -19,7 +19,8 @@ import {
   Target,
   Zap,
   Search,
-  MessageSquare
+  MessageSquare,
+  PanelLeftClose
 } from 'lucide-react';
 import { User, Order } from '../types';
 import { SECTORS } from '../constants';
@@ -489,9 +490,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
             </button>
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="hidden md:p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 md:block"
+              className="hidden md:p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 md:block transition-colors"
+              title={isSidebarOpen ? "Recolher menu lateral" : "Expandir menu lateral"}
             >
-              {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
+              {isSidebarOpen ? <PanelLeftClose size={20} /> : <Menu size={20} />}
             </button>
             <img src={`${import.meta.env.BASE_URL}icons/icone.png`} alt="Prod. Lasa" className="md:hidden w-8 h-8 object-contain" />
             
