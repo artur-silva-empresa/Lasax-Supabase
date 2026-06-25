@@ -54,6 +54,87 @@ const App: React.FC = () => {
   // Estado para notificações do sistema
   const [notification, setNotification] = React.useState<{message: string, type: 'success' | 'info'} | null>(null);
 
+  // Keyboard Shortcuts state
+  const [shortcuts, setShortcuts] = React.useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem('texflow-shortcuts');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Erro ao carregar atalhos de teclado", e);
+      }
+    }
+    // Default shortcuts mapping key -> viewId
+    return {
+      'd': 'dashboard',
+      'o': 'orders',
+      't': 'timeline',
+      'g': 'bottleneck',
+      'c': 'production-capacity',
+      's': 'config'
+    };
+  });
+
+  const handleUpdateShortcuts = (newShortcuts: Record<string, string>) => {
+    setShortcuts(newShortcuts);
+    localStorage.setItem('texflow-shortcuts', JSON.stringify(newShortcuts));
+    setNotification({ message: 'Atalhos de teclado atualizados com sucesso.', type: 'success' });
+  };
+
+  // Keyboard shortcut listener
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in form controls
+      const activeEl = document.activeElement;
+      if (activeEl) {
+        const tagName = activeEl.tagName.toLowerCase();
+        const isInput = tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+        const isContentEditable = activeEl.hasAttribute('contenteditable') || activeEl.getAttribute('contenteditable') === 'true';
+        if (isInput || isContentEditable) {
+          return;
+        }
+      }
+
+      // Avoid overriding standard browser shortcuts (ctrl, cmd, alt)
+      if (e.ctrlKey || e.metaKey || e.altKey) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      const targetView = shortcuts[key];
+      if (targetView) {
+        // Verify user permissions before navigating!
+        if (currentUser) {
+          const perms = currentUser.permissions || {};
+          let hasAccess = false;
+          
+          if (targetView === 'dashboard' && perms.dashboard !== 'none') hasAccess = true;
+          else if (targetView === 'orders' && perms.orders !== 'none') hasAccess = true;
+          else if (targetView === 'timeline' && perms.timeline !== 'none') hasAccess = true;
+          else if (targetView === 'bottleneck' && currentUser.role === 'admin') hasAccess = true;
+          else if (targetView === 'production-capacity' && currentUser.role === 'admin') hasAccess = true;
+          else if (targetView.startsWith('config') && (perms.config !== 'none' || perms.stopReasons !== 'none')) hasAccess = true;
+          else if (targetView.startsWith('sector-')) {
+            const sectorId = targetView.replace('sector-', '');
+            if (perms.sectors && perms.sectors[sectorId] && perms.sectors[sectorId] !== 'none') {
+              hasAccess = true;
+            }
+          }
+
+          if (hasAccess) {
+            e.preventDefault();
+            setActiveView(targetView);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [shortcuts, currentUser]);
+
   React.useEffect(() => {
     // Theme Initialization
     const savedTheme = localStorage.getItem('texflow-theme') as 'light' | 'dark';
@@ -276,8 +357,7 @@ const App: React.FC = () => {
         // Record Audit History for all changed sectors
         if (currentUser) {
             const finalDates = finalOrder.sectorPredictedDates || {};
-            const historyObj = { ...(finalOrder.predictedDatesHistory || []) };
-            const historyArray = Object.values(historyObj);
+            const historyArray = [...(finalOrder.predictedDatesHistory || [])];
             let hasChanges = false;
             
             // Collect changes from final order vs old order
@@ -617,6 +697,8 @@ const App: React.FC = () => {
             orders={globalFilteredOrders}
             activeTab={resolvedTabConfig as any}
             onTabChange={(t) => setActiveView(`config-${t}`)}
+            shortcuts={shortcuts}
+            onUpdateShortcuts={handleUpdateShortcuts}
           />
         );
       case 'bottleneck':

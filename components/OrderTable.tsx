@@ -1065,8 +1065,14 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 <tr 
                   key={order.id} 
                   id={`order-row-${order.id}`}
-                  onClick={() => onViewDetails(order)}
-                  className={`hover:bg-blue-50 dark:hover:bg-slate-900 transition-colors group cursor-pointer ${order.isArchived ? 'opacity-50 bg-slate-50 dark:bg-slate-900/50' : ''} ${selectedOrderIds.has(order.id) ? 'bg-blue-50/50 dark:bg-slate-900/40' : ''} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500 bg-blue-50/30' : ''}`}
+                  onClick={() => {
+                    if (focusedRowIndex === index) {
+                      onViewDetails(order);
+                    } else {
+                      setFocusedRowIndex(index);
+                    }
+                  }}
+                  className={`hover:bg-blue-50 dark:hover:bg-slate-900 transition-colors group cursor-pointer scroll-mt-20 ${order.isArchived ? 'opacity-50 bg-slate-50 dark:bg-slate-900/50' : ''} ${selectedOrderIds.has(order.id) ? 'bg-blue-50/50 dark:bg-slate-900/40' : ''} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500 bg-blue-50/30' : ''}`}
                 >
                   {user?.permissions?.orders === 'write' && (
                     <td className="px-4 py-4 align-middle text-center" onClick={(e) => e.stopPropagation()}>
@@ -1219,8 +1225,14 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
             <div 
               key={order.id}
               id={`order-card-${order.id}`}
-              onClick={() => onViewDetails(order)}
-              className={`p-4 rounded-2xl border transition-colors space-y-4 ${selectedOrderIds.has(order.id) ? 'border-blue-300 dark:border-blue-700 bg-blue-50/20 dark:bg-blue-900/10' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800'} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500' : ''}`}
+              onClick={() => {
+                if (focusedRowIndex === index) {
+                  onViewDetails(order);
+                } else {
+                  setFocusedRowIndex(index);
+                }
+              }}
+              className={`p-4 rounded-2xl border transition-colors space-y-4 scroll-mt-20 ${selectedOrderIds.has(order.id) ? 'border-blue-300 dark:border-blue-700 bg-blue-50/20 dark:bg-blue-900/10' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800'} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500' : ''}`}
             >
               <div className="flex justify-between items-start">
                 <div className="flex items-start gap-2">

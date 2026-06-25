@@ -779,8 +779,16 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                 <tr 
                   key={order.id} 
                   id={`sector-order-row-${order.id}`}
-                  onClick={() => !isEditing && onViewDetails(order)}
-                  className={`hover:bg-blue-50 dark:hover:bg-slate-900 transition-colors group ${isEditing ? 'bg-blue-50 dark:bg-slate-900' : 'cursor-pointer'} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500 bg-blue-50/30' : ''}`}
+                  onClick={() => {
+                    if (!isEditing) {
+                      if (focusedRowIndex === index) {
+                        onViewDetails(order);
+                      } else {
+                        setFocusedRowIndex(index);
+                      }
+                    }
+                  }}
+                  className={`hover:bg-blue-50 dark:hover:bg-slate-900 transition-colors group scroll-mt-16 ${isEditing ? 'bg-blue-50 dark:bg-slate-900' : 'cursor-pointer'} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500 bg-blue-50/30' : ''}`}
                 >
                   <td className="px-4 py-3 align-top font-bold text-sm text-slate-800 dark:text-slate-200 truncate max-w-0">{order.docNr}</td>
                   <td className="px-4 py-3 align-top text-xs font-medium text-slate-600 dark:text-slate-300 truncate max-w-0" title={order.clientName}>{order.clientName}</td>
@@ -958,8 +966,16 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
               <div 
                 key={order.id}
                 id={`sector-order-card-${order.id}`}
-                onClick={() => !isEditing && onViewDetails(order)}
-                className={`p-4 rounded-2xl border transition-colors space-y-4 ${isEditing ? 'border-blue-300 dark:border-blue-700 bg-blue-50/20 dark:bg-slate-900' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800'} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500' : ''}`}
+                onClick={() => {
+                  if (!isEditing) {
+                    if (focusedRowIndex === index) {
+                      onViewDetails(order);
+                    } else {
+                      setFocusedRowIndex(index);
+                    }
+                  }
+                }}
+                className={`p-4 rounded-2xl border transition-colors space-y-4 scroll-mt-20 ${isEditing ? 'border-blue-300 dark:border-blue-700 bg-blue-50/20 dark:bg-slate-900' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800'} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500' : ''}`}
               >
                 <div className="flex justify-between items-start">
                   <div>

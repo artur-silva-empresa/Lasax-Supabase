@@ -36,7 +36,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
-    }
+    },
+    dedupe: ['react', 'react-dom']
   },
 
   // Incluir wasm como asset estático para o Vite não tentar processar

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { FolderInput, FolderOutput, Save, FolderOpen, AlertCircle, CheckCircle, Moon, Sun, Trash2, Users, ShieldCheck, UserPlus, Key, Eye, EyeOff, User as UserIcon, Settings as SettingsIcon, Package, Clock, Layers, ChevronRight, X, AlertTriangle } from 'lucide-react';
+import { FolderInput, FolderOutput, Save, FolderOpen, AlertCircle, CheckCircle, Moon, Sun, Trash2, Users, ShieldCheck, UserPlus, Key, Eye, EyeOff, User as UserIcon, Settings as SettingsIcon, Package, Clock, Layers, ChevronRight, X, AlertTriangle, Keyboard, Plus, RotateCcw } from 'lucide-react';
 import { saveDirectoryHandle, getDirectoryHandle, verifyPermission, hashPassword } from '../services/dataService';
 import { User, PermissionLevel, UserPermissions, Order } from '../types';
 import { SECTORS } from '../constants';
@@ -19,9 +19,25 @@ interface SettingsProps {
   orders?: Order[];
   activeTab?: 'general' | 'users' | 'stop-reasons' | 'export-columns';
   onTabChange?: (tab: 'general' | 'users' | 'stop-reasons' | 'export-columns') => void;
+  shortcuts?: Record<string, string>;
+  onUpdateShortcuts?: (shortcuts: Record<string, string>) => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ currentTheme, onToggleTheme, onResetData, users = [], onSaveUser, onDeleteUser, stopReasonsHierarchy = [], onUpdateStopReasonsHierarchy, orders = [], activeTab = 'general', onTabChange }) => {
+const Settings: React.FC<SettingsProps> = ({ 
+  currentTheme, 
+  onToggleTheme, 
+  onResetData, 
+  users = [], 
+  onSaveUser, 
+  onDeleteUser, 
+  stopReasonsHierarchy = [], 
+  onUpdateStopReasonsHierarchy, 
+  orders = [], 
+  activeTab = 'general', 
+  onTabChange,
+  shortcuts = {},
+  onUpdateShortcuts
+}) => {
   const [internalActiveTab, setInternalActiveTab] = React.useState<'general' | 'users' | 'stop-reasons' | 'export-columns'>(activeTab);
   const currentTab = onTabChange ? activeTab : internalActiveTab;
 
@@ -55,6 +71,143 @@ const Settings: React.FC<SettingsProps> = ({ currentTheme, onToggleTheme, onRese
     } as UserPermissions
   });
   const [showPassword, setShowPassword] = React.useState(false);
+
+  // Keyboard Shortcuts States
+  const [recordingViewId, setRecordingViewId] = React.useState<string | null>(null);
+  const [isListening, setIsListening] = React.useState(false);
+  const [showAddForm, setShowAddForm] = React.useState(false);
+  const [addFormViewId, setAddFormViewId] = React.useState('dashboard');
+  const [addFormKey, setAddFormKey] = React.useState('');
+  const [errorMessage, setErrorMessage] = React.useState('');
+
+  const AVAILABLE_VIEWS = React.useMemo(() => [
+    { id: 'dashboard', name: 'Dashboard', category: 'Principal' },
+    { id: 'orders', name: 'Encomendas', category: 'Principal' },
+    { id: 'timeline', name: 'Timeline', category: 'Principal' },
+    { id: 'bottleneck', name: 'Análise de Gargalos', category: 'Controlo de Produção' },
+    { id: 'production-capacity', name: 'Capacidades de Produção', category: 'Controlo de Produção' },
+    { id: 'config', name: 'Configurações / Geral', category: 'Configurações' },
+    { id: 'config-users', name: 'Configurações / Utilizadores', category: 'Configurações' },
+    { id: 'config-stop-reasons', name: 'Configurações / Motivos de Paragem', category: 'Configurações' },
+    { id: 'config-export-columns', name: 'Configurações / Tabelas Editáveis', category: 'Configurações' },
+    ...SECTORS.map(s => ({
+      id: `sector-${s.id}`,
+      name: `${s.name} (Setor)`,
+      category: 'Setores'
+    }))
+  ], []);
+
+  React.useEffect(() => {
+    if (!isListening) return;
+
+    const handleKeyCapture = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const key = e.key.toLowerCase();
+      
+      // Filter out modifier keys themselves
+      if (['control', 'shift', 'alt', 'meta', 'escape', 'tab', 'enter'].includes(key)) {
+        return;
+      }
+
+      if (recordingViewId) {
+        // We are editing an existing or inline shortcut
+        const conflictingViewId = Object.entries(shortcuts).find(([k, v]) => k === key && v !== recordingViewId)?.[1];
+        
+        if (conflictingViewId) {
+          const conflictingView = AVAILABLE_VIEWS.find(v => v.id === conflictingViewId)?.name || conflictingViewId;
+          if (!window.confirm(`A tecla "${key.toUpperCase()}" já está associada a "${conflictingView}". Deseja reassociar?`)) {
+            setIsListening(false);
+            setRecordingViewId(null);
+            return;
+          }
+        }
+
+        const updated = { ...shortcuts };
+        // Delete any existing keys for this view
+        Object.keys(updated).forEach(k => {
+          if (updated[k] === recordingViewId) {
+            delete updated[k];
+          }
+        });
+        // Bind new key
+        updated[key] = recordingViewId;
+        if (onUpdateShortcuts) {
+          onUpdateShortcuts(updated);
+        }
+        setRecordingViewId(null);
+        setIsListening(false);
+      } else if (showAddForm) {
+        // We are capturing a key for the "Add New Shortcut" form
+        setAddFormKey(key);
+        setIsListening(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyCapture, true);
+    return () => window.removeEventListener('keydown', handleKeyCapture, true);
+  }, [isListening, recordingViewId, showAddForm, shortcuts, onUpdateShortcuts, AVAILABLE_VIEWS]);
+
+  const handleResetShortcuts = () => {
+    if (window.confirm("Deseja repor todos os atalhos de teclado para os padrões do sistema?")) {
+      const defaults = {
+        'd': 'dashboard',
+        'o': 'orders',
+        't': 'timeline',
+        'g': 'bottleneck',
+        'c': 'production-capacity',
+        's': 'config'
+      };
+      if (onUpdateShortcuts) {
+        onUpdateShortcuts(defaults);
+      }
+    }
+  };
+
+  const handleAddShortcut = () => {
+    if (!addFormViewId || !addFormKey) {
+      setErrorMessage('Por favor, selecione uma vista e defina um atalho.');
+      return;
+    }
+
+    const key = addFormKey.toLowerCase();
+    
+    // Check conflict
+    const conflictingViewId = shortcuts[key];
+    if (conflictingViewId) {
+      const conflictingView = AVAILABLE_VIEWS.find(v => v.id === conflictingViewId)?.name || conflictingViewId;
+      if (!window.confirm(`A tecla "${key.toUpperCase()}" já está associada a "${conflictingView}". Deseja substituir?`)) {
+        return;
+      }
+    }
+
+    const updated = { ...shortcuts };
+    // Clear any existing key for this same target view
+    Object.keys(updated).forEach(k => {
+      if (updated[k] === addFormViewId) {
+        delete updated[k];
+      }
+    });
+
+    updated[key] = addFormViewId;
+    if (onUpdateShortcuts) {
+      onUpdateShortcuts(updated);
+    }
+
+    // Reset form
+    setAddFormKey('');
+    setShowAddForm(false);
+    setErrorMessage('');
+  };
+
+  const handleDeleteShortcut = (keyToDelete: string) => {
+    const updated = { ...shortcuts };
+    delete updated[keyToDelete];
+    if (onUpdateShortcuts) {
+      onUpdateShortcuts(updated);
+    }
+  };
 
   React.useEffect(() => {
     loadHandles();
@@ -230,6 +383,202 @@ const Settings: React.FC<SettingsProps> = ({ currentTheme, onToggleTheme, onRese
                 )}
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Keyboard Shortcuts Section */}
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="flex items-start justify-between gap-4 mb-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-xl">
+                <Keyboard size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Atalhos de Teclado</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Navegue rapidamente entre as diferentes páginas pressionando uma única tecla.
+                </p>
+              </div>
+            </div>
+            
+            <button
+              onClick={handleResetShortcuts}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 text-xs font-semibold"
+              title="Repor atalhos padrão"
+            >
+              <RotateCcw size={15} /> Repor Padrões
+            </button>
+          </div>
+
+          {/* Shortcut list */}
+          <div className="space-y-3">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 font-bold text-xs uppercase tracking-wider">
+                    <th className="py-2 px-3">Ecrã / Destino</th>
+                    <th className="py-2 px-3">Categoria</th>
+                    <th className="py-2 px-3 text-center">Atalho</th>
+                    <th className="py-2 px-3 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                  {Object.entries(shortcuts).map(([key, viewId]) => {
+                    const viewObj = AVAILABLE_VIEWS.find(v => v.id === viewId);
+                    const viewName = viewObj ? viewObj.name : viewId;
+                    const viewCat = viewObj ? viewObj.category : 'Outro';
+                    const isRecordingThis = recordingViewId === viewId && isListening;
+
+                    return (
+                      <tr key={key} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+                        <td className="py-3 px-3 font-semibold text-slate-700 dark:text-slate-200">
+                          {viewName}
+                        </td>
+                        <td className="py-3 px-3 text-xs text-slate-400 dark:text-slate-500 font-medium">
+                          {viewCat}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          {isRecordingThis ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded bg-amber-500/10 text-amber-500 text-xs font-black animate-pulse border border-amber-500/20">
+                              Aguardando tecla...
+                            </span>
+                          ) : (
+                            <kbd className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-sm uppercase font-mono">
+                              {key}
+                            </kbd>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setRecordingViewId(viewId);
+                                setIsListening(true);
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-bold transition-colors"
+                            >
+                              Alterar
+                            </button>
+                            <button
+                              onClick={() => handleDeleteShortcut(key)}
+                              className="text-xs text-rose-500 hover:text-rose-700 dark:text-rose-450 dark:hover:text-rose-400 font-bold transition-colors"
+                            >
+                              Remover
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {Object.keys(shortcuts).length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-6 text-center text-slate-400 dark:text-slate-500 text-sm italic">
+                        Nenhum atalho de teclado configurado.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Add shortcut area */}
+            {!showAddForm ? (
+              <button
+                onClick={() => {
+                  setShowAddForm(true);
+                  // Find a view that is not currently bound
+                  const boundViews = Object.values(shortcuts);
+                  const unbound = AVAILABLE_VIEWS.find(v => !boundViews.includes(v.id));
+                  if (unbound) {
+                    setAddFormViewId(unbound.id);
+                  }
+                  setAddFormKey('');
+                  setErrorMessage('');
+                }}
+                className="w-full mt-2 py-2 px-3 border border-dashed border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 rounded-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+              >
+                <Plus size={16} /> Adicionar Novo Atalho
+              </button>
+            ) : (
+              <div className="mt-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">Novo Atalho de Teclado</h4>
+                  <button
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setErrorMessage('');
+                    }}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black uppercase text-slate-400 tracking-wider ml-1">Ecrã / Destino</label>
+                    <select
+                      value={addFormViewId}
+                      onChange={(e) => setAddFormViewId(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-slate-100"
+                    >
+                      {AVAILABLE_VIEWS.map(view => (
+                        <option key={view.id} value={view.id}>
+                          {view.name} ({view.category})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black uppercase text-slate-400 tracking-wider ml-1">Tecla de Atalho</label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setRecordingViewId(null);
+                          setIsListening(true);
+                        }}
+                        className={`flex-1 py-2 px-3 text-sm rounded-xl border font-bold transition-all ${
+                          isListening && !recordingViewId
+                            ? 'bg-amber-500/10 border-amber-500 text-amber-600 dark:text-amber-400 animate-pulse'
+                            : 'bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200'
+                        }`}
+                      >
+                        {isListening && !recordingViewId ? 'A escutar tecla...' : addFormKey ? `Tecla gravada: "${addFormKey.toUpperCase()}"` : 'Pressionar para gravar tecla'}
+                      </button>
+                      
+                      {addFormKey && (
+                        <kbd className="px-3 py-2 font-black text-sm bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-sm uppercase font-mono text-slate-800 dark:text-slate-100">
+                          {addFormKey}
+                        </kbd>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {errorMessage && (
+                  <p className="text-xs text-rose-500 font-semibold">{errorMessage}</p>
+                )}
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setErrorMessage('');
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 border border-transparent rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleAddShortcut}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-md shadow-blue-600/10 transition-all flex items-center gap-1.5"
+                  >
+                    <Save size={14} /> Guardar Atalho
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
