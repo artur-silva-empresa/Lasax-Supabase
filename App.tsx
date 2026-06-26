@@ -217,7 +217,7 @@ const App: React.FC = () => {
           initializeDefaultUsers(),
           loadCapacitiesFromDB()
         ]);
-        
+
         if (savedData && savedData.orders.length > 0) {
           setOrders(savedData.orders);
           setExcelHeaders(savedData.headers);

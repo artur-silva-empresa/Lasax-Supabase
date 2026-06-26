@@ -1,7 +1,7 @@
 
 import * as XLSX from 'xlsx';
 import initSqlJs from 'sql.js';
-import { supabase } from '../src/services/supabase';
+import { supabase, supabaseAuthAdmin } from '../src/services/supabase';
 import { Order, OrderState, SectorState, DashboardKPIs, User, UserRole, PermissionLevel } from '../types';
 import { parseExcelDate, formatDate } from '../utils/formatters';
 import { SECTORS } from '../constants';
@@ -93,6 +93,14 @@ export const hashPassword = async (password: string): Promise<string> => {
 };
 
 export const saveUserToDB = async (user: User) => {
+    if (user.password) {
+        const email = user.username.includes('@') ? user.username : `${user.username}@prodlasa.com`;
+        await supabaseAuthAdmin.auth.signUp({
+            email,
+            password: user.password
+        }).catch(() => {});
+    }
+
     const { error } = await supabase.from('users').upsert({
         id: user.id,
         username: user.username,

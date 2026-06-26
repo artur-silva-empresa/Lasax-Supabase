@@ -2,7 +2,8 @@
 import React from 'react';
 import { User } from '../types';
 import { Lock, User as UserIcon, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
-import { loadUsersFromDB, hashPassword, initializeDefaultUsers } from '../services/dataService';
+import { loadUsersFromDB, initializeDefaultUsers, hashPassword } from '../services/dataService';
+import { supabase } from '../src/services/supabase';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -22,20 +23,38 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setIsAuthenticating(true);
 
     try {
+        const email = username.includes('@') ? username : `${username}@prodlasa.com`;
+        
+        let { data, error: authError } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+
         const users = await loadUsersFromDB();
-        // Se por algum motivo não houver utilizadores, tenta inicializar
         const finalUsers = users.length > 0 ? users : await initializeDefaultUsers();
+        const existingDbUser = finalUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
 
-        const inputHash = await hashPassword(password);
-        const user = finalUsers.find(u => 
-             u.username.toLowerCase() === username.toLowerCase() && 
-             (u.passwordHash === inputHash || u.password === password || u.passwordHash === password)
-        );
-
-        if (user) {
-            onLogin(user);
-        } else {
+        if (authError || !data?.user) {
+            // Fallback: se a password foi alterada no Settings, ela pode estar apenas na base de dados (users)
+            // e não no Supabase Auth (pois não temos Service Role Key para alterar passwords de outros).
+            if (existingDbUser) {
+                const inputHash = await hashPassword(password);
+                if (existingDbUser.passwordHash === inputHash || existingDbUser.password === password) {
+                    // Password correta na base de dados, fazer login mesmo sem Supabase Auth
+                    onLogin(existingDbUser);
+                    return;
+                }
+            }
+            
             setError('Credenciais inválidas. Tente novamente.');
+            return;
+        }
+
+        if (existingDbUser) {
+            onLogin(existingDbUser);
+        } else {
+            setError('Utilizador autenticado, mas sem perfil de acesso configurado no sistema.');
+            await supabase.auth.signOut();
         }
     } catch (err) {
         console.error(err);

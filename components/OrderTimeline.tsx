@@ -102,7 +102,7 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, onViewDetails, gl
       const globalSearch = (globalSearchTerm || '').toLowerCase().trim();
       if (globalSearch) {
           const requestedDateStr = formatDate(o.requestedDate);
-          const predictedDateStr = Object.values(o.sectorPredictedDates || {}).filter(Boolean).map(d => formatDate(d)).join(' ');
+          const predictedDateStr = Object.values(o.sectorPredictedDates || {}).filter(Boolean).map(d => formatDate(d as Date)).join(' ');
           const classStr = Object.values(o.sectorStopReasons || {}).filter(Boolean).join(' ');
           const obsStr = Object.values(o.sectorObservations || {}).filter(Boolean).join(' ');
 
