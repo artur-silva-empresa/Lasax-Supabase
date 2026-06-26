@@ -30,6 +30,7 @@ import { formatDate } from '../utils/formatters';
 import { SECTORS } from '../constants';
 import StopReasonSelector from './StopReasonSelector';
 import ConfirmModal from './ConfirmModal';
+import HighlightText from './HighlightText';
 
 // Definição dos tipos de filtros ativos vindos do Dashboard
 export type ActiveFilterType = 'LATE' | 'WEEK_DELIVERIES' | 'WEEK_COMPLETED' | null;
@@ -656,6 +657,14 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
     setBulkUnarchiveConfirm(false);
   };
 
+  const highlights = [
+    globalSearchTerm,
+    deferredSearch,
+    filterDocSeries !== 'All' ? filterDocSeries : undefined,
+    filterComercial !== 'All' ? filterComercial : undefined,
+    filterReference !== 'All' ? filterReference : undefined
+  ];
+
   return (
     <div className="flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500">
       <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
@@ -1154,24 +1163,28 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                         </div>
                         
                         <div>
-                            <span className="font-bold text-slate-800 dark:text-slate-100 block text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{order.docNr || '-'}</span>
-                            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap block mt-0.5">PO: {order.po || '-'}</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-100 block text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                {order.docNr ? <HighlightText text={order.docNr} highlight={highlights} /> : '-'}
+                            </span>
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap block mt-0.5">
+                                PO: {order.po ? <HighlightText text={order.po} highlight={highlights} /> : '-'}
+                            </span>
                         </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 align-top">
                     <div className="flex flex-col gap-0.5">
                         <span className="text-sm font-black text-slate-900 dark:text-white leading-tight block truncate max-w-[400px]" title={order.clientName}>
-                            {order.clientName || <span className="text-slate-300 italic">Sem Cliente</span>}
-                            {order.comercial && <span className="ml-2 text-[10px] text-blue-500 dark:text-blue-400 font-bold">({order.comercial})</span>}
+                            {order.clientName ? <HighlightText text={order.clientName} highlight={highlights} /> : <span className="text-slate-300 italic">Sem Cliente</span>}
+                            {order.comercial && <span className="ml-2 text-[10px] text-blue-500 dark:text-blue-400 font-bold">({<HighlightText text={order.comercial} highlight={highlights} />})</span>}
                         </span>
                         <div className="flex items-center gap-1.5 text-[11px] max-w-[400px] mt-1">
                             <span className="font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 whitespace-nowrap" title="Referência">
-                                {order.reference || '-'}
+                                {order.reference ? <HighlightText text={order.reference} highlight={highlights} /> : '-'}
                             </span>
                             {order.colorDesc && (
                                 <span className="font-medium text-slate-500 dark:text-slate-400 truncate border-l border-slate-300 dark:border-slate-700 pl-2" title={`Cor: ${order.colorDesc}`}>
-                                    {order.colorDesc}
+                                    <HighlightText text={order.colorDesc} highlight={highlights} />
                                 </span>
                             )}
                         </div>
@@ -1179,10 +1192,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                   </td>
                   <td className="px-6 py-4 align-top">
                     <span className="text-sm font-bold text-slate-800 dark:text-slate-200 block truncate max-w-[100px]">
-                      {order.sizeDesc || '-'}
+                      {order.sizeDesc ? <HighlightText text={order.sizeDesc} highlight={highlights} /> : '-'}
                     </span>
                     <span className="text-[11px] text-slate-500 dark:text-slate-400 block truncate max-w-[100px] uppercase font-medium mt-0.5">
-                      {order.family || '-'}
+                      {order.family ? <HighlightText text={order.family} highlight={highlights} /> : '-'}
                     </span>
                   </td>
                   <td className="px-6 py-4 align-top">
@@ -1303,9 +1316,9 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                         ) : null}
                     </div>
                     <div>
-                        <h3 className="font-black text-slate-800 dark:text-white text-base leading-none">{order.docNr || '-'}</h3>
+                        <h3 className="font-black text-slate-800 dark:text-white text-base leading-none">{order.docNr ? <HighlightText text={order.docNr} highlight={highlights} /> : '-'}</h3>
                         <div className="flex items-center gap-2 mt-1">
-                            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">PO: {order.po || '-'}</p>
+                            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">PO: {order.po ? <HighlightText text={order.po} highlight={highlights} /> : '-'}</p>
                             {hasObservations(order) && <Eye size={14} className="text-blue-500" />}
                         </div>
                     </div>
@@ -1317,24 +1330,24 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 <div className="col-span-2">
                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Cliente / Comercial</p>
                    <p className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-tight truncate">
-                        {order.clientName || '-'}
-                        {order.comercial && <span className="ml-1 text-[11px] text-blue-500 font-bold italic">({order.comercial})</span>}
+                        {order.clientName ? <HighlightText text={order.clientName} highlight={highlights} /> : '-'}
+                        {order.comercial && <span className="ml-1 text-[11px] text-blue-500 font-bold italic">({<HighlightText text={order.comercial} highlight={highlights} />})</span>}
                    </p>
                 </div>
                 <div className="col-span-2">
                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Ref / Cor</p>
                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">{order.reference || '-'}</span>
-                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 truncate">{order.colorDesc}</span>
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">{order.reference ? <HighlightText text={order.reference} highlight={highlights} /> : '-'}</span>
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 truncate">{order.colorDesc ? <HighlightText text={order.colorDesc} highlight={highlights} /> : ''}</span>
                    </div>
                 </div>
                 <div>
                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Medida</p>
-                   <p className="text-xs font-bold text-slate-700 dark:text-slate-300 leading-tight truncate">{order.sizeDesc || '-'}</p>
+                   <p className="text-xs font-bold text-slate-700 dark:text-slate-300 leading-tight truncate">{order.sizeDesc ? <HighlightText text={order.sizeDesc} highlight={highlights} /> : '-'}</p>
                 </div>
                 <div>
                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Família</p>
-                   <p className="text-xs font-bold text-slate-700 dark:text-slate-300 leading-tight truncate">{order.family || '-'}</p>
+                   <p className="text-xs font-bold text-slate-700 dark:text-slate-300 leading-tight truncate">{order.family ? <HighlightText text={order.family} highlight={highlights} /> : '-'}</p>
                 </div>
               </div>
 

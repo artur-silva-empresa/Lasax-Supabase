@@ -29,6 +29,7 @@ import { formatDate } from '../utils/formatters';
 import StopReasonSelector from './StopReasonSelector';
 import { calcOrderCapacityInfo } from '../utils/capacityUtils';
 import { SECTORS } from '../constants';
+import HighlightText from './HighlightText';
 
 interface SectorOrderTableProps {
   orders: Order[];
@@ -532,6 +533,14 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
     }
   };
 
+  const highlights = [
+    globalSearchTerm,
+    deferredSearch,
+    filterDocSeries !== 'All' ? filterDocSeries : undefined,
+    filterComercial !== 'All' ? filterComercial : undefined,
+    filterReference !== 'All' ? filterReference : undefined
+  ];
+
   return (
     <div className="flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500">
       <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
@@ -802,18 +811,18 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                   }}
                   className={`hover:bg-blue-50 dark:hover:bg-slate-900 transition-colors group scroll-mt-16 ${isEditing ? 'bg-blue-50 dark:bg-slate-900' : 'cursor-pointer'} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500 bg-blue-50/30' : ''}`}
                 >
-                  <td className="px-4 py-3 align-top font-bold text-sm text-slate-800 dark:text-slate-200 truncate max-w-0">{order.docNr}</td>
-                  <td className="px-4 py-3 align-top text-xs font-medium text-slate-600 dark:text-slate-300 truncate max-w-0" title={order.clientName}>{order.clientName}</td>
+                  <td className="px-4 py-3 align-top font-bold text-sm text-slate-800 dark:text-slate-200 truncate max-w-0">{order.docNr ? <HighlightText text={order.docNr} highlight={highlights} /> : ''}</td>
+                  <td className="px-4 py-3 align-top text-xs font-medium text-slate-600 dark:text-slate-300 truncate max-w-0" title={order.clientName}>{order.clientName ? <HighlightText text={order.clientName} highlight={highlights} /> : ''}</td>
                   <td className="px-4 py-3 align-top overflow-hidden max-w-0">
                     <div className="flex flex-col">
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{order.reference}</span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{order.colorDesc}</span>
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{order.reference ? <HighlightText text={order.reference} highlight={highlights} /> : ''}</span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{order.colorDesc ? <HighlightText text={order.colorDesc} highlight={highlights} /> : ''}</span>
                     </div>
                   </td>
                   <td className="px-4 py-3 align-top overflow-hidden max-w-0">
                     <div className="flex flex-col">
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{order.sizeDesc}</span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{order.family}</span>
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{order.sizeDesc ? <HighlightText text={order.sizeDesc} highlight={highlights} /> : ''}</span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{order.family ? <HighlightText text={order.family} highlight={highlights} /> : ''}</span>
                     </div>
                   </td>
                   <td className="px-4 py-3 align-top text-center">
@@ -991,8 +1000,8 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="font-black text-slate-800 dark:text-white text-base leading-none">{order.docNr}</h3>
-                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-1">{order.clientName || 'Sem Cliente'}</p>
+                    <h3 className="font-black text-slate-800 dark:text-white text-base leading-none">{order.docNr ? <HighlightText text={order.docNr} highlight={highlights} /> : ''}</h3>
+                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-1">{order.clientName ? <HighlightText text={order.clientName} highlight={highlights} /> : 'Sem Cliente'}</p>
                   </div>
                   
                   <div className="flex flex-col items-end gap-2" onClick={e => e.stopPropagation()}>
@@ -1018,13 +1027,13 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                   <div>
                     <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase">Referência / Cor</p>
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{order.reference}</p>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{order.colorDesc}</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{order.reference ? <HighlightText text={order.reference} highlight={highlights} /> : ''}</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{order.colorDesc ? <HighlightText text={order.colorDesc} highlight={highlights} /> : ''}</p>
                   </div>
                   <div>
                     <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase">Medida / Família</p>
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{order.sizeDesc}</p>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{order.family}</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{order.sizeDesc ? <HighlightText text={order.sizeDesc} highlight={highlights} /> : ''}</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{order.family ? <HighlightText text={order.family} highlight={highlights} /> : ''}</p>
                   </div>
                 </div>
 
