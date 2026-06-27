@@ -93,18 +93,33 @@ export const hashPassword = async (password: string): Promise<string> => {
 };
 
 export const saveUserToDB = async (user: User) => {
+    let passwordHashVal = user.passwordHash;
+    const isSha256 = (str: string) => /^[a-f0-9]{64}$/i.test(str);
+
     if (user.password) {
-        const email = user.username.includes('@') ? user.username : `${user.username}@prodlasa.com`;
-        await supabaseAuthAdmin.auth.signUp({
-            email,
-            password: user.password
-        }).catch(() => {});
+        if (isSha256(user.password)) {
+            passwordHashVal = user.password;
+        } else {
+            passwordHashVal = await hashPassword(user.password);
+        }
+    }
+
+    if (user.password && !isSha256(user.password)) {
+        try {
+            const email = user.username.includes('@') ? user.username : `${user.username}@prodlasa.com`;
+            await supabaseAuthAdmin.auth.signUp({
+                email,
+                password: user.password
+            });
+        } catch (authErr) {
+            console.error("Supabase Auth signUp error:", authErr);
+        }
     }
 
     const { error } = await supabase.from('users').upsert({
         id: user.id,
         username: user.username,
-        password_hash: user.password || user.passwordHash,
+        password_hash: passwordHashVal || '',
         role: user.role,
         name: user.name,
         permissions: user.permissions
