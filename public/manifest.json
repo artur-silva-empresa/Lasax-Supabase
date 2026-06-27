@@ -3,8 +3,10 @@
   "name": "Prod. Lasa - Gestão de Produção Têxtil",
   "description": "Sistema avançado para gestão e acompanhamento de encomendas industriais.",
   "icons": [
-    { "src": "icons/icone.png", "type": "image/png", "sizes": "512x512", "purpose": "any maskable" },
-    { "src": "icons/icone.png", "type": "image/png", "sizes": "192x192", "purpose": "any" }
+    { "src": "icons/icon-192x192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "icons/icon-512x512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "icons/icon-192x192.png", "type": "image/png", "sizes": "192x192", "purpose": "maskable" },
+    { "src": "icons/icon-512x512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
   ],
   "start_url": "./",
   "scope": "./",
