@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { User } from '../types';
-import { Lock, User as UserIcon, ArrowRight, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Lock, User as UserIcon, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 import { loadUsersFromDB, initializeDefaultUsers, hashPassword } from '../services/dataService';
 import { supabase } from '../src/services/supabase';
 
@@ -14,7 +14,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState('');
   const [isAuthenticating, setIsAuthenticating] = React.useState(false);
-  const [showPassword, setShowPassword] = React.useState(false);
   
   const passwordInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -110,20 +109,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input 
                     ref={passwordInputRef}
-                    type={showPassword ? "text" : "password"} 
+                    type="password" 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-12 text-slate-800 font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-4 text-slate-800 font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                     placeholder="••••••••"
                 />
-                <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer p-1 rounded-lg hover:bg-slate-100 transition-colors"
-                    aria-label={showPassword ? "Esconder palavra-passe" : "Mostrar palavra-passe"}
-                >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
             </div>
           </div>
 
