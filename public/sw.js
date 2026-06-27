@@ -1,6 +1,6 @@
 
 // ⚠️ Incrementar a versão a cada deploy para forçar refresh do cache em todos os clientes
-const CACHE_VERSION = 'v11';
+const CACHE_VERSION = 'v12';
 const CACHE_NAME = `prod-lasa-${CACHE_VERSION}`;
 
 // Assets que são pré-cacheados na instalação (shell da aplicação)
