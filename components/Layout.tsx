@@ -20,7 +20,9 @@ import {
   Zap,
   Search,
   MessageSquare,
-  PanelLeftClose
+  PanelLeftClose,
+  Maximize,
+  Minimize
 } from 'lucide-react';
 import { User, Order } from '../types';
 import { SECTORS } from '../constants';
@@ -49,6 +51,74 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
   const [isConfigOpen, setIsConfigOpen] = React.useState(false);
   const [isProductionOpen, setIsProductionOpen] = React.useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
+
+  // Estados e lógica de Ecrã Inteiro (Fullscreen)
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
+  const [isFullscreenSupported, setIsFullscreenSupported] = React.useState(true);
+
+  React.useEffect(() => {
+    const checkSupport = () => {
+      const docEl = document.documentElement as any;
+      const supported = !!(
+        document.fullscreenEnabled ||
+        docEl.requestFullscreen ||
+        docEl.webkitRequestFullscreen ||
+        docEl.msRequestFullscreen
+      );
+      setIsFullscreenSupported(supported);
+    };
+
+    checkSupport();
+
+    const handleFullscreenChange = () => {
+      setIsFullscreen(
+        !!(
+          document.fullscreenElement ||
+          (document as any).webkitFullscreenElement ||
+          (document as any).mozFullScreenElement ||
+          (document as any).msFullscreenElement
+        )
+      );
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+        const docEl = document.documentElement as any;
+        if (docEl.requestFullscreen) {
+          await docEl.requestFullscreen();
+        } else if (docEl.webkitRequestFullscreen) {
+          await docEl.webkitRequestFullscreen();
+        } else if (docEl.msRequestFullscreen) {
+          await docEl.msRequestFullscreen();
+        }
+      } else {
+        const doc = document as any;
+        if (doc.exitFullscreen) {
+          await doc.exitFullscreen();
+        } else if (doc.webkitExitFullscreen) {
+          await doc.webkitExitFullscreen();
+        } else if (doc.msExitFullscreen) {
+          await doc.msExitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.warn("Fullscreen toggle non-critical error:", err);
+    }
+  };
 
   const [localSearchTerm, setLocalSearchTerm] = React.useState(globalSearchTerm || '');
 
@@ -573,6 +643,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
           </div>
 
           <div className="flex items-center gap-2 md:gap-4 relative">
+            {isFullscreenSupported && (
+              <button
+                onClick={toggleFullscreen}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 transition-colors"
+                title={isFullscreen ? "Sair do Ecrã Inteiro" : "Entrar em Ecrã Inteiro"}
+              >
+                {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+              </button>
+            )}
             <button
               onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
               className={`relative p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors ${isNotificationsOpen ? 'bg-slate-100 dark:bg-slate-800 text-blue-600' : 'text-slate-500 dark:text-slate-400'}`}
