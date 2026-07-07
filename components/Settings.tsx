@@ -660,10 +660,12 @@ const Settings: React.FC<SettingsProps> = ({
               }`}
             >
               <span
-                className={`absolute top-1 left-1 bg-white rounded-full w-6 h-6 shadow-md transform transition-transform duration-300 ${
+                className={`absolute top-1 left-1 bg-white rounded-full w-6 h-6 shadow-md transform transition-transform duration-300 flex items-center justify-center ${
                   keepAliveConfig.enabled ? 'translate-x-8' : 'translate-x-0'
                 }`}
-              />
+              >
+                 {keepAliveConfig.enabled ? <Activity size={12} className="text-blue-600"/> : <Moon size={12} className="text-slate-400"/>}
+              </span>
             </button>
           </div>
 
