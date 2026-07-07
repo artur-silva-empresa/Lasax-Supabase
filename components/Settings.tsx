@@ -357,7 +357,7 @@ const Settings: React.FC<SettingsProps> = ({
             {onToggleTheme && (
                 <button
                     onClick={onToggleTheme}
-                    className={`relative w-16 h-8 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 ${
+                    className={`relative shrink-0 w-16 h-8 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 ${
                         currentTheme === 'dark' ? 'bg-violet-600' : 'bg-slate-200 dark:bg-slate-700'
                     }`}
                 >
@@ -655,7 +655,7 @@ const Settings: React.FC<SettingsProps> = ({
             {/* Toggle Enable/Disable */}
             <button
               onClick={() => handleUpdateKeepAliveConfig({ enabled: !keepAliveConfig.enabled })}
-              className={`relative w-16 h-8 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+              className={`relative shrink-0 w-16 h-8 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
                 keepAliveConfig.enabled ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'
               }`}
             >
