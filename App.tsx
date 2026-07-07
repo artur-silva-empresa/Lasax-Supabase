@@ -19,6 +19,7 @@ import SectorOrderTable from './components/SectorOrderTable';
 import ProductionCapacityPage from './components/ProductionCapacityPage';
 import BottleneckAnalysis from './components/BottleneckAnalysis';
 import { ProductionCapacity } from './types';
+import { checkAndRunAutoPing } from './src/services/supabaseKeepAlive';
 
 const App: React.FC = () => {
   const [orders, setOrders] = React.useState<Order[]>([]);
@@ -205,6 +206,15 @@ const App: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [notification]);
+
+  // Supabase Keep-Alive automatic routine (runs once on mount, pings if bi-weekly interval elapsed)
+  React.useEffect(() => {
+    if (isOnline) {
+      checkAndRunAutoPing().catch(err => {
+        console.warn('Supabase automatic keep-alive check failed:', err);
+      });
+    }
+  }, [isOnline]);
 
   // Initialize from IndexedDB
   React.useEffect(() => {

@@ -1,11 +1,21 @@
 
 import React from 'react';
-import { FolderInput, FolderOutput, Save, FolderOpen, AlertCircle, CheckCircle, Moon, Sun, Trash2, Users, ShieldCheck, UserPlus, Key, Eye, EyeOff, User as UserIcon, Settings as SettingsIcon, Package, Clock, Layers, ChevronRight, X, AlertTriangle, Keyboard, Plus, RotateCcw } from 'lucide-react';
+import { FolderInput, FolderOutput, Save, FolderOpen, AlertCircle, CheckCircle, Moon, Sun, Trash2, Users, ShieldCheck, UserPlus, Key, Eye, EyeOff, User as UserIcon, Settings as SettingsIcon, Package, Clock, Layers, ChevronRight, X, AlertTriangle, Keyboard, Plus, RotateCcw, Database, Activity, RefreshCw } from 'lucide-react';
 import { saveDirectoryHandle, getDirectoryHandle, verifyPermission, hashPassword } from '../services/dataService';
 import { User, PermissionLevel, UserPermissions, Order } from '../types';
 import { SECTORS } from '../constants';
 import StopReasons from './StopReasons';
 import ExportableColumns from './ExportableColumns';
+import { 
+  getKeepAliveConfig, 
+  saveKeepAliveConfig, 
+  getKeepAliveLogs, 
+  clearKeepAliveLogs, 
+  runKeepAlivePing, 
+  getLastPingTime,
+  KeepAliveConfig,
+  KeepAliveLog 
+} from '../src/services/supabaseKeepAlive';
 
 interface SettingsProps {
   currentTheme?: 'light' | 'dark';
@@ -52,6 +62,12 @@ const Settings: React.FC<SettingsProps> = ({
   const [exportHandle, setExportHandle] = React.useState<any>(null);
   const [importHandle, setImportHandle] = React.useState<any>(null);
   const [statusMsg, setStatusMsg] = React.useState('');
+
+  // Supabase Keep-Alive Cron Job States
+  const [keepAliveConfig, setKeepAliveConfig] = React.useState<KeepAliveConfig>(() => getKeepAliveConfig());
+  const [keepAliveLogs, setKeepAliveLogs] = React.useState<KeepAliveLog[]>(() => getKeepAliveLogs());
+  const [keepAliveLastPing, setKeepAliveLastPing] = React.useState<string | null>(() => getLastPingTime());
+  const [isPinging, setIsPinging] = React.useState(false);
 
   // User form state
   const [isUserFormOpen, setIsUserFormOpen] = React.useState(false);
@@ -206,6 +222,45 @@ const Settings: React.FC<SettingsProps> = ({
     delete updated[keyToDelete];
     if (onUpdateShortcuts) {
       onUpdateShortcuts(updated);
+    }
+  };
+
+  // Supabase Keep-Alive Event Handlers
+  const handleManualPing = async () => {
+    setIsPinging(true);
+    try {
+      const result = await runKeepAlivePing(true);
+      setKeepAliveLastPing(getLastPingTime());
+      setKeepAliveLogs(getKeepAliveLogs());
+      if (result.success) {
+        setStatusMsg('Sucesso: O ping de teste foi enviado e a API da Supabase respondeu com sucesso!');
+      } else {
+        setStatusMsg(`Erro no ping: ${result.log.message}`);
+      }
+    } catch (e: any) {
+      console.error(e);
+      setStatusMsg(`Erro ao executar ping: ${e.message || e}`);
+    } finally {
+      setIsPinging(false);
+      setTimeout(() => setStatusMsg(''), 6000);
+    }
+  };
+
+  const handleUpdateKeepAliveConfig = (updates: Partial<KeepAliveConfig>) => {
+    const updated = { ...keepAliveConfig, ...updates };
+    setKeepAliveConfig(updated);
+    saveKeepAliveConfig(updated);
+    setStatusMsg('Configuração do Keep-Alive guardada com sucesso.');
+    setTimeout(() => setStatusMsg(''), 3000);
+  };
+
+  const handleClearKeepAliveLogs = () => {
+    if (window.confirm('Tem a certeza que deseja limpar o histórico de logs do Keep-Alive?')) {
+      clearKeepAliveLogs();
+      setKeepAliveLogs([]);
+      setKeepAliveLastPing(null);
+      setStatusMsg('Histórico de logs limpo com sucesso.');
+      setTimeout(() => setStatusMsg(''), 3000);
     }
   };
 
@@ -577,6 +632,176 @@ const Settings: React.FC<SettingsProps> = ({
                     <Save size={14} /> Guardar Atalho
                   </button>
                 </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Supabase Keep-Alive (Cron Job) */}
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="flex items-start justify-between gap-4 mb-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl">
+                <Database size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Supabase Keep-Alive (Cron Job)</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Evite que a sua base de dados do Supabase (Free Tier) entre em suspensão. O sistema realiza pings automáticos de rotina.
+                </p>
+              </div>
+            </div>
+
+            {/* Toggle Enable/Disable */}
+            <button
+              onClick={() => handleUpdateKeepAliveConfig({ enabled: !keepAliveConfig.enabled })}
+              className={`relative w-16 h-8 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                keepAliveConfig.enabled ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'
+              }`}
+            >
+              <span
+                className={`absolute top-1 left-1 bg-white rounded-full w-6 h-6 shadow-md transform transition-transform duration-300 flex items-center justify-center ${
+                  keepAliveConfig.enabled ? 'translate-x-8' : 'translate-x-0'
+                }`}
+              >
+                {keepAliveConfig.enabled ? (
+                  <span className="w-2 h-2 rounded-full bg-blue-600" />
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-slate-400" />
+                )}
+              </span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div className="space-y-1.5">
+              <label className="text-xs font-black uppercase text-slate-400 tracking-wider ml-1">Intervalo de Ping</label>
+              <select
+                value={keepAliveConfig.intervalDays}
+                onChange={(e) => handleUpdateKeepAliveConfig({ intervalDays: Number(e.target.value) })}
+                disabled={!keepAliveConfig.enabled}
+                className="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-slate-100 disabled:opacity-50"
+              >
+                <option value={7}>Semanal (7 em 7 dias)</option>
+                <option value={10}>Cada 10 dias</option>
+                <option value={14}>Quinzenal (14 em 14 dias - Padrão)</option>
+                <option value={30}>Mensal (30 em 30 dias)</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-black uppercase text-slate-400 tracking-wider ml-1">
+                URL de Edge Function (Opcional)
+              </label>
+              <input
+                type="text"
+                placeholder="https://your-project.supabase.co/functions/v1/keep-alive"
+                value={keepAliveConfig.customUrl}
+                onChange={(e) => handleUpdateKeepAliveConfig({ customUrl: e.target.value })}
+                disabled={!keepAliveConfig.enabled}
+                className="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-slate-100 disabled:opacity-50"
+              />
+            </div>
+          </div>
+
+          {/* Quick status board */}
+          <div className="bg-slate-50 dark:bg-slate-950/20 rounded-2xl p-4 border border-slate-100 dark:border-slate-800/60 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Estado do Cron</span>
+              <div className="flex items-center gap-1.5">
+                <span className={`w-2.5 h-2.5 rounded-full ${keepAliveConfig.enabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                  {keepAliveConfig.enabled ? 'Ativo & Agendado' : 'Desativado'}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Último Ping</span>
+              <div className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                <Clock size={14} className="text-slate-400" />
+                {keepAliveLastPing ? new Date(keepAliveLastPing).toLocaleString('pt-PT') : 'Nunca'}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Próximo Agendamento</span>
+              <div className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                {!keepAliveConfig.enabled ? (
+                  'Suspenso'
+                ) : !keepAliveLastPing ? (
+                  'Imediato (No próximo arranque)'
+                ) : (() => {
+                    const nextDate = new Date(keepAliveLastPing);
+                    nextDate.setDate(nextDate.getDate() + keepAliveConfig.intervalDays);
+                    const diffDays = Math.max(0, Math.ceil((nextDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)));
+                    return `${nextDate.toLocaleDateString('pt-PT')} (em ~${diffDays} dias)`;
+                  })()
+                }
+              </div>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <button
+              onClick={handleManualPing}
+              disabled={isPinging || !keepAliveConfig.enabled}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-md shadow-blue-500/10 flex items-center gap-2 transition-all disabled:opacity-50 active:scale-95"
+            >
+              {isPinging ? (
+                <>
+                  <RefreshCw size={14} className="animate-spin" />
+                  A enviar ping...
+                </>
+              ) : (
+                <>
+                  <Activity size={14} />
+                  Testar Ligação (Ping Agora)
+                </>
+              )}
+            </button>
+
+            {keepAliveLogs.length > 0 && (
+              <button
+                onClick={handleClearKeepAliveLogs}
+                className="text-slate-400 hover:text-rose-500 font-semibold text-xs flex items-center gap-1.5 transition-colors"
+              >
+                Limpar Histórico
+              </button>
+            )}
+          </div>
+
+          {/* Activity Logs */}
+          <div className="space-y-2">
+            <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider ml-1">Histórico de Pings</h4>
+            {keepAliveLogs.length === 0 ? (
+              <div className="text-center py-6 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-slate-400 dark:text-slate-500 text-xs font-medium">
+                Nenhum log de ping disponível. Teste a ligação para iniciar o histórico.
+              </div>
+            ) : (
+              <div className="border border-slate-100 dark:border-slate-850 rounded-2xl overflow-hidden max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-850">
+                {keepAliveLogs.map((log) => (
+                  <div key={log.id} className="p-3 hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors flex items-start justify-between gap-4 text-xs">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-200">
+                        <span className={`w-2 h-2 rounded-full ${log.status === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        <span>{log.status === 'success' ? 'Ping com Sucesso' : 'Erro no Ping'}</span>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                          {new Date(log.timestamp).toLocaleString('pt-PT')}
+                        </span>
+                      </div>
+                      <p className="text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
+                        {log.message}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                        {log.durationMs}ms
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
