@@ -660,16 +660,10 @@ const Settings: React.FC<SettingsProps> = ({
               }`}
             >
               <span
-                className={`absolute top-1 left-1 bg-white rounded-full w-6 h-6 shadow-md transform transition-transform duration-300 flex items-center justify-center ${
+                className={`absolute top-1 left-1 bg-white rounded-full w-6 h-6 shadow-md transform transition-transform duration-300 ${
                   keepAliveConfig.enabled ? 'translate-x-8' : 'translate-x-0'
                 }`}
-              >
-                {keepAliveConfig.enabled ? (
-                  <span className="w-2 h-2 rounded-full bg-blue-600" />
-                ) : (
-                  <span className="w-2 h-2 rounded-full bg-slate-400" />
-                )}
-              </span>
+              />
             </button>
           </div>
 
