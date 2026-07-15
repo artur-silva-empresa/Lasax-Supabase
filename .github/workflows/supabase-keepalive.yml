@@ -5,6 +5,10 @@ on:
     # Corre todos os dias às 05:00 UTC (evita a suspensão do Supabase Free Tier)
     - cron: '37 5 * * *'
   workflow_dispatch: # Permite executar manualmente a partir do separador "Actions" do GitHub
+  push:
+    branches:
+      - main
+      - master # Adicionado para garantir que o workflow corre logo após um push e aparece no separador Actions
 
 jobs:
   ping-supabase:
@@ -17,23 +21,30 @@ jobs:
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
             echo "❌ ERRO: As variáveis SUPABASE_URL ou SUPABASE_ANON_KEY não estão configuradas nos Secrets do GitHub."
+            echo "Vá a Settings > Secrets and variables > Actions e adicione-as."
             exit 1
           fi
 
           echo "A iniciar ping à base de dados Supabase..."
           
-          # Fazemos ping à raiz da API REST (PostgREST) que retorna a especificação OpenAPI
-          # Isto garante sempre um 200 OK independentemente de existirem tabelas criadas ou não.
+          # Ping à API REST para verificar se está online
+          curl -s -o /dev/null -X GET "${SUPABASE_URL}/rest/v1/" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}"
+
+          # Fazemos uma query a uma tabela (mesmo que não exista, ex: 'keepalive_dummy')
+          # Isto força o PostgREST a ir ao PostgreSQL da base de dados (ignorando caches de API Edge)
+          # Qualquer resposta 200 (OK), 400 ou 404 (tabela não existe) significa que a BD processou o pedido.
           RESPONSE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X GET "${SUPABASE_URL}/rest/v1/" \
+            -X GET "${SUPABASE_URL}/rest/v1/keepalive_dummy?select=*&limit=1" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
 
-          echo "Código de Resposta HTTP para o ping: $RESPONSE_STATUS"
+          echo "Código de Resposta HTTP para o ping de atividade: $RESPONSE_STATUS"
 
-          if [ "$RESPONSE_STATUS" -eq 200 ]; then
-            echo "✅ Sucesso! O servidor do Supabase respondeu com 200 OK e a ligação foi mantida ativa."
+          if [ "$RESPONSE_STATUS" -eq 200 ] || [ "$RESPONSE_STATUS" -eq 400 ] || [ "$RESPONSE_STATUS" -eq 404 ]; then
+            echo "✅ Sucesso! O servidor do Supabase processou o pedido e a atividade foi registada."
           else
-            echo "⚠️ Alerta: O servidor respondeu com o código HTTP $RESPONSE_STATUS. Verifique as credenciais nos Secrets do GitHub ou o estado do projeto."
+            echo "⚠️ Alerta: O servidor respondeu com o código HTTP $RESPONSE_STATUS. Verifique as credenciais."
             exit 1
           fi
