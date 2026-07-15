@@ -22,22 +22,18 @@ jobs:
 
           echo "A iniciar ping à base de dados Supabase..."
           
-          # 1. Ping à tabela 'users' para acordar o PostgREST e a base de dados PostgreSQL
-          # Usamos o endpoint REST oficial com o cabeçalho apikey e Authorization Bearer
+          # Fazemos ping à raiz da API REST (PostgREST) que retorna a especificação OpenAPI
+          # Isto garante sempre um 200 OK independentemente de existirem tabelas criadas ou não.
           RESPONSE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X GET "${SUPABASE_URL}/rest/v1/users?select=id&limit=1" \
+            -X GET "${SUPABASE_URL}/rest/v1/" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-            -H "Content-Type: application/json")
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
 
-          echo "Código de Resposta HTTP para o ping da tabela: $RESPONSE_STATUS"
+          echo "Código de Resposta HTTP para o ping: $RESPONSE_STATUS"
 
-          # Se responder 200 (OK), 206, ou 404/400 (se a tabela não existir, mas o servidor respondeu),
-          # significa que a base de dados está operacional e respondeu ao pedido.
-          # Apenas códigos de erro de rede, timeouts ou 401/403 de chaves inválidas devem ser investigados.
-          if [ "$RESPONSE_STATUS" -eq 200 ] || [ "$RESPONSE_STATUS" -eq 204 ] || [ "$RESPONSE_STATUS" -eq 404 ] || [ "$RESPONSE_STATUS" -eq 400 ]; then
-            echo "✅ Sucesso! O servidor do Supabase respondeu e a ligação foi mantida ativa."
+          if [ "$RESPONSE_STATUS" -eq 200 ]; then
+            echo "✅ Sucesso! O servidor do Supabase respondeu com 200 OK e a ligação foi mantida ativa."
           else
-            echo "⚠️ Alerta: O servidor respondeu com o código HTTP $RESPONSE_STATUS. Verifique as credenciais nos Secrets do GitHub."
+            echo "⚠️ Alerta: O servidor respondeu com o código HTTP $RESPONSE_STATUS. Verifique as credenciais nos Secrets do GitHub ou o estado do projeto."
             exit 1
           fi
