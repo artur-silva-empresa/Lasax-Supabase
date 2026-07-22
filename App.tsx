@@ -56,6 +56,79 @@ const App: React.FC = () => {
   // Estado para notificações do sistema
   const [notification, setNotification] = React.useState<{message: string, type: 'success' | 'info'} | null>(null);
 
+  // Estado de Bloqueio Temporário do Login (Persistido no sessionStorage)
+  const [loginLockoutUntil, setLoginLockoutUntil] = React.useState<number | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('login_lockout_until');
+      return saved ? parseInt(saved, 10) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Função Centralizada para Logout (Limpa estado, tokens e sessão Supabase)
+  const handleLogout = React.useCallback(async () => {
+    try {
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (err) {
+      console.error("Erro ao encerrar sessão no Supabase:", err);
+    }
+    setCurrentUser(null);
+    try {
+      sessionStorage.removeItem('texflow_current_user');
+      localStorage.removeItem('texflow_current_user');
+    } catch {}
+  }, []);
+
+  // Temporizador Global de Inatividade (30 Minutos) para terminais partilhados no chão de fábrica
+  React.useEffect(() => {
+    if (!currentUser) return;
+
+    const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos sem interação
+    let timer: NodeJS.Timeout;
+
+    const resetInactivityTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        handleLogout();
+        setNotification({
+          message: 'Sessão encerrada por inatividade (30 min sem interação). Por segurança, efetue o login novamente.',
+          type: 'info'
+        });
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    // Eventos Globais de Interação do Utilizador
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart', 'wheel'];
+
+    let lastActivityTime = Date.now();
+    const handleUserActivity = () => {
+      const now = Date.now();
+      // Throttle de 1 segundo para otimização de performance
+      if (now - lastActivityTime > 1000) {
+        lastActivityTime = now;
+        resetInactivityTimer();
+      }
+    };
+
+    // Iniciar temporizador
+    resetInactivityTimer();
+
+    // Registar ouvintes de eventos
+    events.forEach(event => {
+      window.addEventListener(event, handleUserActivity, { passive: true });
+    });
+
+    return () => {
+      clearTimeout(timer);
+      events.forEach(event => {
+        window.removeEventListener(event, handleUserActivity);
+      });
+    };
+  }, [currentUser, handleLogout]);
+
   // Keyboard Shortcuts state
   const [shortcuts, setShortcuts] = React.useState<Record<string, string>>(() => {
     const saved = localStorage.getItem('texflow-shortcuts');
@@ -746,7 +819,7 @@ const App: React.FC = () => {
                 <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Acesso Restrito</h2>
                 <p className="text-slate-500 dark:text-slate-400 max-w-xs">Não tem permissões para visualizar nenhuma página do sistema. Contacte o administrador.</p>
                 <button
-                    onClick={() => setCurrentUser(null)}
+                    onClick={handleLogout}
                     className="mt-6 text-blue-600 font-bold hover:underline"
                 >
                     Voltar ao Login
@@ -820,14 +893,18 @@ const App: React.FC = () => {
 
     return (
       <>
-        <Login onLogin={async (user) => {
-          // Se existirem dados carregados e for admin, pedir confirmação antes de continuar.
-          if (orders.length > 0 && user.role === 'admin') {
-            setPendingLoginUser(user);
-          } else {
-            doLogin(user);
-          }
-        }} />
+        <Login 
+          lockoutUntil={loginLockoutUntil}
+          onSetLockoutUntil={setLoginLockoutUntil}
+          onLogin={async (user) => {
+            // Se existirem dados carregados e for admin, pedir confirmação antes de continuar.
+            if (orders.length > 0 && user.role === 'admin') {
+              setPendingLoginUser(user);
+            } else {
+              doLogin(user);
+            }
+          }} 
+        />
 
         {/* Modal de aviso: existe base de dados carregada */}
         {pendingLoginUser && (
@@ -935,7 +1012,7 @@ const App: React.FC = () => {
         onImportClick={() => setIsImportModalOpen(true)}
         alertCount={alertCount}
         user={currentUser}
-        onLogout={() => setCurrentUser(null)}
+        onLogout={handleLogout}
         orders={globalFilteredOrders}
         onViewDetails={handleViewDetails}
         globalSearchTerm={globalSearchTerm}
