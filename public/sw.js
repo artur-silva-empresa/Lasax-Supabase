@@ -1,6 +1,6 @@
 
 // ⚠️ Incrementar a versão a cada deploy para forçar refresh do cache em todos os clientes
-const CACHE_VERSION = 'v12';
+const CACHE_VERSION = 'v13';
 const CACHE_NAME = `prod-lasa-${CACHE_VERSION}`;
 
 // Assets que são pré-cacheados na instalação (shell da aplicação)
@@ -109,10 +109,97 @@ self.addEventListener('fetch', (event) => {
 });
 
 // -------------------------
-// MESSAGE — forçar atualização manual
+// PUSH NOTIFICATIONS — Receber e exibir alertas de encomendas
+// -------------------------
+self.addEventListener('push', (event) => {
+  console.log('[SW] Push Notification recebida:', event);
+
+  let payload = {
+    title: 'TexFlow — Notificação de Encomenda',
+    body: 'Ocorreu uma atualização relevante na sua encomenda.',
+    icon: './icons/icone.png',
+    badge: './icons/icone.png',
+    tag: 'order-push-notification',
+    data: { url: '/' }
+  };
+
+  if (event.data) {
+    try {
+      const parsed = event.data.json();
+      payload = { ...payload, ...parsed };
+    } catch (err) {
+      payload.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: payload.body,
+    icon: payload.icon || './icons/icone.png',
+    badge: payload.badge || './icons/icone.png',
+    vibrate: [150, 50, 150],
+    tag: payload.tag || 'texflow-notification',
+    renotify: true,
+    data: payload.data || { url: '/' },
+    actions: [
+      { action: 'open', title: 'Ver Detalhes' },
+      { action: 'dismiss', title: 'Fechar' }
+    ]
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, options)
+  );
+});
+
+// -------------------------
+// NOTIFICATION CLICK — Ação do utilizador ao clicar na notificação
+// -------------------------
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  if (event.action === 'dismiss') return;
+
+  const targetUrl = event.notification.data?.url || './';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Procura por uma janela da aplicação já aberta
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.postMessage({
+            type: 'PUSH_NOTIFICATION_CLICK',
+            data: event.notification.data
+          });
+          return client.focus();
+        }
+      }
+      // Se não houver nenhuma janela aberta, abre uma nova
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
+
+// -------------------------
+// MESSAGE — Comunicação com a App Frontend
 // -------------------------
 self.addEventListener('message', (event) => {
-  if (event.data === 'SKIP_WAITING') {
+  if (!event.data) return;
+
+  if (event.data === 'SKIP_WAITING' || event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+  } else if (event.data.type === 'SHOW_NOTIFICATION') {
+    const { title, body, tag, data } = event.data;
+    self.registration.showNotification(title || 'TexFlow — Alerta de Encomenda', {
+      body: body || 'Nova atualização registada.',
+      icon: './icons/icone.png',
+      badge: './icons/icone.png',
+      vibrate: [150, 50, 150],
+      tag: tag || 'manual-order-notification',
+      renotify: true,
+      data: data || { url: '/' }
+    });
   }
 });
+

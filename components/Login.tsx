@@ -24,6 +24,25 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setIsAuthenticating(true);
 
     try {
+        // Enviar notificação/tentativa ao endpoint com rate limit no servidor Express
+        let rateLimitResponse: Response | null = null;
+        try {
+          rateLimitResponse = await fetch('/api/auth/login-attempt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, success: false })
+          });
+          
+          if (rateLimitResponse && rateLimitResponse.status === 429) {
+            const resData = await rateLimitResponse.json();
+            setError(resData.error || 'Excedido o limite de tentativas de autenticação. Por favor, aguarde 15 minutos.');
+            setIsAuthenticating(false);
+            return;
+          }
+        } catch {
+          // Se o servidor API offline ou em ambiente isolado, prossegue normalmente
+        }
+
         const email = username.includes('@') ? username : `${username}@prodlasa.com`;
         
         let { data, error: authError } = await supabase.auth.signInWithPassword({
@@ -41,7 +60,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             if (existingDbUser) {
                 const inputHash = await hashPassword(password);
                 if (existingDbUser.passwordHash === inputHash || existingDbUser.password === password) {
-                    // Password correta na base de dados, fazer login mesmo sem Supabase Auth
+                    // Password correta na base de dados, avisar o endpoint do sucesso
+                    fetch('/api/auth/login-attempt', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ username, success: true })
+                    }).catch(() => {});
+
                     onLogin(existingDbUser);
                     return;
                 }
@@ -52,6 +77,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         }
 
         if (existingDbUser) {
+            fetch('/api/auth/login-attempt', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username, success: true })
+            }).catch(() => {});
+
             onLogin(existingDbUser);
         } else {
             setError('Utilizador autenticado, mas sem perfil de acesso configurado no sistema.');

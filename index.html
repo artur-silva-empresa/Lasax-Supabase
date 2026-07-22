@@ -9,6 +9,14 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Prod. Lasa">
     <meta name="description" content="Prod. Lasa - Gestão e Acompanhamento de Encomendas Têxteis">
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+
+    <!-- Guarantee HTTPS protocol on client side for Web Crypto API (window.crypto.subtle) -->
+    <script>
+        if (window.location.protocol === 'http:' && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
+            window.location.href = window.location.href.replace(/^http:/, 'https:');
+        }
+    </script>
 
     <!-- Favicon -->
     <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">

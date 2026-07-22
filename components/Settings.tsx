@@ -1,7 +1,8 @@
 
 import React from 'react';
-import { FolderInput, FolderOutput, Save, FolderOpen, AlertCircle, CheckCircle, Moon, Sun, Trash2, Users, ShieldCheck, UserPlus, Key, Eye, EyeOff, User as UserIcon, Settings as SettingsIcon, Package, Clock, Layers, ChevronRight, X, AlertTriangle, Keyboard, Plus, RotateCcw, Database, Activity, RefreshCw } from 'lucide-react';
+import { FolderInput, FolderOutput, Save, FolderOpen, AlertCircle, CheckCircle, Moon, Sun, Trash2, Users, ShieldCheck, UserPlus, Key, Eye, EyeOff, User as UserIcon, Settings as SettingsIcon, Package, Clock, Layers, ChevronRight, X, AlertTriangle, Keyboard, Plus, RotateCcw, Database, Activity, RefreshCw, Bell } from 'lucide-react';
 import { saveDirectoryHandle, getDirectoryHandle, verifyPermission, hashPassword } from '../services/dataService';
+import { notificationService } from '../services/notificationService';
 import { User, PermissionLevel, UserPermissions, Order } from '../types';
 import { SECTORS } from '../constants';
 import StopReasons from './StopReasons';
@@ -62,6 +63,24 @@ const Settings: React.FC<SettingsProps> = ({
   const [exportHandle, setExportHandle] = React.useState<any>(null);
   const [importHandle, setImportHandle] = React.useState<any>(null);
   const [statusMsg, setStatusMsg] = React.useState('');
+  const [notifPermission, setNotifPermission] = React.useState<NotificationPermission>(() => notificationService.getPermissionStatus());
+
+  const handleRequestPushPermission = async () => {
+    const granted = await notificationService.requestPermission();
+    setNotifPermission(notificationService.getPermissionStatus());
+    if (granted) {
+      setStatusMsg('Notificações Push ativadas com sucesso!');
+      setTimeout(() => setStatusMsg(''), 4000);
+    }
+  };
+
+  const handleTestPushNotification = () => {
+    notificationService.sendNotification({
+      title: '🔔 Teste de Notificação Push',
+      body: 'Service Worker ativo! Receberá alertas em tempo real das encomendas.',
+      tag: 'test-push-notification'
+    });
+  };
 
   // Supabase Keep-Alive Cron Job States
   const [keepAliveConfig, setKeepAliveConfig] = React.useState<KeepAliveConfig>(() => getKeepAliveConfig());
@@ -339,7 +358,7 @@ const Settings: React.FC<SettingsProps> = ({
         {/* ===== ABA GERAL ===== */}
         {currentTab === 'general' && (
         <>
-        {/* Appearance Settings */}
+        {/* Aparência Visual */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-start gap-4">
@@ -370,6 +389,48 @@ const Settings: React.FC<SettingsProps> = ({
                     </span>
                 </button>
             )}
+          </div>
+        </div>
+
+        {/* Notificações Push (Service Worker) */}
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-xl">
+                <Bell size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  Notificações Push no Navegador
+                  {notifPermission === 'granted' && (
+                    <span className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-0.5 rounded-full font-semibold">
+                      Ativas
+                    </span>
+                  )}
+                </h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Receba alertas instantâneos via Service Worker quando uma encomenda mudar de estado ou quando outro utilizador inserir uma nova previsão de data.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-end gap-2">
+              {notifPermission !== 'granted' ? (
+                <button
+                  onClick={handleRequestPushPermission}
+                  className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm flex items-center gap-2"
+                >
+                  <Bell size={16} /> Ativar Notificações
+                </button>
+              ) : (
+                <button
+                  onClick={handleTestPushNotification}
+                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 border border-slate-200 dark:border-slate-700"
+                >
+                  <Bell size={14} /> Testar Notificação
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

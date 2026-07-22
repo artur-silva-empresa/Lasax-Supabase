@@ -11,6 +11,7 @@ import StopReasons from './components/StopReasons';
 import Login from './components/Login';
 import { Order, User } from './types';
 import { generateMockOrders, loadOrdersFromDB, saveOrdersToDB, saveOrderToDB, clearOrdersFromDB, loadStopReasonsFromDB, saveStopReasonsToDB, loadUsersFromDB, initializeDefaultUsers, saveUserToDB, deleteUserFromDB, loadCapacitiesFromDB, saveCapacitiesToDB, hydrateOrder, processSyncQueue } from './services/dataService';
+import { notificationService } from './services/notificationService';
 import { supabase } from './src/services/supabase';
 import { WifiOff, CheckCircle2, X, Download, Loader2 } from 'lucide-react';
 import { SECTORS, STOP_REASONS_HIERARCHY } from './constants';
@@ -266,6 +267,9 @@ const App: React.FC = () => {
               const newOrder = hydrateOrder(payload.new);
               setOrders(prev => {
                   const existing = prev.find(o => o.id === newOrder.id);
+                  // Disparar Notificação Push em tempo real
+                  notificationService.handleRealtimeOrderChange(existing, newOrder);
+
                   if (existing) {
                       return prev.map(o => o.id === newOrder.id ? newOrder : o);
                   } else {
