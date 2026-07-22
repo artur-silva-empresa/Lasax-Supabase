@@ -331,27 +331,46 @@ const Login: React.FC<LoginProps> = ({ onLogin, lockoutUntil: externalLockoutUnt
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-black uppercase text-slate-400 tracking-wider ml-1">Palavra-passe</label>
+            <div className="flex items-center justify-between">
+              <label className={`text-xs font-black uppercase tracking-wider ml-1 transition-colors ${failedAttempts >= 2 ? 'text-amber-700 flex items-center gap-1.5' : 'text-slate-400'}`}>
+                Palavra-passe
+                {failedAttempts >= 2 && (
+                  <span className="normal-case font-bold text-[11px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md border border-amber-300 animate-pulse">
+                    ⚠️ Confirme a palavra-passe
+                  </span>
+                )}
+              </label>
+            </div>
             <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${failedAttempts >= 2 ? 'text-amber-500' : 'text-slate-400'}`} size={18} />
                 <input 
                     ref={passwordInputRef}
                     type={showPassword ? "text" : "password"} 
                     value={password}
                     disabled={isAuthenticating || lockoutRemaining > 0}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-12 text-slate-800 font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`w-full rounded-xl py-3 pl-11 pr-12 font-bold outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                      failedAttempts >= 2 
+                        ? 'bg-amber-50/60 border-2 border-amber-400 text-amber-950 focus:ring-2 focus:ring-amber-500 shadow-sm shadow-amber-200/50' 
+                        : 'bg-slate-50 border border-slate-200 text-slate-800 focus:ring-2 focus:ring-blue-500'
+                    }`}
                     placeholder="••••••••"
                 />
                 <button
                     type="button"
                     disabled={lockoutRemaining > 0}
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none disabled:opacity-50"
+                    className={`absolute right-4 top-1/2 -translate-y-1/2 focus:outline-none disabled:opacity-50 transition-colors ${failedAttempts >= 2 ? 'text-amber-600 hover:text-amber-800 font-bold' : 'text-slate-400 hover:text-slate-600'}`}
+                    title={showPassword ? "Ocultar palavra-passe" : "Mostrar palavra-passe"}
                 >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
             </div>
+            {failedAttempts >= 2 && (
+              <p className="text-[11px] font-semibold text-amber-700 ml-1 flex items-center gap-1 animate-in fade-in">
+                <span>💡 Por favor, verifique se a palavra-passe inserida está correta antes de resolver a verificação humana abaixo.</span>
+              </p>
+            )}
           </div>
 
           {/* DESAFIO DE SEGURANÇA INTERATIVO (reCAPTCHA v3 / Proteção Antibot ativada após 2 tentativas) */}
