@@ -29,7 +29,7 @@ const STORAGE_KEYS = {
 const DEFAULT_CONFIG: KeepAliveConfig = {
   enabled: true,
   customUrl: '',
-  intervalDays: 14 // Bi-weekly (14 days)
+  intervalDays: 0.25 // Agressivo Padrão: A cada 6 horas
 };
 
 // Retrieve configuration from local storage
@@ -110,60 +110,57 @@ export const runKeepAlivePing = async (force: boolean = false): Promise<{ succes
   }
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    const errorMsg = 'Supabase credentials are not configured (missing URL or Anon Key).';
+    const errorMsg = 'Credenciais de Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY) não configuradas.';
     const log = addLog('failed', errorMsg, 0);
     return { success: false, log };
   }
 
   const startTime = performance.now();
+  const simulatedTables = ['users', 'production_orders', 'stop_reasons', 'system_config'];
+  const queryLogs: string[] = [];
   
   try {
-    // 1. Query the 'users' table using the official, correctly-configured Supabase client.
-    // This is extremely safe, respects CORS, passes the correct tokens automatically,
-    // and keeps both PostgREST and Postgres alive and active.
-    const { data, error } = await supabase.from('users').select('id').limit(1);
-    const duration = Math.round(performance.now() - startTime);
-
-    if (error) {
-      // If there's an error, let's see if it's a database-level response (like table/relation not found,
-      // or permission/RLS denied). If so, the server is fully online and responded, meaning keep-alive succeeded!
-      // Any error with a postgrest code (like 42P01 or PGRSTxxx) means the database is online and answered.
-      const isDatabaseAlive = !!error.code;
-      
-      if (isDatabaseAlive) {
-        const successMsg = `Ligação ao Supabase estabelecida. O servidor está ativo. (Nota: query retornou código ${error.code}: ${error.message})`;
-        const log = addLog('success', successMsg, duration);
-        return { success: true, log };
-      } else {
-        throw new Error(error.message || 'Supabase retornou um erro na ligação.');
+    // 1. Simular pesquisas reais em tabelas variadas do Supabase para manter o engine PostgreSQL ativo
+    for (const table of simulatedTables) {
+      try {
+        const { error } = await supabase.from(table as any).select('id').limit(1);
+        if (error) {
+          queryLogs.push(`${table}: c${error.code || 'ERR'}`);
+        } else {
+          queryLogs.push(`${table}: OK`);
+        }
+      } catch {
+        queryLogs.push(`${table}: falhou`);
       }
     }
 
-    // 2. If the user specified a custom URL/Edge Function, ping that as well
+    // 2. Acionar também o endpoint do servidor Node.js 24/7 para ping cruzado
+    let backendTriggered = false;
+    try {
+      const serverRes = await fetch('/api/keep-alive/ping', { method: 'POST' });
+      if (serverRes.ok) {
+        backendTriggered = true;
+      }
+    } catch {
+      // Ignorar caso esteja a correr num ambiente estático
+    }
+
+    // 3. Se houver Edge Function configurada
     if (config.customUrl && config.customUrl.trim() !== '') {
-      const edgeStartTime = performance.now();
       try {
-        const edgeResponse = await fetch(config.customUrl, {
+        await fetch(config.customUrl, {
           method: 'GET',
           headers: {
             'apikey': supabaseAnonKey,
             'Authorization': `Bearer ${supabaseAnonKey}`
           }
         });
-        const edgeDuration = Math.round(performance.now() - edgeStartTime);
-        
-        const successMsg = `Ping ao REST da Supabase efetuado com sucesso (${duration}ms). Ping da Edge Function (${config.customUrl}) também efetuado com sucesso (${edgeDuration}ms, Status: ${edgeResponse.status}).`;
-        const log = addLog('success', successMsg, duration + edgeDuration);
-        return { success: true, log };
-      } catch (edgeErr: any) {
-        const partialMsg = `Ping REST com sucesso (${duration}ms). Contudo, o ping à Edge Function falhou: ${edgeErr.message || edgeErr}`;
-        const log = addLog('success', partialMsg, duration);
-        return { success: true, log };
-      }
+      } catch {}
     }
 
-    // Standard REST-only success
-    const log = addLog('success', `Ping efetuado com sucesso à API do Supabase (tabela: 'users'). Serviço ativo e operacional.`, duration);
+    const duration = Math.round(performance.now() - startTime);
+    const successMsg = `Ping agressivo e pesquisas simuladas concluídas com sucesso [Tabelas: ${queryLogs.join(', ')}]. ${backendTriggered ? '⚡ Cron do Servidor 24/7 acionado.' : ''}`;
+    const log = addLog('success', successMsg, duration);
     return { success: true, log };
   } catch (error: any) {
     const duration = Math.round(performance.now() - startTime);

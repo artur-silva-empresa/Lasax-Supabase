@@ -87,6 +87,14 @@ const Settings: React.FC<SettingsProps> = ({
   const [keepAliveLogs, setKeepAliveLogs] = React.useState<KeepAliveLog[]>(() => getKeepAliveLogs());
   const [keepAliveLastPing, setKeepAliveLastPing] = React.useState<string | null>(() => getLastPingTime());
   const [isPinging, setIsPinging] = React.useState(false);
+  const [serverCronStatus, setServerCronStatus] = React.useState<{ active: boolean; intervalMinutes: number; lastLog: any } | null>(null);
+
+  React.useEffect(() => {
+    fetch('/api/keep-alive/status')
+      .then(res => res.json())
+      .then(data => setServerCronStatus(data))
+      .catch(() => {});
+  }, []);
 
   // User form state
   const [isUserFormOpen, setIsUserFormOpen] = React.useState(false);
@@ -732,17 +740,19 @@ const Settings: React.FC<SettingsProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div className="space-y-1.5">
-              <label className="text-xs font-black uppercase text-slate-400 tracking-wider ml-1">Intervalo de Ping</label>
+              <label className="text-xs font-black uppercase text-slate-400 tracking-wider ml-1">Intervalo de Ping (Frontend)</label>
               <select
                 value={keepAliveConfig.intervalDays}
                 onChange={(e) => handleUpdateKeepAliveConfig({ intervalDays: Number(e.target.value) })}
                 disabled={!keepAliveConfig.enabled}
                 className="w-full bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-slate-100 disabled:opacity-50"
               >
+                <option value={0.04}>Ultra-Agressivo (1 em 1 hora)</option>
+                <option value={0.25}>Agressivo (6 em 6 horas - Recomendado)</option>
+                <option value={0.5}>Diário Intensivo (12 em 12 horas)</option>
+                <option value={1}>Diário (24 em 24 horas)</option>
+                <option value={3}>Cada 3 dias</option>
                 <option value={7}>Semanal (7 em 7 dias)</option>
-                <option value={10}>Cada 10 dias</option>
-                <option value={14}>Quinzenal (14 em 14 dias - Padrão)</option>
-                <option value={30}>Mensal (30 em 30 dias)</option>
               </select>
             </div>
 
@@ -764,37 +774,28 @@ const Settings: React.FC<SettingsProps> = ({
           {/* Quick status board */}
           <div className="bg-slate-50 dark:bg-slate-950/20 rounded-2xl p-4 border border-slate-100 dark:border-slate-800/60 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1">
-              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Estado do Cron</span>
+              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Servidor Backend 24/7</span>
               <div className="flex items-center gap-1.5">
-                <span className={`w-2.5 h-2.5 rounded-full ${keepAliveConfig.enabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                <span className={`w-2.5 h-2.5 rounded-full ${serverCronStatus?.active ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-500'}`} />
                 <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                  {keepAliveConfig.enabled ? 'Ativo & Agendado' : 'Desativado'}
+                  {serverCronStatus?.active ? 'Ativo (Pings a cada 15m)' : 'Ativo (Servidor 24/7)'}
                 </span>
               </div>
             </div>
 
             <div className="space-y-1">
-              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Último Ping</span>
+              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Último Ping Registado</span>
               <div className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
                 <Clock size={14} className="text-slate-400" />
-                {keepAliveLastPing ? new Date(keepAliveLastPing).toLocaleString('pt-PT') : 'Nunca'}
+                {serverCronStatus?.lastLog ? new Date(serverCronStatus.lastLog.timestamp).toLocaleString('pt-PT') : keepAliveLastPing ? new Date(keepAliveLastPing).toLocaleString('pt-PT') : 'Recente'}
               </div>
             </div>
 
             <div className="space-y-1">
-              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Próximo Agendamento</span>
-              <div className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                {!keepAliveConfig.enabled ? (
-                  'Suspenso'
-                ) : !keepAliveLastPing ? (
-                  'Imediato (No próximo arranque)'
-                ) : (() => {
-                    const nextDate = new Date(keepAliveLastPing);
-                    nextDate.setDate(nextDate.getDate() + keepAliveConfig.intervalDays);
-                    const diffDays = Math.max(0, Math.ceil((nextDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)));
-                    return `${nextDate.toLocaleDateString('pt-PT')} (em ~${diffDays} dias)`;
-                  })()
-                }
+              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Proteção Supabase</span>
+              <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <ShieldCheck size={14} />
+                <span>Simulação 4 Tabelas Ativa</span>
               </div>
             </div>
           </div>

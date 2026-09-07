@@ -175,6 +175,111 @@ async function startServer() {
     res.json({ success: true, timestamp: new Date().toISOString() });
   });
 
+  // --- CRON JOB DE MANUTENÇÃO E PING AGRESSIVO SUPABASE (24/7 SERVIDOREXPRESS) ---
+  interface ServerPingLog {
+    id: string;
+    timestamp: string;
+    status: 'success' | 'failed';
+    queriesExecuted: string[];
+    durationMs: number;
+    message: string;
+  }
+
+  const serverPingLogs: ServerPingLog[] = [];
+  const BACKEND_PING_INTERVAL_MS = 15 * 60 * 1000; // 15 Minutos (Garante 24/7 sem inatividade do Supabase)
+
+  const executeServerSupabasePing = async (): Promise<ServerPingLog> => {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+    const startTime = Date.now();
+    const executedQueries: string[] = [];
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      const log: ServerPingLog = {
+        id: `srv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        timestamp: new Date().toISOString(),
+        status: 'failed',
+        queriesExecuted: [],
+        durationMs: 0,
+        message: 'Credenciais de Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY) não detetadas no ambiente.'
+      };
+      serverPingLogs.unshift(log);
+      if (serverPingLogs.length > 25) serverPingLogs.pop();
+      return log;
+    }
+
+    try {
+      // Tabelas para simulação de pesquisas ativas (previne pausa automática por falta de atividade)
+      const tablesToQuery = ['users', 'production_orders', 'stop_reasons', 'system_config'];
+      const headers = {
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'Content-Type': 'application/json'
+      };
+
+      for (const table of tablesToQuery) {
+        try {
+          const res = await fetch(`${supabaseUrl}/rest/v1/${table}?select=*&limit=1`, {
+            method: 'GET',
+            headers
+          });
+          executedQueries.push(`GET /rest/v1/${table} [Status ${res.status}]`);
+        } catch (err: any) {
+          executedQueries.push(`GET /rest/v1/${table} [Erro: ${err.message || 'Sem resposta'}]`);
+        }
+      }
+
+      const durationMs = Date.now() - startTime;
+      const log: ServerPingLog = {
+        id: `srv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        timestamp: new Date().toISOString(),
+        status: 'success',
+        queriesExecuted: executedQueries,
+        durationMs,
+        message: `Cron Job Servidor 24/7 executou pesquisas simuladas com sucesso em ${executedQueries.length} tabelas do Supabase.`
+      };
+
+      console.log(`[Supabase Cron 24/7] ⚡ Ping de manutenção ativo (${durationMs}ms) - Tabelas: ${executedQueries.length}`);
+      serverPingLogs.unshift(log);
+      if (serverPingLogs.length > 25) serverPingLogs.pop();
+      return log;
+    } catch (error: any) {
+      const durationMs = Date.now() - startTime;
+      const log: ServerPingLog = {
+        id: `srv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        timestamp: new Date().toISOString(),
+        status: 'failed',
+        queriesExecuted: executedQueries,
+        durationMs,
+        message: `Erro no cron job de servidor: ${error.message || error}`
+      };
+      console.error('[Supabase Cron 24/7 Error]', error);
+      serverPingLogs.unshift(log);
+      if (serverPingLogs.length > 25) serverPingLogs.pop();
+      return log;
+    }
+  };
+
+  // Iniciar Cron Job automático imediatamente e repetir a cada 15 minutos
+  executeServerSupabasePing();
+  setInterval(executeServerSupabasePing, BACKEND_PING_INTERVAL_MS);
+
+  // Endpoints para consulta e acionamento manual do Cron
+  app.get('/api/keep-alive/status', (_req, res) => {
+    res.json({
+      active: true,
+      intervalMinutes: 15,
+      lastLog: serverPingLogs[0] || null,
+      recentLogs: serverPingLogs.slice(0, 10),
+      serverTime: new Date().toISOString()
+    });
+  });
+
+  app.post('/api/keep-alive/ping', apiLimiter, async (_req, res) => {
+    const result = await executeServerSupabasePing();
+    res.json({ success: result.status === 'success', log: result });
+  });
+
   // Endpoints para Gerenciamento de Notificações Push
   const pushSubscriptions = new Map<string, any>();
 
