@@ -55,6 +55,45 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
   // Controlo de visibilidade do menu móvel (auto-hide ao fazer scroll vertical para baixo, reaparece ao voltar ao topo)
   const [isMobileNavVisible, setIsMobileNavVisible] = React.useState(true);
 
+  // Deteta se o dispositivo está em landscape com altura compacta (smartphone em landscape)
+  const [isCompactLandscape, setIsCompactLandscape] = React.useState(() => {
+    if (typeof window === 'undefined') return false;
+    return (
+      (window.innerHeight <= 560 && window.innerWidth > window.innerHeight) ||
+      (typeof window.matchMedia === 'function' && window.matchMedia('(orientation: landscape) and (max-height: 560px)').matches)
+    );
+  });
+
+  React.useEffect(() => {
+    const handleOrientationOrResize = () => {
+      const isLandscape = window.innerWidth > window.innerHeight;
+      const isShort = window.innerHeight <= 560;
+      const mediaMatch = typeof window.matchMedia === 'function' 
+        ? window.matchMedia('(orientation: landscape) and (max-height: 560px)').matches 
+        : false;
+      const isLandscapeMobile = (isLandscape && isShort) || mediaMatch;
+      setIsCompactLandscape(isLandscapeMobile);
+      // Sempre que se altera orientação ou tamanho, assegura menu visível inicialmente
+      setIsMobileNavVisible(true);
+    };
+
+    window.addEventListener('resize', handleOrientationOrResize);
+    window.addEventListener('orientationchange', handleOrientationOrResize);
+    return () => {
+      window.removeEventListener('resize', handleOrientationOrResize);
+      window.removeEventListener('orientationchange', handleOrientationOrResize);
+    };
+  }, []);
+
+  const isAutoCollapseActive = React.useCallback(() => {
+    // Modo móvel vertical (< 768px) ou smartphone em landscape (altura <= 560px)
+    return (
+      window.innerWidth < 768 ||
+      window.innerHeight <= 560 ||
+      (typeof window.matchMedia === 'function' && window.matchMedia('(orientation: landscape) and (max-height: 560px)').matches)
+    );
+  }, []);
+
   React.useEffect(() => {
     // Sempre visível ao mudar de ecrã/vista
     setIsMobileNavVisible(true);
@@ -82,11 +121,17 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
     };
 
     const handleNativeScroll = (e: Event) => {
-      if (window.innerWidth >= 768) return;
+      if (!isAutoCollapseActive()) return;
       const target = e.target as HTMLElement;
-      if (!target || typeof target.scrollTop !== 'number') return;
+      let currentScrollY = 0;
+      if (target && typeof target.scrollTop === 'number') {
+        currentScrollY = target.scrollTop;
+      } else if (typeof window.scrollY === 'number') {
+        currentScrollY = window.scrollY;
+      } else {
+        return;
+      }
       
-      const currentScrollY = target.scrollTop;
       if (!ticking) {
         window.requestAnimationFrame(() => {
           onScrollPosition(currentScrollY);
@@ -97,7 +142,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
     };
 
     const handleCustomScroll = (e: any) => {
-      if (window.innerWidth >= 768) return;
+      if (!isAutoCollapseActive()) return;
       const { scrollTop, isAtTop, isScrollingDown } = e.detail || {};
       if (typeof scrollTop === 'number') {
         if (isAtTop || scrollTop <= 25) {
@@ -116,7 +161,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
       document.removeEventListener('scroll', handleNativeScroll, { capture: true });
       window.removeEventListener('app-scroll', handleCustomScroll);
     };
-  }, []);
+  }, [isAutoCollapseActive]);
 
   // Estados e lógica de Ecrã Inteiro (Fullscreen)
   const [isFullscreen, setIsFullscreen] = React.useState(false);
@@ -249,7 +294,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
   return (
     <div className="flex h-screen h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden flex-col md:flex-row w-full transition-colors duration-300">
       {/* Desktop Sidebar */}
-      <aside className={`hidden md:flex ${isSidebarOpen ? 'w-64' : 'w-20'} bg-slate-900 dark:bg-slate-900 text-white transition-all duration-300 ease-in-out flex-col z-50 shrink-0`}>
+      <aside className={`hidden md:flex ${isSidebarOpen ? 'w-64' : 'w-20'} bg-slate-900 dark:bg-slate-900 text-white transition-all duration-300 ease-in-out flex-col z-50 shrink-0 ${
+        isCompactLandscape && !isMobileNavVisible
+          ? `-translate-x-full ${isSidebarOpen ? '-ml-64' : '-ml-20'} pointer-events-none`
+          : 'translate-x-0 ml-0'
+      }`}>
         <div className="p-6 flex items-center gap-3">
           <img src={`${import.meta.env.BASE_URL}icons/icone.png`} alt="Prod. Lasa" className="w-8 h-8 shrink-0 object-contain" />
           {isSidebarOpen && (
@@ -614,7 +663,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
       {/* Main Content Container */}
       <div className="flex-1 flex flex-col min-w-0 relative h-full">
         <header className={`h-12 md:h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 md:px-8 shrink-0 z-40 transition-all duration-300 ease-in-out ${
-          !isMobileNavVisible ? '-translate-y-full md:translate-y-0 -mb-12 md:mb-0 pointer-events-none md:pointer-events-auto' : 'translate-y-0'
+          !isMobileNavVisible 
+            ? isCompactLandscape
+              ? '-translate-y-full -mb-12 md:-mb-16 pointer-events-none'
+              : '-translate-y-full md:translate-y-0 -mb-12 md:mb-0 pointer-events-none md:pointer-events-auto' 
+            : 'translate-y-0'
         }`}>
           <div className="flex items-center gap-3">
             {/* Hamburger menu / Sidebar toggler */}
@@ -897,8 +950,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
         </header>
 
         {/* ÁREA DE CONTEÚDO */}
-        <main className={`flex-1 overflow-hidden relative transition-all duration-300 md:pb-0 ${
-          isMobileNavVisible ? 'pb-14' : 'pb-0'
+        <main className={`flex-1 overflow-hidden relative transition-all duration-300 ${
+          isCompactLandscape 
+            ? 'pb-0' 
+            : isMobileNavVisible 
+            ? 'pb-14 md:pb-0' 
+            : 'pb-0'
         }`}>
           <div className="w-full h-full">
             {children}
@@ -939,10 +996,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
       </nav>
 
       {/* Botão flutuante para reexibir o menu se estiver oculto no scroll */}
-      {!isMobileNavVisible && (
+      {!isMobileNavVisible && (window.innerWidth < 768 || isCompactLandscape) && (
         <button
           onClick={() => setIsMobileNavVisible(true)}
-          className="md:hidden fixed bottom-3 right-3 z-40 bg-slate-900/90 dark:bg-slate-800/90 backdrop-blur-md text-white p-2 rounded-full shadow-lg border border-slate-700/50 flex items-center gap-1.5 px-3 animate-in fade-in zoom-in-95 text-[10px] font-bold active:scale-95 transition-transform"
+          className="fixed bottom-3 right-3 z-40 bg-slate-900/90 dark:bg-slate-800/90 backdrop-blur-md text-white p-2 rounded-full shadow-lg border border-slate-700/50 flex items-center gap-1.5 px-3 animate-in fade-in zoom-in-95 text-[10px] font-bold active:scale-95 transition-transform"
           title="Mostrar Menu"
         >
           <Menu size={14} />
