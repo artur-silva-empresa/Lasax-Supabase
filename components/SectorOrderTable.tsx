@@ -4,6 +4,8 @@ import {
   RotateCcw, 
   ChevronLeft, 
   ChevronRight,
+  ChevronDown,
+  Layers,
   Calendar,
   Save,
   Edit2,
@@ -96,18 +98,26 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
   const [tableExportSuccess, setTableExportSuccess] = React.useState(false);
 
   const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    if (window.innerWidth >= 1280) return;
     const scrollTop = e.currentTarget.scrollTop;
-    // Only auto-collapse if scrolling down from near the top (e.g., from under 40px)
-    if (scrollTop > lastScrollTop.current && scrollTop > 80 && lastScrollTop.current < 40) {
-      if (showMobileFilters) {
-        setShowMobileFilters(false);
-      }
-    } else if (scrollTop === 0) {
-      if (!showMobileFilters) {
-        setShowMobileFilters(true);
+    const isScrollingDown = scrollTop > lastScrollTop.current;
+
+    if (window.innerWidth < 1280) {
+      if (isScrollingDown && scrollTop > 50) {
+        if (showMobileFilters) {
+          setShowMobileFilters(false);
+        }
       }
     }
+
+    // Notificar layout para auto-hide do menu fixo na versão móvel
+    window.dispatchEvent(new CustomEvent('app-scroll', {
+      detail: {
+        scrollTop,
+        isScrollingDown,
+        isAtTop: scrollTop <= 20
+      }
+    }));
+
     lastScrollTop.current = scrollTop;
   };
   
@@ -376,6 +386,84 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
     return filteredOrders.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredOrders, currentPage]);
 
+  // Agrupamento para a versão Smartphone: colapsa todos os itens da mesma encomenda (docNr)
+  const mobileOrderGroups = React.useMemo(() => {
+    const map = new Map<string, {
+      docNr: string;
+      mainOrder: Order;
+      clientName: string;
+      totalQtyRequested: number;
+      totalProducedQty: number;
+      exitDate: Date | null;
+      predictedDate: Date | null;
+      items: Order[];
+    }>();
+
+    for (const order of filteredOrders) {
+      const key = order.docNr && order.docNr.trim() !== '' ? order.docNr.trim() : `item-${order.id}`;
+      const existing = map.get(key);
+      const prodQty = getSectorProducedQty(order);
+      const eDate = getSectorDate(order);
+      const pDate = order.sectorPredictedDates?.[sector.id] || null;
+
+      if (!existing) {
+        map.set(key, {
+          docNr: order.docNr || '-',
+          mainOrder: order,
+          clientName: order.clientName || 'Sem Cliente',
+          totalQtyRequested: order.qtyRequested || 0,
+          totalProducedQty: prodQty,
+          exitDate: eDate,
+          predictedDate: pDate,
+          items: [order],
+        });
+      } else {
+        existing.items.push(order);
+        existing.totalQtyRequested += (order.qtyRequested || 0);
+        existing.totalProducedQty += prodQty;
+        if (!existing.predictedDate && pDate) existing.predictedDate = pDate;
+        if (!existing.exitDate && eDate) existing.exitDate = eDate;
+      }
+    }
+    return Array.from(map.values());
+  }, [filteredOrders, sector.id]);
+
+  const mobileTotalPages = Math.ceil(mobileOrderGroups.length / ITEMS_PER_PAGE);
+
+  const mobilePaginatedGroups = React.useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return mobileOrderGroups.slice(start, start + ITEMS_PER_PAGE);
+  }, [mobileOrderGroups, currentPage]);
+
+  // Estado dos docNrs expandidos no telemóvel (por padrão, colapsados)
+  const [expandedDocNrs, setExpandedDocNrs] = React.useState<Set<string>>(new Set());
+  const lastTapRef = React.useRef<{ [key: string]: number }>({});
+
+  const toggleExpandDocNr = React.useCallback((docNr: string) => {
+    setExpandedDocNrs(prev => {
+      const next = new Set(prev);
+      if (next.has(docNr)) {
+        next.delete(docNr);
+      } else {
+        next.add(docNr);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleDocNrTouchEnd = React.useCallback((docNr: string, e: React.TouchEvent) => {
+    const now = Date.now();
+    const lastTap = lastTapRef.current[docNr] || 0;
+    if (now - lastTap < 350) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleExpandDocNr(docNr);
+      lastTapRef.current[docNr] = 0;
+    } else {
+      lastTapRef.current[docNr] = now;
+    }
+  }, [toggleExpandDocNr]);
+
   const [focusedRowIndex, setFocusedRowIndex] = React.useState(-1);
 
   React.useEffect(() => {
@@ -580,19 +668,19 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
           </button>
       </div>
       {/* Mobile/Tablet Header Row */}
-      <div className="xl:hidden flex justify-between items-center p-3.5 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-        <span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Painel de Pesquisa</span>
+      <div className="xl:hidden flex justify-between items-center py-2 px-3 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
+        <span className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Filtros & Pesquisa</span>
         <button
           onClick={() => setShowMobileFilters(!showMobileFilters)}
-          className={`p-1.5 rounded-xl border transition-all active:scale-95 flex items-center gap-1.5 ${
+          className={`py-1 px-2.5 rounded-lg border transition-all active:scale-95 flex items-center gap-1.5 text-xs ${
             showMobileFilters 
               ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-600 dark:border-blue-600' 
               : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'
           }`}
           title={showMobileFilters ? "Ocultar Pesquisa" : "Mostrar Pesquisa"}
         >
-          <Filter size={14} className={showMobileFilters ? "fill-white/10" : "text-slate-500"} />
-          <span className="text-xs font-bold">{showMobileFilters ? "Ocultar" : "Mostrar"}</span>
+          <Filter size={13} className={showMobileFilters ? "fill-white/10" : "text-slate-500"} />
+          <span className="font-bold">{showMobileFilters ? "Ocultar" : "Filtrar"}</span>
           {searchTerm && (
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
               showMobileFilters ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
@@ -973,197 +1061,287 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
         </table>
         </div>
 
-        {/* Mobile Grid */}
-        <div className="md:hidden grid grid-cols-1 gap-3 p-4">
-          {paginatedOrders.map((order, index) => {
-            const isEditing = editingId === order.id;
-            const producedQty = getSectorProducedQty(order);
-            const exitDate = getSectorDate(order);
-            const predictedDate = order.sectorPredictedDates?.[sector.id];
-            const obs = order.sectorObservations?.[sector.id];
-            const capInfo = capacities.length > 0 ? calcOrderCapacityInfo(order, sector.id, capacities) : null;
+        {/* Mobile Grid - Versão smartphone afinada para o setor:
+            - Tipografia e espaçamentos reduzidos para maximizar painel de leitura
+            - Colapsa todos os itens da mesma encomenda (docNr) numa só linha
+            - Duplo clique no número do documento (docNr) expande todos os itens */}
+        <div className="md:hidden grid grid-cols-1 gap-2 p-2">
+          {mobilePaginatedGroups.map((group, index) => {
+            const isExpanded = expandedDocNrs.has(group.docNr);
 
             return (
               <div 
-                key={order.id}
-                id={`sector-order-card-${order.id}`}
-                onClick={() => {
-                  if (!isEditing) {
-                    if (focusedRowIndex === index) {
-                      onViewDetails(order);
-                    } else {
-                      setFocusedRowIndex(index);
-                    }
-                  }
-                }}
-                className={`p-4 rounded-2xl border transition-colors space-y-4 scroll-mt-20 ${isEditing ? 'border-blue-300 dark:border-blue-700 bg-blue-50/20 dark:bg-slate-900' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800'} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500' : ''}`}
+                key={group.docNr}
+                id={`sector-order-card-${group.docNr}`}
+                className={`p-2.5 rounded-xl border transition-all ${
+                  isExpanded 
+                    ? 'border-blue-400 dark:border-blue-600 bg-white dark:bg-slate-900 shadow-sm ring-1 ring-blue-500/20' 
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700'
+                }`}
               >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-black text-slate-800 dark:text-white text-base leading-none">{order.docNr ? <HighlightText text={order.docNr} highlight={highlights} /> : ''}</h3>
-                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-1">{order.clientName ? <HighlightText text={order.clientName} highlight={highlights} /> : 'Sem Cliente'}</p>
+                {/* Linha 1: DocNr (Duplo clique para expandir) + Cliente */}
+                <div className="flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <div 
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        toggleExpandDocNr(group.docNr);
+                      }}
+                      onTouchEnd={(e) => handleDocNrTouchEnd(group.docNr, e)}
+                      className="cursor-pointer select-none flex items-center gap-1 min-w-0 group/doc"
+                      title="Duplo clique no docNr para colapsar/expandir itens"
+                    >
+                      <h3 className="font-black text-slate-800 dark:text-white text-xs leading-none tracking-tight group-hover/doc:text-blue-600 transition-colors">
+                        {group.docNr ? <HighlightText text={group.docNr} highlight={highlights} /> : '-'}
+                      </h3>
+                      
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleExpandDocNr(group.docNr);
+                        }}
+                        className={`text-[9px] font-black px-1.5 py-0.2 rounded-md border flex items-center gap-0.5 transition-colors ${
+                          isExpanded 
+                            ? 'bg-blue-600 text-white border-blue-600' 
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                        }`}
+                        title="Duplo clique no docNr para expandir/colapsar"
+                      >
+                        <span>{group.items.length} {group.items.length === 1 ? 'item' : 'itens'}</span>
+                        <ChevronDown size={10} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                      </button>
+                    </div>
                   </div>
-                  
-                  <div className="flex flex-col items-end gap-2" onClick={e => e.stopPropagation()}>
-                    {isEditing ? (
-                      <div className="flex gap-1">
-                        <button onClick={(e) => handleSaveClick(order, e)} className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg shadow-sm">
-                            <Check size={14} />
-                        </button>
-                        <button onClick={handleCancelClick} className="p-1.5 bg-slate-100 text-slate-600 rounded-lg shadow-sm">
-                            <X size={14} />
-                        </button>
+
+                  {/* Previsão / Datas */}
+                  <div className="text-right shrink-0">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center justify-end gap-1">
+                      <Calendar size={10} className="text-slate-400" />
+                      {group.predictedDate ? formatDate(group.predictedDate) : group.exitDate ? formatDate(group.exitDate) : '-'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Linha 2: Cliente + Qtd / Produzido Total */}
+                <div className="mt-1 flex items-baseline justify-between gap-2">
+                  <p className="text-[11px] font-bold text-slate-900 dark:text-slate-100 truncate flex-1 min-w-0">
+                    {group.clientName ? <HighlightText text={group.clientName} highlight={highlights} /> : 'Sem Cliente'}
+                  </p>
+
+                  <div className="text-right shrink-0">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                      Qtd: <span className="font-medium text-slate-700 dark:text-slate-300">{group.totalQtyRequested.toLocaleString('pt-PT')}</span> / Prod: <span className="font-black text-slate-900 dark:text-white">{group.totalProducedQty.toLocaleString('pt-PT')}</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Resumo quando Colapsado */}
+                {!isExpanded && (
+                  <div 
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      toggleExpandDocNr(group.docNr);
+                    }}
+                    onTouchEnd={(e) => handleDocNrTouchEnd(group.docNr, e)}
+                    className="mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500 cursor-pointer"
+                  >
+                    {group.items.length === 1 ? (
+                      <div className="truncate flex items-center gap-1.5 flex-1 min-w-0 pr-2">
+                        <span className="font-bold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 px-1 py-0.2 rounded border border-slate-200 dark:border-slate-700 shrink-0">
+                          {group.items[0].reference ? <HighlightText text={group.items[0].reference} highlight={highlights} /> : '-'}
+                        </span>
+                        <span className="truncate text-slate-500">{group.items[0].colorDesc || ''}</span>
+                        {group.items[0].sizeDesc && <span className="text-slate-400 shrink-0">• {group.items[0].sizeDesc}</span>}
                       </div>
                     ) : (
-                      canEdit && (
-                        <button onClick={(e) => handleEditClick(order, e)} className="p-1.5 text-slate-500 bg-slate-100 dark:bg-slate-800 rounded-lg shadow-sm">
-                          <Edit2 size={14} />
-                        </button>
-                      )
+                      <span className="truncate italic flex items-center gap-1 flex-1 min-w-0 pr-2 text-slate-500">
+                        <Layers size={11} className="text-blue-500 shrink-0" />
+                        {group.items.length} itens no setor (duplo clique no docNr para abrir)
+                      </span>
                     )}
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase">Referência / Cor</p>
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{order.reference ? <HighlightText text={order.reference} highlight={highlights} /> : ''}</p>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{order.colorDesc ? <HighlightText text={order.colorDesc} highlight={highlights} /> : ''}</p>
+                    <button 
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (group.items.length === 1) {
+                          onViewDetails(group.items[0]);
+                        } else {
+                          toggleExpandDocNr(group.docNr);
+                        }
+                      }}
+                      className="text-[9px] text-blue-600 dark:text-blue-400 font-bold hover:underline shrink-0"
+                    >
+                      {group.items.length === 1 ? 'Ver Detalhe →' : 'Ver Itens ▼'}
+                    </button>
                   </div>
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase">Medida / Família</p>
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{order.sizeDesc ? <HighlightText text={order.sizeDesc} highlight={highlights} /> : ''}</p>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{order.family ? <HighlightText text={order.family} highlight={highlights} /> : ''}</p>
-                  </div>
-                </div>
+                )}
 
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-0.5">Qtd / Prod</p>
-                    <p className="text-xs text-slate-600 dark:text-slate-400">
-                      {order.qtyRequested.toLocaleString('pt-PT')} / <span className="font-black text-slate-900 dark:text-white">{producedQty.toLocaleString('pt-PT')}</span>
-                    </p>
-                  </div>
-                  
-                  <div className="text-right">
-                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-0.5">Cap / Est</p>
-                    {capInfo ? (
-                      capInfo.remainingQty === 0 ? (
-                        <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400">✓ Concluído</span>
-                      ) : (
-                        <span className={`text-[10px] font-black ${capInfo.estimatedDays > 10 ? 'text-rose-600' : capInfo.estimatedDays > 5 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                          {capInfo.estimatedDays}d est.
-                        </span>
-                      )
-                    ) : (
-                      <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
-                    )}
-                  </div>
-                </div>
+                {/* ITENS EXPANDIDOS (Aparecem após Duplo Clique no docNr) */}
+                {isExpanded && (
+                  <div className="mt-2 pt-2 border-t border-blue-100 dark:border-slate-800 space-y-1.5 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                        Itens do Setor ({group.items.length})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleExpandDocNr(group.docNr)}
+                        className="text-[9px] text-blue-600 dark:text-blue-400 font-bold hover:underline"
+                      >
+                        ▲ Colapsar
+                      </button>
+                    </div>
 
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800" onClick={e => e.stopPropagation()}>
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5">Previsão Entrega</p>
-                    {isEditing ? (
-                        <div className="flex items-center gap-1">
-                            <input
-                                type="date"
-                                value={editDate}
-                                onChange={(e) => setEditDate(e.target.value)}
-                                className="w-full text-xs p-1.5 border border-blue-300 rounded-lg outline-none bg-white dark:bg-slate-800 dark:text-white shadow-sm"
-                            />
-                            <button
-                                onClick={() => setEditDate('')}
-                                className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors shadow-sm"
-                                title="Limpar data"
-                            >
-                                <Trash2 size={16} />
-                            </button>
-                        </div>
-                    ) : (
-                      <div className="flex flex-col gap-1">
-                        <span className={`text-xs font-bold ${order.sectorPredictedDatesPending?.[sector.id] ? 'text-orange-500 animate-pulse' : (predictedDate ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400')}`}>
-                            {predictedDate ? formatDate(predictedDate) : '-'}
-                        </span>
-                        {order.sectorPredictedDatesPending?.[sector.id] && (
-                            <div className="flex items-center gap-2">
-                                <span className="text-[8px] font-black text-orange-500 uppercase flex items-center gap-0.5">
-                                    <AlertCircle size={8} /> Pendente
+                    <div className="space-y-1.5">
+                      {group.items.map((order, itemIdx) => {
+                        const isEditing = editingId === order.id;
+                        const itemProdQty = getSectorProducedQty(order);
+                        const itemPredictedDate = order.sectorPredictedDates?.[sector.id];
+                        const itemObs = order.sectorObservations?.[sector.id];
+                        const capInfo = capacities.length > 0 ? calcOrderCapacityInfo(order, sector.id, capacities) : null;
+
+                        return (
+                          <div 
+                            key={order.id}
+                            className="p-2 bg-slate-50 dark:bg-slate-850/60 rounded-lg border border-slate-100 dark:border-slate-800 flex flex-col gap-1.5"
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-[9px] font-black text-slate-400 bg-white dark:bg-slate-800 px-1 rounded border border-slate-200 dark:border-slate-700 shrink-0">
+                                  #{order.itemNr || itemIdx + 1}
                                 </span>
-                                {canEdit && (
-                                    <button
-                                        onClick={(e) => handleQuickValidate(order, e)}
-                                        className="bg-emerald-500 hover:bg-emerald-600 text-white p-1 rounded-full shadow-sm"
-                                    >
-                                        <Check size={10} strokeWidth={4} />
+                                <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 truncate">
+                                  {order.reference ? <HighlightText text={order.reference} highlight={highlights} /> : '-'}
+                                </span>
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                                  {order.colorDesc ? <HighlightText text={order.colorDesc} highlight={highlights} /> : ''}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                                {isEditing ? (
+                                  <div className="flex gap-1">
+                                    <button onClick={(e) => handleSaveClick(order, e)} className="p-1 bg-emerald-100 text-emerald-600 rounded">
+                                      <Check size={12} />
                                     </button>
+                                    <button onClick={handleCancelClick} className="p-1 bg-slate-100 text-slate-600 rounded">
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  canEdit && (
+                                    <button onClick={(e) => handleEditClick(order, e)} className="p-1 text-slate-400 hover:text-blue-600">
+                                      <Edit2 size={12} />
+                                    </button>
+                                  )
                                 )}
+                              </div>
                             </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5">Classificação</p>
-                    <StopReasonSelector 
-                        currentReason={order.sectorStopReasons?.[sector.id]} 
-                        onSelect={(reason) => onUpdateOrder({ 
-                          ...order, 
-                          sectorStopReasons: { ...(order.sectorStopReasons || {}), [sector.id]: reason } 
-                        })}
-                        hierarchy={stopReasonsHierarchy}
-                        disabled={!canEdit}
-                    />
-                  </div>
-                </div>
 
-                <div className="pt-2" onClick={e => e.stopPropagation()}>
-                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1">Observações</p>
-                    {isEditing ? (
-                        <textarea
-                            value={editObs}
-                            onChange={(e) => setEditObs(e.target.value)}
-                            className="w-full text-xs p-2 border border-blue-300 rounded-lg outline-none bg-white dark:bg-slate-800 dark:text-white shadow-sm"
-                            rows={2}
-                            placeholder="Adicionar observação..."
-                        />
-                    ) : (
-                        <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-tight">
-                            {obs || '-'}
-                        </p>
-                    )}
-                </div>
+                            <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                              <span className="truncate">
+                                {order.sizeDesc || order.size || '-'} {order.family ? `• ${order.family}` : ''}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                                {order.qtyRequested.toLocaleString('pt-PT')} / <strong className="text-slate-900 dark:text-white">{itemProdQty.toLocaleString('pt-PT')}</strong>
+                              </span>
+                            </div>
 
+                            {/* Classificação & Previsão */}
+                            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-800 text-[10px]" onClick={e => e.stopPropagation()}>
+                              <div>
+                                <span className="text-[8px] font-black uppercase text-slate-400 block">Previsão</span>
+                                {isEditing ? (
+                                  <input
+                                    type="date"
+                                    value={editDate}
+                                    onChange={(e) => setEditDate(e.target.value)}
+                                    className="w-full text-[10px] p-1 border border-blue-300 rounded outline-none bg-white dark:bg-slate-800 dark:text-white"
+                                  />
+                                ) : (
+                                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                    {itemPredictedDate ? formatDate(itemPredictedDate) : '-'}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div>
+                                <span className="text-[8px] font-black uppercase text-slate-400 block">Classificação</span>
+                                <StopReasonSelector 
+                                  currentReason={order.sectorStopReasons?.[sector.id]} 
+                                  onSelect={(reason) => onUpdateOrder({ 
+                                    ...order, 
+                                    sectorStopReasons: { ...(order.sectorStopReasons || {}), [sector.id]: reason } 
+                                  })}
+                                  hierarchy={stopReasonsHierarchy}
+                                  disabled={!canEdit}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Observação / Detalhe link */}
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-slate-800 text-[10px]" onClick={e => e.stopPropagation()}>
+                              <div className="truncate flex-1 min-w-0 pr-2">
+                                {isEditing ? (
+                                  <textarea
+                                    value={editObs}
+                                    onChange={(e) => setEditObs(e.target.value)}
+                                    className="w-full text-[10px] p-1 border border-blue-300 rounded outline-none bg-white dark:bg-slate-800 dark:text-white"
+                                    rows={1}
+                                    placeholder="Obs..."
+                                  />
+                                ) : (
+                                  <span className="text-slate-500 italic truncate block">
+                                    {itemObs ? `Obs: ${itemObs}` : 'Sem observações'}
+                                  </span>
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => onViewDetails(order)}
+                                className="text-[9px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
+                              >
+                                Detalhes →
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
-          {paginatedOrders.length === 0 && (
-              <div className="p-8 text-center text-slate-400 font-medium">Nenhum resultado encontrado.</div>
+          {mobilePaginatedGroups.length === 0 && (
+             <div className="p-8 text-center text-slate-400 font-medium text-xs">Nenhum resultado encontrado.</div>
           )}
         </div>
-
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3 flex items-center justify-between shrink-0 safe-bottom transition-colors">
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium pl-2">
-                Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+      {(mobileTotalPages > 1 || totalPages > 1) && (
+        <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-2.5 flex items-center justify-between shrink-0 safe-bottom transition-colors">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium pl-2">
+                Página <strong>{currentPage}</strong> de <strong>{typeof window !== 'undefined' && window.innerWidth < 768 ? mobileTotalPages : totalPages}</strong>
             </span>
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
                 <button 
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:hover:bg-transparent text-slate-600 dark:text-slate-400"
+                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:hover:bg-transparent text-slate-600 dark:text-slate-400"
                 >
-                    <ChevronLeft size={20} />
+                    <ChevronLeft size={18} />
                 </button>
                 <button 
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:hover:bg-transparent text-slate-600 dark:text-slate-400"
+                    onClick={() => setCurrentPage(p => Math.min(typeof window !== 'undefined' && window.innerWidth < 768 ? mobileTotalPages : totalPages, p + 1))}
+                    disabled={currentPage >= (typeof window !== 'undefined' && window.innerWidth < 768 ? mobileTotalPages : totalPages)}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:hover:bg-transparent text-slate-600 dark:text-slate-400"
                 >
-                    <ChevronRight size={20} />
+                    <ChevronRight size={18} />
                 </button>
             </div>
         </div>

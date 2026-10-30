@@ -13,6 +13,8 @@ import {
   RotateCcw,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Layers,
   Eye,
   Filter,
   Flag,
@@ -87,18 +89,26 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
   const lastScrollTop = React.useRef(0);
 
   const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    if (window.innerWidth >= 1280) return;
     const scrollTop = e.currentTarget.scrollTop;
-    // Only auto-collapse if scrolling down from near the top (e.g., from under 40px)
-    if (scrollTop > lastScrollTop.current && scrollTop > 80 && lastScrollTop.current < 40) {
-      if (showMobileFilters) {
-        setShowMobileFilters(false);
-      }
-    } else if (scrollTop === 0) {
-      if (!showMobileFilters) {
-        setShowMobileFilters(true);
+    const isScrollingDown = scrollTop > lastScrollTop.current;
+
+    if (window.innerWidth < 1280) {
+      if (isScrollingDown && scrollTop > 50) {
+        if (showMobileFilters) {
+          setShowMobileFilters(false);
+        }
       }
     }
+
+    // Notificar layout para auto-hide do menu fixo na versão móvel
+    window.dispatchEvent(new CustomEvent('app-scroll', {
+      detail: {
+        scrollTop,
+        isScrollingDown,
+        isAtTop: scrollTop <= 20
+      }
+    }));
+
     lastScrollTop.current = scrollTop;
   };
   
@@ -494,18 +504,136 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
       }
   };
 
-  // Pagination Logic
-  const totalPages = Math.ceil(finalFilteredOrders.length / ITEMS_PER_PAGE);
-  const paginatedOrders = React.useMemo(() => {
+  // Definição do grupo por Documento
+  interface DocumentGroup {
+    docNr: string;
+    mainOrder: Order;
+    clientName: string;
+    comercial: string;
+    po: string;
+    priority: number;
+    isManual: boolean;
+    isArchived: boolean;
+    archivedBy?: string;
+    hasObservations: boolean;
+    requestedDate: Date | null;
+    status: OrderState;
+    totalQtyRequested: number;
+    totalQtyOpen: number;
+    distinctReferencesCount: number;
+    referenceSummary: string;
+    items: Order[];
+  }
+
+  // Agrupamento de encomendas por Documento (1 cartão/linha por docNr)
+  const documentGroups = React.useMemo<DocumentGroup[]>(() => {
+    const map = new Map<string, DocumentGroup>();
+
+    for (const order of finalFilteredOrders) {
+      const key = order.docNr && order.docNr.trim() !== '' ? order.docNr.trim() : `item-${order.id}`;
+      const existing = map.get(key);
+      const orderState = getOrderState(order);
+      const hasObs = hasObservations(order);
+
+      if (!existing) {
+        map.set(key, {
+          docNr: order.docNr || '-',
+          mainOrder: order,
+          clientName: order.clientName || '',
+          comercial: order.comercial || '',
+          po: order.po || '',
+          priority: order.priority || 0,
+          isManual: !!order.isManual,
+          isArchived: !!order.isArchived,
+          archivedBy: order.archivedBy,
+          hasObservations: hasObs,
+          requestedDate: order.requestedDate,
+          status: orderState,
+          totalQtyRequested: order.qtyRequested || 0,
+          totalQtyOpen: order.qtyOpen !== undefined ? order.qtyOpen : (order.qtyRequested || 0),
+          distinctReferencesCount: 1,
+          referenceSummary: '',
+          items: [order],
+        });
+      } else {
+        existing.items.push(order);
+        existing.totalQtyRequested += (order.qtyRequested || 0);
+        existing.totalQtyOpen += (order.qtyOpen !== undefined ? order.qtyOpen : (order.qtyRequested || 0));
+        if (hasObs) existing.hasObservations = true;
+        if ((order.priority || 0) > existing.priority) {
+          existing.priority = order.priority || 0;
+        }
+        if (order.isManual) existing.isManual = true;
+        if (orderState === OrderState.LATE) {
+          existing.status = OrderState.LATE;
+        } else if (orderState === OrderState.IN_PRODUCTION && existing.status !== OrderState.LATE) {
+          existing.status = OrderState.IN_PRODUCTION;
+        }
+        if (!existing.po && order.po) existing.po = order.po;
+        if (!existing.clientName && order.clientName) existing.clientName = order.clientName;
+        if (!existing.comercial && order.comercial) existing.comercial = order.comercial;
+        if (!existing.requestedDate && order.requestedDate) existing.requestedDate = order.requestedDate;
+      }
+    }
+
+    for (const group of map.values()) {
+      const refs = Array.from(new Set(group.items.map(it => it.reference).filter(Boolean)));
+      group.distinctReferencesCount = refs.length;
+      if (refs.length > 1) {
+        group.referenceSummary = `${refs.length} referências`;
+      } else if (refs.length === 1) {
+        const first = group.items[0];
+        const extra = first.colorDesc || first.family || first.sizeDesc || '';
+        group.referenceSummary = `Ref. ${refs[0]}${extra ? ` - ${extra}` : ''}`;
+      } else {
+        group.referenceSummary = '-';
+      }
+    }
+
+    return Array.from(map.values());
+  }, [finalFilteredOrders]);
+
+  // Pagination Logic baseada nos grupos de Documentos
+  const totalPages = Math.max(1, Math.ceil(documentGroups.length / ITEMS_PER_PAGE));
+  const paginatedGroups = React.useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return finalFilteredOrders.slice(start, start + ITEMS_PER_PAGE);
-  }, [finalFilteredOrders, currentPage]);
+    return documentGroups.slice(start, start + ITEMS_PER_PAGE);
+  }, [documentGroups, currentPage]);
+
+  // Estado dos docNrs que estão expandidos (por padrão, colapsados)
+  const [expandedDocNrs, setExpandedDocNrs] = React.useState<Set<string>>(new Set());
+  const lastTapRef = React.useRef<{ [key: string]: number }>({});
+
+  const toggleExpandDocNr = React.useCallback((docNr: string) => {
+    setExpandedDocNrs(prev => {
+      const next = new Set(prev);
+      if (next.has(docNr)) {
+        next.delete(docNr);
+      } else {
+        next.add(docNr);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleDocNrTouchEnd = React.useCallback((docNr: string, e: React.TouchEvent) => {
+    const now = Date.now();
+    const lastTap = lastTapRef.current[docNr] || 0;
+    if (now - lastTap < 350) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleExpandDocNr(docNr);
+      lastTapRef.current[docNr] = 0;
+    } else {
+      lastTapRef.current[docNr] = now;
+    }
+  }, [toggleExpandDocNr]);
 
   const [focusedRowIndex, setFocusedRowIndex] = React.useState(-1);
 
   React.useEffect(() => {
     setFocusedRowIndex(-1);
-  }, [paginatedOrders]);
+  }, [paginatedGroups]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -514,37 +642,37 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
 
       if (e.key === 'ArrowDown') {
         setFocusedRowIndex(prev => {
-          if (paginatedOrders.length === 0) return prev;
+          if (paginatedGroups.length === 0) return prev;
           e.preventDefault();
-          const next = Math.min(prev === -1 ? 0 : prev + 1, paginatedOrders.length - 1);
-          const tr = document.getElementById(`order-row-${paginatedOrders[next].id}`);
-          const card = document.getElementById(`order-card-${paginatedOrders[next].id}`);
+          const next = Math.min(prev === -1 ? 0 : prev + 1, paginatedGroups.length - 1);
+          const tr = document.getElementById(`order-row-${paginatedGroups[next].docNr}`);
+          const card = document.getElementById(`order-card-${paginatedGroups[next].docNr}`);
           if (window.innerWidth >= 768 && tr) tr.scrollIntoView({ block: 'nearest' });
           else if (card) card.scrollIntoView({ block: 'nearest' });
           return next;
         });
       } else if (e.key === 'ArrowUp') {
         setFocusedRowIndex(prev => {
-          if (paginatedOrders.length === 0 || prev <= 0) return prev;
+          if (paginatedGroups.length === 0 || prev <= 0) return prev;
           e.preventDefault();
           const next = Math.max(prev - 1, 0);
-          const tr = document.getElementById(`order-row-${paginatedOrders[next].id}`);
-          const card = document.getElementById(`order-card-${paginatedOrders[next].id}`);
+          const tr = document.getElementById(`order-row-${paginatedGroups[next].docNr}`);
+          const card = document.getElementById(`order-card-${paginatedGroups[next].docNr}`);
           if (window.innerWidth >= 768 && tr) tr.scrollIntoView({ block: 'nearest' });
           else if (card) card.scrollIntoView({ block: 'nearest' });
           return next;
         });
       } else if (e.key === 'Enter') {
-        if (focusedRowIndex >= 0 && focusedRowIndex < paginatedOrders.length) {
+        if (focusedRowIndex >= 0 && focusedRowIndex < paginatedGroups.length) {
           e.preventDefault();
-          onViewDetails(paginatedOrders[focusedRowIndex]);
+          toggleExpandDocNr(paginatedGroups[focusedRowIndex].docNr);
         }
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [paginatedOrders, focusedRowIndex, onViewDetails]);
+  }, [paginatedGroups, focusedRowIndex, toggleExpandDocNr]);
 
   const handlePriorityClick = (e: React.MouseEvent, orderId: string) => {
       e.stopPropagation();
@@ -565,26 +693,37 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
       }
   };
 
+  // Verificação e seleção de documentos
+  const isDocGroupSelected = (group: DocumentGroup) => {
+    return group.items.length > 0 && group.items.every(it => selectedOrderIds.has(it.id));
+  };
+
+  const isDocGroupPartiallySelected = (group: DocumentGroup) => {
+    const selectedCount = group.items.filter(it => selectedOrderIds.has(it.id)).length;
+    return selectedCount > 0 && selectedCount < group.items.length;
+  };
+
   // Bulk Selection and Update Helpers
-  const allSelected = paginatedOrders.length > 0 && paginatedOrders.every(o => selectedOrderIds.has(o.id));
+  const allSelected = paginatedGroups.length > 0 && paginatedGroups.every(isDocGroupSelected);
   
   const handleSelectAllToggle = () => {
     const newSelected = new Set(selectedOrderIds);
     if (allSelected) {
-      paginatedOrders.forEach(o => newSelected.delete(o.id));
+      paginatedGroups.forEach(g => g.items.forEach(it => newSelected.delete(it.id)));
     } else {
-      paginatedOrders.forEach(o => newSelected.add(o.id));
+      paginatedGroups.forEach(g => g.items.forEach(it => newSelected.add(it.id)));
     }
     setSelectedOrderIds(newSelected);
   };
 
-  const handleToggleSelectOrder = (e: React.MouseEvent | React.ChangeEvent, orderId: string) => {
-    e.stopPropagation();
+  const handleToggleDocSelect = (group: DocumentGroup, e?: React.MouseEvent | React.ChangeEvent) => {
+    if (e) e.stopPropagation();
     const newSelected = new Set(selectedOrderIds);
-    if (newSelected.has(orderId)) {
-      newSelected.delete(orderId);
+    const fullySelected = isDocGroupSelected(group);
+    if (fullySelected) {
+      group.items.forEach(it => newSelected.delete(it.id));
     } else {
-      newSelected.add(orderId);
+      group.items.forEach(it => newSelected.add(it.id));
     }
     setSelectedOrderIds(newSelected);
   };
@@ -675,7 +814,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
           <div>
             <h2 className="text-lg font-bold text-slate-800 dark:text-white transition-colors">Listagem de Encomendas</h2>
             <div className="flex items-center gap-2 mt-1">
-              <p className="text-xs text-slate-500 dark:text-slate-400">{finalFilteredOrders.length} registos encontrados</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{documentGroups.length} documentos ({finalFilteredOrders.length} linhas)</p>
               {filterDate && (
                   <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-in fade-in">
                       Filtro: Semana {getISOWeek(filterDate)}
@@ -787,19 +926,19 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
       </div>
 
       {/* Mobile/Tablet Header Row */}
-      <div className="xl:hidden flex justify-between items-center p-3.5 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-        <span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Painel de Pesquisa</span>
+      <div className="xl:hidden flex justify-between items-center py-2 px-3 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
+        <span className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Filtros & Pesquisa</span>
         <button
           onClick={() => setShowMobileFilters(!showMobileFilters)}
-          className={`p-1.5 rounded-xl border transition-all active:scale-95 flex items-center gap-1.5 ${
+          className={`py-1 px-2.5 rounded-lg border transition-all active:scale-95 flex items-center gap-1.5 text-xs ${
             showMobileFilters 
               ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-600 dark:border-blue-600' 
               : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'
           }`}
           title={showMobileFilters ? "Ocultar Pesquisa" : "Mostrar Pesquisa"}
         >
-          <Filter size={14} className={showMobileFilters ? "fill-white/10" : "text-slate-500"} />
-          <span className="text-xs font-bold">{showMobileFilters ? "Ocultar" : "Mostrar"}</span>
+          <Filter size={13} className={showMobileFilters ? "fill-white/10" : "text-slate-500"} />
+          <span className="font-bold">{showMobileFilters ? "Ocultar" : "Filtrar"}</span>
           {(() => {
             let count = 0;
             if (searchTerm) count++;
@@ -1090,158 +1229,280 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-950 transition-colors">
-              {paginatedOrders.map((order, index) => (
-                <tr 
-                  key={order.id} 
-                  id={`order-row-${order.id}`}
-                  onClick={() => {
-                    if (focusedRowIndex === index) {
-                      onViewDetails(order);
-                    } else {
-                      setFocusedRowIndex(index);
-                    }
-                  }}
-                  className={`hover:bg-blue-50 dark:hover:bg-slate-900 transition-colors group cursor-pointer scroll-mt-20 ${order.isArchived ? 'opacity-50 bg-slate-50 dark:bg-slate-900/50' : ''} ${selectedOrderIds.has(order.id) ? 'bg-blue-50/50 dark:bg-slate-900/40' : ''} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500 bg-blue-50/30' : ''}`}
-                >
-                  {user?.permissions?.orders === 'write' && (
-                    <td className="px-4 py-4 align-middle text-center" onClick={(e) => e.stopPropagation()}>
-                      <input 
-                        type="checkbox" 
-                        checked={selectedOrderIds.has(order.id)} 
-                        onChange={(e) => handleToggleSelectOrder(e, order.id)}
-                        className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4 bg-white dark:bg-slate-800"
-                        title="Selecionar encomenda"
-                      />
-                    </td>
-                  )}
-                  <td className="px-6 py-4 align-top">
-                    <div className="flex items-start gap-2">
-                        <div className="flex flex-col gap-1.5 shrink-0 pt-0.5 items-center">
+              {paginatedGroups.map((group, index) => {
+                const isExpanded = expandedDocNrs.has(group.docNr);
+                const isAllGroupSelected = isDocGroupSelected(group);
+                const isPartialGroupSelected = isDocGroupPartiallySelected(group);
+                const isFocused = focusedRowIndex === index;
+
+                return (
+                  <React.Fragment key={group.docNr}>
+                    <tr 
+                      id={`order-row-${group.docNr}`}
+                      onClick={() => {
+                        toggleExpandDocNr(group.docNr);
+                        setFocusedRowIndex(index);
+                      }}
+                      className={`hover:bg-blue-50/70 dark:hover:bg-slate-900/80 transition-colors group cursor-pointer scroll-mt-20 border-b border-slate-100 dark:border-slate-800/80 ${
+                        group.isArchived ? 'opacity-50 bg-slate-50 dark:bg-slate-900/50' : ''
+                      } ${
+                        isAllGroupSelected || isPartialGroupSelected ? 'bg-blue-50/40 dark:bg-slate-900/40' : ''
+                      } ${
+                        isFocused ? 'ring-2 ring-inset ring-blue-500 bg-blue-50/30' : ''
+                      } ${
+                        isExpanded ? 'bg-blue-50/20 dark:bg-slate-900/40 font-medium' : ''
+                      }`}
+                    >
+                      {user?.permissions?.orders === 'write' && (
+                        <td className="px-4 py-3.5 align-middle text-center" onClick={(e) => e.stopPropagation()}>
+                          <input 
+                            type="checkbox" 
+                            checked={isAllGroupSelected} 
+                            ref={el => { if (el) el.indeterminate = isPartialGroupSelected; }}
+                            onChange={(e) => handleToggleDocSelect(group, e)}
+                            className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4 bg-white dark:bg-slate-800"
+                            title="Selecionar todas as linhas deste documento"
+                          />
+                        </td>
+                      )}
+                      <td className="px-6 py-3.5 align-top">
+                        <div className="flex items-start gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpandDocNr(group.docNr);
+                            }}
+                            className="p-1 -ml-1 text-slate-400 hover:text-blue-600 transition-colors shrink-0 mt-0.5"
+                            title={isExpanded ? "Ocultar linhas" : "Ver linhas"}
+                          >
+                            <ChevronRight size={15} className={`transition-transform duration-200 ${isExpanded ? 'rotate-90 text-blue-600' : ''}`} />
+                          </button>
+
+                          <div className="flex flex-col gap-1 shrink-0 pt-0.5 items-center">
                             {/* Priority Flag */}
                             <div className="relative">
-                                <button 
-                                    onClick={(e) => user?.permissions?.orders === 'write' ? handlePriorityClick(e, order.id) : null}
-                                    className={`transition-all ${user?.permissions?.orders === 'write' ? 'hover:scale-110 active:scale-95 cursor-pointer' : 'cursor-default'}`}
-                                    title={user?.permissions?.orders === 'write' ? "Alterar Prioridade" : "Prioridade"}
+                              <button 
+                                onClick={(e) => user?.permissions?.orders === 'write' ? handlePriorityClick(e, group.mainOrder.id) : null}
+                                className={`transition-all ${user?.permissions?.orders === 'write' ? 'hover:scale-110 active:scale-95 cursor-pointer' : 'cursor-default'}`}
+                                title={user?.permissions?.orders === 'write' ? "Alterar Prioridade" : "Prioridade"}
+                              >
+                                <Flag size={15} className={getPriorityColor(group.priority || 0)} strokeWidth={2} />
+                              </button>
+                              
+                              {/* Priority Menu */}
+                              {openPriorityMenuId === group.mainOrder.id && (
+                                <div 
+                                  ref={menuRef}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="absolute top-6 left-0 bg-white dark:bg-slate-800 shadow-xl border border-slate-200 dark:border-slate-700 rounded-xl p-2 z-50 flex flex-col gap-1 min-w-[140px] animate-in fade-in zoom-in-95"
                                 >
-                                    <Flag size={16} className={getPriorityColor(order.priority || 0)} strokeWidth={2} />
-                                </button>
-                                
-                                {/* Priority Menu */}
-                                {openPriorityMenuId === order.id && (
-                                    <div 
-                                        ref={menuRef}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="absolute top-6 left-0 bg-white dark:bg-slate-800 shadow-xl border border-slate-200 dark:border-slate-700 rounded-xl p-2 z-50 flex flex-col gap-1 min-w-[140px] animate-in fade-in zoom-in-95"
-                                    >
-                                        <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase px-2 mb-1">Definir Prioridade</p>
-                                        <button onClick={() => handleSetPriority(order.docNr, 1)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg text-xs font-bold text-red-900 dark:text-red-400">
-                                            <Flag size={12} className="fill-red-900 dark:fill-red-400"/> Alta
-                                        </button>
-                                        <button onClick={() => handleSetPriority(order.docNr, 2)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-orange-50 dark:hover:bg-orange-900/30 rounded-lg text-xs font-bold text-orange-600 dark:text-orange-400">
-                                            <Flag size={12} className="fill-orange-500 dark:fill-orange-400"/> Média
-                                        </button>
-                                        <button onClick={() => handleSetPriority(order.docNr, 3)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 rounded-lg text-xs font-bold text-yellow-500 dark:text-yellow-400">
-                                            <Flag size={12} className="fill-yellow-400 dark:fill-yellow-400"/> Baixa
-                                        </button>
-                                        <div className="h-px bg-slate-100 dark:bg-slate-700 my-0.5"></div>
-                                        <button onClick={() => handleSetPriority(order.docNr, 0)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400">
-                                            <Flag size={12} className="text-slate-300 dark:text-slate-600"/> Remover
-                                        </button>
-                                    </div>
-                                )}
+                                  <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase px-2 mb-1">Definir Prioridade</p>
+                                  <button onClick={() => handleSetPriority(group.docNr, 1)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg text-xs font-bold text-red-900 dark:text-red-400">
+                                    <Flag size={12} className="fill-red-900 dark:fill-red-400"/> Alta
+                                  </button>
+                                  <button onClick={() => handleSetPriority(group.docNr, 2)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-orange-50 dark:hover:bg-orange-900/30 rounded-lg text-xs font-bold text-orange-600 dark:text-orange-400">
+                                    <Flag size={12} className="fill-orange-500 dark:fill-orange-400"/> Média
+                                  </button>
+                                  <button onClick={() => handleSetPriority(group.docNr, 3)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 rounded-lg text-xs font-bold text-yellow-500 dark:text-yellow-400">
+                                    <Flag size={12} className="fill-yellow-400 dark:fill-yellow-400"/> Baixa
+                                  </button>
+                                  <div className="h-px bg-slate-100 dark:bg-slate-700 my-0.5"></div>
+                                  <button onClick={() => handleSetPriority(group.docNr, 0)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400">
+                                    <Flag size={12} className="text-slate-300 dark:text-slate-600"/> Remover
+                                  </button>
+                                </div>
+                              )}
                             </div>
 
                             {/* Manual Confection 'M' Flag */}
                             <button
-                                onClick={(e) => handleManualClick(e, order.docNr, !!order.isManual)}
-                                className={`w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center border transition-all ${user?.permissions?.orders === 'write' ? 'hover:scale-110 active:scale-95 cursor-pointer' : 'cursor-default'} ${order.isManual ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800' : 'bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-400 dark:hover:text-slate-500'}`}
-                                title={user?.permissions?.orders === 'write' ? "Alternar Confeção Manual" : "Confeção Manual"}
+                              onClick={(e) => handleManualClick(e, group.docNr, group.isManual)}
+                              className={`w-3.5 h-3.5 rounded text-[8px] font-bold flex items-center justify-center border transition-all ${user?.permissions?.orders === 'write' ? 'hover:scale-110 active:scale-95 cursor-pointer' : 'cursor-default'} ${group.isManual ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800' : 'bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-400 dark:hover:text-slate-500'}`}
+                              title={user?.permissions?.orders === 'write' ? "Alternar Confeção Manual" : "Confeção Manual"}
                             >
-                                M
+                              M
                             </button>
-                        </div>
-                        
-                        <div>
-                            <span className="font-bold text-slate-800 dark:text-slate-100 block text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                                {order.docNr ? <HighlightText text={order.docNr} highlight={highlights} /> : '-'}
+                          </div>
+                          
+                          <div>
+                            <span className="font-bold text-slate-900 dark:text-slate-100 block text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                              {group.docNr ? <HighlightText text={group.docNr} highlight={highlights} /> : '-'}
                             </span>
                             <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap block mt-0.5">
-                                PO: {order.po ? <HighlightText text={order.po} highlight={highlights} /> : '-'}
+                              PO: {group.po ? <HighlightText text={group.po} highlight={highlights} /> : '-'}
                             </span>
+                          </div>
                         </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 align-top">
-                    <div className="flex flex-col gap-0.5">
-                        <span className="text-sm font-black text-slate-900 dark:text-white leading-tight block truncate max-w-[400px]" title={order.clientName}>
-                            {order.clientName ? <HighlightText text={order.clientName} highlight={highlights} /> : <span className="text-slate-300 italic">Sem Cliente</span>}
-                            {order.comercial && <span className="ml-2 text-[10px] text-blue-500 dark:text-blue-400 font-bold">({<HighlightText text={order.comercial} highlight={highlights} />})</span>}
-                        </span>
-                        <div className="flex items-center gap-1.5 text-[11px] max-w-[400px] mt-1">
-                            <span className="font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 whitespace-nowrap" title="Referência">
-                                {order.reference ? <HighlightText text={order.reference} highlight={highlights} /> : '-'}
-                            </span>
-                            {order.colorDesc && (
-                                <span className="font-medium text-slate-500 dark:text-slate-400 truncate border-l border-slate-300 dark:border-slate-700 pl-2" title={`Cor: ${order.colorDesc}`}>
-                                    <HighlightText text={order.colorDesc} highlight={highlights} />
-                                </span>
+                      </td>
+                      <td className="px-6 py-3.5 align-top">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-sm font-black text-slate-900 dark:text-white leading-tight block truncate max-w-[420px]" title={group.clientName}>
+                            {group.clientName ? <HighlightText text={group.clientName.toUpperCase()} highlight={highlights} /> : <span className="text-slate-300 italic">Sem Cliente</span>}
+                            {group.comercial && (
+                              <span className="ml-2 text-[11px] text-blue-600 dark:text-blue-400 font-bold">
+                                ({<HighlightText text={group.comercial.toUpperCase()} highlight={highlights} />})
+                              </span>
                             )}
+                          </span>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate mt-0.5">
+                            <HighlightText text={group.referenceSummary} highlight={highlights} />
+                          </div>
                         </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 align-top">
-                    <span className="text-sm font-bold text-slate-800 dark:text-slate-200 block truncate max-w-[100px]">
-                      {order.sizeDesc ? <HighlightText text={order.sizeDesc} highlight={highlights} /> : '-'}
-                    </span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block truncate max-w-[100px] uppercase font-medium mt-0.5">
-                      {order.family ? <HighlightText text={order.family} highlight={highlights} /> : '-'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 align-top">
-                    <span className="text-sm font-black text-slate-800 dark:text-slate-200 block">{order.qtyRequested.toLocaleString('pt-PT')} <span className="text-[9px] text-slate-400 dark:text-slate-500 font-normal">UN</span></span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5 mt-1">
-                       <Calendar size={11} className="text-slate-400" /> {formatDate(order.requestedDate)}
-                    </span>
-                  </td>
-                  <td className="px-2 py-4 align-middle text-center">
-                    {hasObservations(order) && (
-                        <div title="Tem observações">
+                      </td>
+                      <td className="px-6 py-3.5 align-top">
+                        <span className="text-sm font-black text-slate-800 dark:text-slate-200 block">
+                          {group.items.length} {group.items.length === 1 ? 'linha' : 'linhas'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExpandDocNr(group.docNr);
+                          }}
+                          className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline block mt-0.5 cursor-pointer text-left"
+                        >
+                          {isExpanded ? 'Ocultar linhas' : 'Ver linhas'}
+                        </button>
+                      </td>
+                      <td className="px-6 py-3.5 align-top">
+                        <span className="text-sm font-black text-slate-900 dark:text-slate-100 block">
+                          {group.totalQtyRequested.toLocaleString('pt-PT')} <span className="text-[9px] text-slate-400 dark:text-slate-500 font-normal">UN</span>
+                        </span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium block">
+                          Em aberto: {group.totalQtyOpen.toLocaleString('pt-PT')}
+                        </span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5 mt-0.5">
+                          <Calendar size={11} className="text-slate-400" /> {formatDate(group.requestedDate)}
+                        </span>
+                      </td>
+                      <td className="px-2 py-3.5 align-middle text-center">
+                        {group.hasObservations && (
+                          <div title="Tem observações no documento">
                             <Eye size={16} className="text-slate-400 dark:text-slate-500 mx-auto group-hover:text-blue-500 dark:group-hover:text-blue-400" />
-                        </div>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-2 py-3.5 align-middle text-center" onClick={(e) => e.stopPropagation()}>
+                        <StopReasonSelector 
+                          currentReason={group.mainOrder.sectorStopReasons?.['planeamento']} 
+                          onSelect={(reason) => onUpdateStopReason?.(group.docNr, 'planeamento', reason)}
+                          disabled={user?.permissions?.orders !== 'write'}
+                          hierarchy={stopReasonsHierarchy}
+                        />
+                      </td>
+                      <td className="px-6 py-3.5 align-middle text-center">
+                        {getStatusBadge(group.mainOrder)}
+                      </td>
+                      <td className="px-2 py-3.5 align-middle text-center w-[60px]" onClick={(e) => e.stopPropagation()}>
+                        {user?.role === 'admin' && onArchiveOrder ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              setOrderToArchive(group.mainOrder);
+                            }}
+                            className={`p-1.5 rounded-lg transition-all hover:scale-110 active:scale-95 ${group.isArchived ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' : 'text-slate-300 dark:text-slate-600 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
+                            title={group.isArchived ? `Desarquivar (arquivado por ${group.archivedBy})` : 'Arquivar encomenda'}
+                          >
+                            {group.isArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+                          </button>
+                        ) : (
+                          <div className="w-[16px] h-[16px]"></div>
+                        )}
+                      </td>
+                    </tr>
+
+                    {/* Subtabela de itens expandidos ao clicar no documento */}
+                    {isExpanded && (
+                      <tr className="bg-slate-50/70 dark:bg-slate-900/60 border-b border-blue-200 dark:border-blue-900/40">
+                        <td colSpan={user?.permissions?.orders === 'write' ? 10 : 9} className="p-0">
+                          <div className="p-3.5 pl-9 bg-gradient-to-r from-blue-50/50 via-slate-50/50 to-transparent dark:from-slate-900/60 dark:via-slate-900/40 dark:to-transparent border-l-4 border-l-blue-500 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                                <Layers size={13} className="text-blue-500" />
+                                Itens da Encomenda {group.docNr} ({group.items.length} {group.items.length === 1 ? 'item' : 'itens'})
+                              </span>
+                              <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                                Clique numa linha para ver detalhes completos e setores
+                              </span>
+                            </div>
+
+                            <table className="w-full text-left text-xs bg-white dark:bg-slate-950 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xs">
+                              <thead className="bg-slate-100/90 dark:bg-slate-900/90 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                                <tr>
+                                  <th className="px-3 py-2 w-[45px] text-center">Item</th>
+                                  <th className="px-4 py-2">Referência & Descrição</th>
+                                  <th className="px-3 py-2">Cor</th>
+                                  <th className="px-3 py-2">Medida</th>
+                                  <th className="px-3 py-2">Família</th>
+                                  <th className="px-3 py-2 text-right">Qtd. Pedida</th>
+                                  <th className="px-3 py-2 text-right">Em Aberto</th>
+                                  <th className="px-3 py-2 text-center">Entrega</th>
+                                  <th className="px-2 py-2 text-center w-[40px]">Obs.</th>
+                                  <th className="px-3 py-2 text-center">Estado</th>
+                                  <th className="px-3 py-2 text-center w-[100px]">Ação</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                                {group.items.map((item, idx) => (
+                                  <tr
+                                    key={item.id}
+                                    onClick={() => onViewDetails(item)}
+                                    className="hover:bg-blue-50/70 dark:hover:bg-slate-900 cursor-pointer transition-colors"
+                                  >
+                                    <td className="px-3 py-2 text-center font-bold text-slate-400 text-[11px]">
+                                      #{item.itemNr || idx + 1}
+                                    </td>
+                                    <td className="px-4 py-2 font-bold text-slate-900 dark:text-slate-100">
+                                      {item.reference ? <HighlightText text={item.reference} highlight={highlights} /> : '-'}
+                                    </td>
+                                    <td className="px-3 py-2 text-slate-600 dark:text-slate-400">
+                                      {item.colorDesc ? <HighlightText text={item.colorDesc} highlight={highlights} /> : '-'}
+                                    </td>
+                                    <td className="px-3 py-2 font-medium text-slate-700 dark:text-slate-300">
+                                      {item.sizeDesc || item.size || '-'}
+                                    </td>
+                                    <td className="px-3 py-2 text-slate-500 dark:text-slate-400 uppercase text-[11px]">
+                                      {item.family || '-'}
+                                    </td>
+                                    <td className="px-3 py-2 text-right font-black text-slate-900 dark:text-slate-100">
+                                      {item.qtyRequested?.toLocaleString('pt-PT')} <span className="text-[9px] text-slate-400 font-normal">UN</span>
+                                    </td>
+                                    <td className="px-3 py-2 text-right font-medium text-slate-600 dark:text-slate-400">
+                                      {item.qtyOpen !== undefined ? item.qtyOpen.toLocaleString('pt-PT') : '-'}
+                                    </td>
+                                    <td className="px-3 py-2 text-center font-medium text-slate-600 dark:text-slate-400">
+                                      {formatDate(item.requestedDate)}
+                                    </td>
+                                    <td className="px-2 py-2 text-center">
+                                      {hasObservations(item) && (
+                                        <Eye size={13} className="text-blue-500 mx-auto" title="Tem observações" />
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2 text-center">
+                                      {getStatusBadge(item)}
+                                    </td>
+                                    <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                      <button
+                                        onClick={() => onViewDetails(item)}
+                                        className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 text-[10px] font-bold transition-colors shadow-2xs"
+                                      >
+                                        Ver Detalhes
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
                     )}
-                  </td>
-                  <td className="px-2 py-4 align-middle text-center" onClick={(e) => e.stopPropagation()}>
-                    <StopReasonSelector 
-                        currentReason={order.sectorStopReasons?.['planeamento']} 
-                        onSelect={(reason) => onUpdateStopReason?.(order.docNr, 'planeamento', reason)}
-                        disabled={user?.permissions?.orders !== 'write'}
-                        hierarchy={stopReasonsHierarchy}
-                    />
-                  </td>
-                  <td className="px-6 py-4 align-middle text-center">
-                    {getStatusBadge(order)}
-                  </td>
-                  <td className="px-2 py-4 align-middle text-center w-[60px]" onClick={(e) => e.stopPropagation()}>
-                    {user?.role === 'admin' && onArchiveOrder ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          setOrderToArchive(order);
-                        }}
-                        className={`p-1.5 rounded-lg transition-all hover:scale-110 active:scale-95 ${order.isArchived ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' : 'text-slate-300 dark:text-slate-600 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
-                        title={order.isArchived ? `Desarquivar (arquivado por ${order.archivedBy})` : 'Arquivar encomenda'}
-                      >
-                        {order.isArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
-                      </button>
-                    ) : (
-                      <div className="w-[16px] h-[16px]"></div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {paginatedOrders.length === 0 && (
+                  </React.Fragment>
+                );
+              })}
+              {paginatedGroups.length === 0 && (
                 <tr>
                     <td colSpan={10} className="p-8 text-center text-slate-400 font-medium">
                         Nenhum resultado encontrado.
@@ -1252,158 +1513,253 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
           </table>
         </div>
         
-        {/* Mobile Grid */}
-        <div className="md:hidden grid grid-cols-1 gap-3 p-4">
-          {paginatedOrders.map((order, index) => (
-            <div 
-              key={order.id}
-              id={`order-card-${order.id}`}
-              onClick={() => {
-                if (focusedRowIndex === index) {
-                  onViewDetails(order);
-                } else {
-                  setFocusedRowIndex(index);
-                }
-              }}
-              className={`p-4 rounded-2xl border transition-colors space-y-4 scroll-mt-20 ${selectedOrderIds.has(order.id) ? 'border-blue-300 dark:border-blue-700 bg-blue-50/20 dark:bg-blue-900/10' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800'} ${focusedRowIndex === index ? 'ring-2 ring-inset ring-blue-500' : ''}`}
-            >
-              <div className="flex justify-between items-start">
-                <div className="flex items-start gap-2">
-                   {user?.permissions?.orders === 'write' && (
-                     <div className="pt-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                       <input 
-                         type="checkbox" 
-                         checked={selectedOrderIds.has(order.id)} 
-                         onChange={(e) => handleToggleSelectOrder(e, order.id)}
-                         className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4 bg-white dark:bg-slate-800 mr-1"
-                       />
-                     </div>
-                   )}
-                   {/* Mobile Flags Container */}
-                    <div className="pt-0.5 flex flex-col gap-1 items-center relative">
-                        <button 
-                            onClick={(e) => user?.permissions?.orders === 'write' ? handlePriorityClick(e, order.id) : null}
-                            className={`transition-all ${user?.permissions?.orders === 'write' ? 'cursor-pointer' : 'cursor-default'}`}
-                        >
-                           <Flag size={16} className={getPriorityColor(order.priority || 0)} strokeWidth={2} />
-                        </button>
-                        
-                        {/* Priority Menu Mobile */}
-                        {openPriorityMenuId === order.id && (
-                            <div 
-                                ref={menuRef}
-                                onClick={(e) => e.stopPropagation()}
-                                className="absolute top-6 left-0 bg-white dark:bg-slate-800 shadow-xl border border-slate-200 dark:border-slate-700 rounded-xl p-2 z-50 flex flex-col gap-1 min-w-[140px] animate-in fade-in zoom-in-95"
-                            >
-                                <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase px-2 mb-1">Definir Prioridade</p>
-                                <button onClick={() => handleSetPriority(order.docNr, 1)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg text-xs font-bold text-red-900 dark:text-red-400">
-                                    <Flag size={12} className="fill-red-900 dark:fill-red-400"/> Alta
-                                </button>
-                                <button onClick={() => handleSetPriority(order.docNr, 2)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-orange-50 dark:hover:bg-orange-900/30 rounded-lg text-xs font-bold text-orange-600 dark:text-orange-400">
-                                    <Flag size={12} className="fill-orange-500 dark:fill-orange-400"/> Média
-                                </button>
-                                <button onClick={() => handleSetPriority(order.docNr, 3)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 rounded-lg text-xs font-bold text-yellow-500 dark:text-yellow-400">
-                                    <Flag size={12} className="fill-yellow-400 dark:fill-yellow-400"/> Baixa
-                                </button>
-                                <div className="h-px bg-slate-100 dark:bg-slate-700 my-0.5"></div>
-                                <button onClick={() => handleSetPriority(order.docNr, 0)} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400">
-                                    <Flag size={12} className="text-slate-300 dark:text-slate-600"/> Remover
-                                </button>
-                            </div>
-                        )}
-                        {order.isManual ? (
-                            <div className="w-3.5 h-3.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[8px] font-bold flex items-center justify-center border border-indigo-200 dark:border-indigo-800">M</div>
-                        ) : null}
-                    </div>
-                    <div>
-                        <h3 className="font-black text-slate-800 dark:text-white text-base leading-none">{order.docNr ? <HighlightText text={order.docNr} highlight={highlights} /> : '-'}</h3>
-                        <div className="flex items-center gap-2 mt-1">
-                            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">PO: {order.po ? <HighlightText text={order.po} highlight={highlights} /> : '-'}</p>
-                            {hasObservations(order) && <Eye size={14} className="text-blue-500" />}
-                        </div>
-                    </div>
-                </div>
-                {getStatusBadge(order)}
-              </div>
-              
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3 pt-2">
-                <div className="col-span-2">
-                   <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Cliente / Comercial</p>
-                   <p className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-tight truncate">
-                        {order.clientName ? <HighlightText text={order.clientName} highlight={highlights} /> : '-'}
-                        {order.comercial && <span className="ml-1 text-[11px] text-blue-500 font-bold italic">({<HighlightText text={order.comercial} highlight={highlights} />})</span>}
-                   </p>
-                </div>
-                <div className="col-span-2">
-                   <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Ref / Cor</p>
-                   <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">{order.reference ? <HighlightText text={order.reference} highlight={highlights} /> : '-'}</span>
-                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 truncate">{order.colorDesc ? <HighlightText text={order.colorDesc} highlight={highlights} /> : ''}</span>
-                   </div>
-                </div>
-                <div>
-                   <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Medida</p>
-                   <p className="text-xs font-bold text-slate-700 dark:text-slate-300 leading-tight truncate">{order.sizeDesc ? <HighlightText text={order.sizeDesc} highlight={highlights} /> : '-'}</p>
-                </div>
-                <div>
-                   <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Família</p>
-                   <p className="text-xs font-bold text-slate-700 dark:text-slate-300 leading-tight truncate">{order.family ? <HighlightText text={order.family} highlight={highlights} /> : '-'}</p>
-                </div>
-              </div>
+        {/* Mobile Grid - 1 Cartão por Documento com expansão ao clicar */}
+        <div className="md:hidden grid grid-cols-1 gap-2 p-2">
+          {paginatedGroups.map((group, index) => {
+            const isExpanded = expandedDocNrs.has(group.docNr);
+            const isGroupSelected = isDocGroupSelected(group);
+            const isGroupPartial = isDocGroupPartiallySelected(group);
 
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <div className="text-left">
-                  <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Qtd. Pedida</p>
-                  <p className="text-sm font-black text-slate-800 dark:text-slate-200">{order.qtyRequested.toLocaleString('pt-PT')}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Entrega</p>
-                  <div className="flex items-center gap-2 justify-end">
-                    <p className="text-xs font-bold text-slate-600 dark:text-slate-400">{formatDate(order.requestedDate)}</p>
+            return (
+              <div 
+                key={group.docNr}
+                id={`order-card-${group.docNr}`}
+                onClick={() => toggleExpandDocNr(group.docNr)}
+                className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+                  isExpanded 
+                    ? 'border-blue-400 dark:border-blue-600 bg-white dark:bg-slate-900 shadow-sm ring-1 ring-blue-500/20' 
+                    : isGroupSelected || isGroupPartial
+                    ? 'border-blue-300 dark:border-blue-700 bg-blue-50/20 dark:bg-blue-900/10'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700'
+                }`}
+              >
+                {/* Linha 1: DocNr + Flags + Status */}
+                <div className="flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {user?.permissions?.orders === 'write' && (
+                      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <input 
+                          type="checkbox" 
+                          checked={isGroupSelected} 
+                          ref={el => { if (el) el.indeterminate = isGroupPartial; }}
+                          onChange={(e) => handleToggleDocSelect(group, e)}
+                          className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer w-3.5 h-3.5 bg-white dark:bg-slate-800"
+                        />
+                      </div>
+                    )}
+
+                    {/* Bandeira Prioridade & Manual */}
+                    <div className="flex items-center gap-1 shrink-0 relative" onClick={(e) => e.stopPropagation()}>
+                      <button 
+                        onClick={(e) => user?.permissions?.orders === 'write' ? handlePriorityClick(e, group.mainOrder.id) : null}
+                        className={`transition-all ${user?.permissions?.orders === 'write' ? 'cursor-pointer' : 'cursor-default'}`}
+                        title="Prioridade"
+                      >
+                        <Flag size={13} className={getPriorityColor(group.priority || 0)} strokeWidth={2} />
+                      </button>
+
+                      {openPriorityMenuId === group.mainOrder.id && (
+                        <div 
+                          ref={menuRef}
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute top-5 left-0 bg-white dark:bg-slate-800 shadow-xl border border-slate-200 dark:border-slate-700 rounded-xl p-1.5 z-50 flex flex-col gap-0.5 min-w-[130px] animate-in fade-in zoom-in-95 text-xs"
+                        >
+                          <p className="text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase px-2 mb-0.5">Prioridade</p>
+                          <button onClick={() => handleSetPriority(group.docNr, 1)} className="flex items-center gap-1.5 px-2 py-1 hover:bg-red-50 dark:hover:bg-red-900/30 rounded text-[11px] font-bold text-red-700 dark:text-red-400">
+                            <Flag size={11} className="fill-red-700 dark:fill-red-400"/> Alta
+                          </button>
+                          <button onClick={() => handleSetPriority(group.docNr, 2)} className="flex items-center gap-1.5 px-2 py-1 hover:bg-orange-50 dark:hover:bg-orange-900/30 rounded text-[11px] font-bold text-orange-600 dark:text-orange-400">
+                            <Flag size={11} className="fill-orange-500 dark:fill-orange-400"/> Média
+                          </button>
+                          <button onClick={() => handleSetPriority(group.docNr, 3)} className="flex items-center gap-1.5 px-2 py-1 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 rounded text-[11px] font-bold text-yellow-600 dark:text-yellow-400">
+                            <Flag size={11} className="fill-yellow-400 dark:fill-yellow-400"/> Baixa
+                          </button>
+                          <div className="h-px bg-slate-100 dark:bg-slate-700 my-0.5"></div>
+                          <button onClick={() => handleSetPriority(group.docNr, 0)} className="flex items-center gap-1.5 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-700 rounded text-[11px] font-medium text-slate-500">
+                            <Flag size={11} className="text-slate-300"/> Remover
+                          </button>
+                        </div>
+                      )}
+
+                      {group.isManual && (
+                        <div className="w-3 h-3 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[7px] font-black flex items-center justify-center border border-indigo-200 dark:border-indigo-800" title="Confeção Manual">M</div>
+                      )}
+                    </div>
+
+                    {/* docNr e botão para expandir */}
+                    <div 
+                      onTouchEnd={(e) => handleDocNrTouchEnd(group.docNr, e)}
+                      className="select-none flex items-center gap-1 min-w-0 group/doc"
+                    >
+                      <h3 className="font-black text-slate-800 dark:text-white text-xs leading-none tracking-tight group-hover/doc:text-blue-600 transition-colors">
+                        {group.docNr ? <HighlightText text={group.docNr} highlight={highlights} /> : '-'}
+                      </h3>
+                      
+                      <span
+                        className={`text-[9px] font-black px-1.5 py-0.2 rounded-md border flex items-center gap-0.5 transition-colors ${
+                          isExpanded 
+                            ? 'bg-blue-600 text-white border-blue-600' 
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        <span>{group.items.length} {group.items.length === 1 ? 'linha' : 'linhas'}</span>
+                        <ChevronDown size={10} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                      </span>
+                    </div>
+
+                    {group.hasObservations && (
+                      <Eye size={12} className="text-blue-500 shrink-0" title="Tem observações" />
+                    )}
+                  </div>
+
+                  {/* Estado Badge + Arquivar */}
+                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <div className="scale-90 origin-right">
+                      {getStatusBadge(group.mainOrder)}
+                    </div>
                     {user?.role === 'admin' && onArchiveOrder && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           e.preventDefault();
-                          setOrderToArchive(order);
+                          setOrderToArchive(group.mainOrder);
                         }}
-                        title={order.isArchived ? `Desarquivar (arquivado por ${order.archivedBy})` : 'Arquivar encomenda'}
-                        className={`p-1.5 rounded-lg transition-all active:scale-95 ${order.isArchived ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20' : 'text-slate-400 bg-slate-50 dark:bg-slate-800'}`}
+                        title={group.isArchived ? `Desarquivar (${group.archivedBy})` : 'Arquivar'}
+                        className={`p-1 rounded transition-all active:scale-95 ${group.isArchived ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20' : 'text-slate-400 hover:text-amber-500'}`}
                       >
-                        {order.isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                        {group.isArchived ? <ArchiveRestore size={12} /> : <Archive size={12} />}
                       </button>
                     )}
                   </div>
                 </div>
+
+                {/* Linha 2: Cliente + Comercial + Totais */}
+                <div className="mt-1 flex items-baseline justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold text-slate-900 dark:text-slate-100 truncate leading-tight">
+                      {group.clientName ? <HighlightText text={group.clientName.toUpperCase()} highlight={highlights} /> : '-'}
+                      {group.comercial && <span className="ml-1 text-[10px] text-blue-500 font-semibold italic">({<HighlightText text={group.comercial.toUpperCase()} highlight={highlights} />})</span>}
+                    </p>
+                    {group.po && (
+                      <p className="text-[9px] text-slate-400 font-medium truncate">
+                        PO: {<HighlightText text={group.po} highlight={highlights} />}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <span className="text-[11px] font-black text-slate-900 dark:text-slate-100">
+                      {group.totalQtyRequested.toLocaleString('pt-PT')} <span className="text-[8px] font-normal text-slate-400">UN</span>
+                    </span>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center justify-end gap-1 leading-none mt-0.5">
+                      <Calendar size={10} className="text-slate-400" />
+                      {formatDate(group.requestedDate)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Linha 3: Resumo quando Colapsado */}
+                {!isExpanded && (
+                  <div className="mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500">
+                    <span className="truncate flex items-center gap-1.5 flex-1 min-w-0 pr-2">
+                      <Layers size={11} className="text-blue-500 shrink-0" />
+                      <span className="truncate">{group.referenceSummary}</span>
+                    </span>
+
+                    <span className="text-[9px] text-blue-600 dark:text-blue-400 font-bold hover:underline shrink-0">
+                      Ver linhas ▼
+                    </span>
+                  </div>
+                )}
+
+                {/* ITENS EXPANDIDOS (Aparecem após Clicar no cartão) */}
+                {isExpanded && (
+                  <div 
+                    className="mt-2 pt-2 border-t border-blue-100 dark:border-slate-800 space-y-1.5 animate-in fade-in duration-150"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                        Linhas do Documento ({group.items.length})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleExpandDocNr(group.docNr)}
+                        className="text-[9px] text-blue-600 dark:text-blue-400 font-bold hover:underline"
+                      >
+                        ▲ Ocultar linhas
+                      </button>
+                    </div>
+
+                    <div className="space-y-1">
+                      {group.items.map((item, itemIdx) => (
+                        <div 
+                          key={item.id}
+                          onClick={() => onViewDetails(item)}
+                          className="p-2 bg-slate-50 dark:bg-slate-850/60 hover:bg-blue-50/50 dark:hover:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-800 transition-colors cursor-pointer flex flex-col gap-1 active:scale-99"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-[9px] font-black text-slate-400 bg-white dark:bg-slate-800 px-1 rounded border border-slate-200 dark:border-slate-700 shrink-0">
+                                #{item.itemNr || itemIdx + 1}
+                              </span>
+                              <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 truncate">
+                                {item.reference ? <HighlightText text={item.reference} highlight={highlights} /> : '-'}
+                              </span>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                                {item.colorDesc ? <HighlightText text={item.colorDesc} highlight={highlights} /> : ''}
+                              </span>
+                            </div>
+                            <span className="text-[11px] font-black text-slate-900 dark:text-slate-100 shrink-0">
+                              {item.qtyRequested.toLocaleString('pt-PT')} UN
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                            <span className="truncate">
+                              {item.sizeDesc || item.size || '-'} {item.family ? `• ${item.family}` : ''}
+                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                              {hasObservations(item) && <Eye size={12} className="text-blue-500" title="Tem observações" />}
+                              <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                                Detalhes →
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
-          {paginatedOrders.length === 0 && (
-             <div className="p-8 text-center text-slate-400 font-medium">Nenhum resultado encontrado.</div>
+            );
+          })}
+          {paginatedGroups.length === 0 && (
+             <div className="p-8 text-center text-slate-400 font-medium text-xs">Nenhum resultado encontrado.</div>
           )}
         </div>
       </div>
 
       {/* Pagination Footer */}
       {totalPages > 1 && (
-        <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3 flex items-center justify-between shrink-0 safe-bottom transition-colors">
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium pl-2">
+        <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-2.5 flex items-center justify-between shrink-0 safe-bottom transition-colors">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium pl-2">
                 Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
             </span>
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
                 <button 
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:hover:bg-transparent text-slate-600 dark:text-slate-400"
+                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:hover:bg-transparent text-slate-600 dark:text-slate-400"
                 >
-                    <ChevronLeft size={20} />
+                    <ChevronLeft size={18} />
                 </button>
                 <button 
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:hover:bg-transparent text-slate-600 dark:text-slate-400"
+                    disabled={currentPage >= totalPages}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:hover:bg-transparent text-slate-600 dark:text-slate-400"
                 >
-                    <ChevronRight size={20} />
+                    <ChevronRight size={18} />
                 </button>
             </div>
         </div>

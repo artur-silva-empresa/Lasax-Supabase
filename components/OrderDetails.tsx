@@ -89,28 +89,30 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ order, onClose, onUpdateOrd
   return (
     <div className="bg-[#f8fafc] dark:bg-slate-950 w-full h-full flex flex-col overflow-hidden">
         {/* Header matching LAYOUT.png */}
-        <header className="px-8 py-3 flex justify-between items-start shrink-0">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2">
-                <div className="text-blue-600 dark:text-blue-400">
-                    <User size={20} strokeWidth={2.5} />
+        <header className="px-3 md:px-8 py-2 md:py-3 flex justify-between items-start shrink-0">
+          <div className="space-y-0.5 min-w-0 flex-1 pr-2">
+            <div className="flex items-center gap-1.5 md:gap-2">
+                <div className="text-blue-600 dark:text-blue-400 shrink-0">
+                    <User size={18} strokeWidth={2.5} />
                 </div>
-                <h1 className="text-2xl font-black text-[#1e40af] dark:text-blue-400 uppercase tracking-tight flex items-center gap-3">
-                    {order.clientName}
-                    <span className="text-[#94a3b8] font-bold text-xl">{order.docNr}</span>
+                <h1 className="text-base md:text-2xl font-black text-[#1e40af] dark:text-blue-400 uppercase tracking-tight flex items-center gap-2 truncate">
+                    <span className="truncate">{order.clientName}</span>
+                    <span className="text-[#94a3b8] font-bold text-sm md:text-xl shrink-0">{order.docNr}</span>
                 </h1>
             </div>
-            <div className="text-[#64748b] dark:text-slate-400 font-bold text-base flex items-center gap-2 pl-7">
-                {order.reference} - {order.colorDesc} <span className="text-[#cbd5e1]">•</span> {order.sizeDesc || order.size}
+            <div className="text-[#64748b] dark:text-slate-400 font-bold text-xs md:text-base flex items-center gap-1.5 pl-5 md:pl-7 truncate">
+                <span className="truncate">{order.reference} - {order.colorDesc}</span>
+                <span className="text-[#cbd5e1] shrink-0">•</span>
+                <span className="shrink-0">{order.sizeDesc || order.size}</span>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white dark:hover:bg-slate-800 rounded-full text-slate-400 transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700 shadow-sm shrink-0">
-            <X size={28} />
+          <button onClick={onClose} className="p-1.5 md:p-2 hover:bg-white dark:hover:bg-slate-800 rounded-full text-slate-400 transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700 shadow-sm shrink-0">
+            <X size={22} />
           </button>
         </header>
 
         {/* 3-Column Content Layout */}
-        <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden px-4 lg:px-6 pb-16 lg:pb-2 gap-6">
+        <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden px-2 md:px-6 pb-12 lg:pb-2 gap-3 lg:gap-6">
 
             {/* Combined Column 1 & 2: FLUXO + OBS (Vertical Scrollable) */}
             <main className="flex-1 flex flex-col min-w-0 lg:overflow-hidden">

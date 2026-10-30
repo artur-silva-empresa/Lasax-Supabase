@@ -52,6 +52,72 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
   const [isProductionOpen, setIsProductionOpen] = React.useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
 
+  // Controlo de visibilidade do menu móvel (auto-hide ao fazer scroll vertical para baixo, reaparece ao voltar ao topo)
+  const [isMobileNavVisible, setIsMobileNavVisible] = React.useState(true);
+
+  React.useEffect(() => {
+    // Sempre visível ao mudar de ecrã/vista
+    setIsMobileNavVisible(true);
+  }, [activeView]);
+
+  React.useEffect(() => {
+    let lastScrollY = 0;
+    let ticking = false;
+
+    const onScrollPosition = (currentScrollY: number) => {
+      const delta = currentScrollY - lastScrollY;
+
+      // Se estiver perto do topo (<= 25px), mostrar sempre o menu
+      if (currentScrollY <= 25) {
+        setIsMobileNavVisible(true);
+      } else if (delta > 8 && currentScrollY > 40) {
+        // A fazer scroll para baixo pelas encomendas -> ocultar o menu para utilizar toda a altura do ecrã
+        setIsMobileNavVisible(false);
+      } else if (delta < -8) {
+        // A fazer scroll para cima / em direção ao topo -> mostrar o menu
+        setIsMobileNavVisible(true);
+      }
+
+      lastScrollY = currentScrollY;
+    };
+
+    const handleNativeScroll = (e: Event) => {
+      if (window.innerWidth >= 768) return;
+      const target = e.target as HTMLElement;
+      if (!target || typeof target.scrollTop !== 'number') return;
+      
+      const currentScrollY = target.scrollTop;
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          onScrollPosition(currentScrollY);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    const handleCustomScroll = (e: any) => {
+      if (window.innerWidth >= 768) return;
+      const { scrollTop, isAtTop, isScrollingDown } = e.detail || {};
+      if (typeof scrollTop === 'number') {
+        if (isAtTop || scrollTop <= 25) {
+          setIsMobileNavVisible(true);
+        } else if (isScrollingDown && scrollTop > 40) {
+          setIsMobileNavVisible(false);
+        } else if (!isScrollingDown) {
+          setIsMobileNavVisible(true);
+        }
+      }
+    };
+
+    document.addEventListener('scroll', handleNativeScroll, { capture: true, passive: true });
+    window.addEventListener('app-scroll', handleCustomScroll);
+    return () => {
+      document.removeEventListener('scroll', handleNativeScroll, { capture: true });
+      window.removeEventListener('app-scroll', handleCustomScroll);
+    };
+  }, []);
+
   // Estados e lógica de Ecrã Inteiro (Fullscreen)
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const [isFullscreenSupported, setIsFullscreenSupported] = React.useState(true);
@@ -547,7 +613,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
 
       {/* Main Content Container */}
       <div className="flex-1 flex flex-col min-w-0 relative h-full">
-        <header className="h-14 md:h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 z-40 transition-colors duration-300">
+        <header className={`h-12 md:h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 md:px-8 shrink-0 z-40 transition-all duration-300 ease-in-out ${
+          !isMobileNavVisible ? '-translate-y-full md:translate-y-0 -mb-12 md:mb-0 pointer-events-none md:pointer-events-auto' : 'translate-y-0'
+        }`}>
           <div className="flex items-center gap-3">
             {/* Hamburger menu / Sidebar toggler */}
             <button 
@@ -829,42 +897,58 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
         </header>
 
         {/* ÁREA DE CONTEÚDO */}
-        <main className="flex-1 overflow-hidden relative pb-24 md:pb-0">
+        <main className={`flex-1 overflow-hidden relative transition-all duration-300 md:pb-0 ${
+          isMobileNavVisible ? 'pb-14' : 'pb-0'
+        }`}>
           <div className="w-full h-full">
             {children}
           </div>
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation - Fixa na base */}
+      {/* Mobile Bottom Navigation - Oculta ao fazer scroll para baixo e reaparece ao voltar ao topo */}
       <nav 
-        className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around px-2 z-50 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]"
-        style={{ height: 'calc(4rem + env(safe-area-inset-bottom))', paddingBottom: 'env(safe-area-inset-bottom)' }}
+        className={`md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around px-2 z-50 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] transition-all duration-300 ease-in-out ${
+          isMobileNavVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'
+        }`}
+        style={{ height: 'calc(3.5rem + env(safe-area-inset-bottom))', paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {menuItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setActiveView(item.id)}
-            className={`flex flex-col items-center justify-center gap-1 min-w-[64px] transition-colors ${
+            className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] transition-colors py-1 ${
               activeView === item.id || (item.id === 'orders' && activeView === 'order-details') ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'
             }`}
           >
-            <item.icon size={20} strokeWidth={activeView === item.id ? 2.5 : 2} />
-            <span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span>
+            <item.icon size={18} strokeWidth={activeView === item.id ? 2.5 : 2} />
+            <span className="text-[9px] font-bold uppercase tracking-tighter">{item.label}</span>
           </button>
         ))}
         {user?.role === 'admin' && (
         <button
           onClick={onImportClick}
-          className="flex flex-col items-center justify-center gap-1 min-w-[64px] text-emerald-600 dark:text-emerald-500"
+          className="flex flex-col items-center justify-center gap-0.5 min-w-[56px] text-emerald-600 dark:text-emerald-500 py-1"
         >
-          <div className="bg-emerald-100 dark:bg-emerald-900/30 p-2 rounded-full -mt-8 shadow-md border-2 border-white dark:border-slate-900">
-            <Upload size={20} strokeWidth={2.5} />
+          <div className="bg-emerald-100 dark:bg-emerald-900/30 p-1.5 rounded-full -mt-6 shadow-md border-2 border-white dark:border-slate-900">
+            <Upload size={18} strokeWidth={2.5} />
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-tighter">Importar</span>
+          <span className="text-[9px] font-bold uppercase tracking-tighter">Importar</span>
         </button>
         )}
       </nav>
+
+      {/* Botão flutuante para reexibir o menu se estiver oculto no scroll */}
+      {!isMobileNavVisible && (
+        <button
+          onClick={() => setIsMobileNavVisible(true)}
+          className="md:hidden fixed bottom-3 right-3 z-40 bg-slate-900/90 dark:bg-slate-800/90 backdrop-blur-md text-white p-2 rounded-full shadow-lg border border-slate-700/50 flex items-center gap-1.5 px-3 animate-in fade-in zoom-in-95 text-[10px] font-bold active:scale-95 transition-transform"
+          title="Mostrar Menu"
+        >
+          <Menu size={14} />
+          <span>Menu</span>
+        </button>
+      )}
 
       {/* Mobile Drawer Overlay */}
       {isMobileMenuOpen && (
