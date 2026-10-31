@@ -90,7 +90,8 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
   const [searchTerm, setSearchTerm] = React.useState('');
   const deferredSearch = React.useDeferredValue(searchTerm);
   const [currentPage, setCurrentPage] = React.useState(1);
-  const [showMobileFilters, setShowMobileFilters] = React.useState(true);
+  // Filtros fechados por predefinição em smartphone
+  const [showMobileFilters, setShowMobileFilters] = React.useState(false);
   const lastScrollTop = React.useRef(0);
 
   // Estados para exportação Tabela Personalizada
@@ -846,7 +847,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
 
       {/* Table */}
       <div className="flex-1 overflow-y-auto w-full relative" onScroll={handleListScroll}>
-        <div className="hidden md:block overflow-x-auto h-full min-h-[300px]">
+        <div className="compact-desktop-only overflow-x-auto h-full min-h-[300px]">
           <table className="min-w-full w-max text-left border-collapse table-fixed">
             <thead className="bg-slate-100 dark:bg-slate-900 sticky top-0 z-20 shadow-sm">
             <tr>
@@ -1061,11 +1062,11 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
         </table>
         </div>
 
-        {/* Mobile Grid - Versão smartphone afinada para o setor:
+        {/* Mobile Grid - Versão smartphone afinada para o setor (Vertical e Landscape sem scroll lateral):
             - Tipografia e espaçamentos reduzidos para maximizar painel de leitura
             - Colapsa todos os itens da mesma encomenda (docNr) numa só linha
             - Duplo clique no número do documento (docNr) expande todos os itens */}
-        <div className="md:hidden grid grid-cols-1 gap-2 p-2">
+        <div className="compact-mobile-only grid grid-cols-1 gap-1.5 p-1.5 sm:p-2 w-full max-w-full overflow-x-hidden">
           {mobilePaginatedGroups.map((group, index) => {
             const isExpanded = expandedDocNrs.has(group.docNr);
 

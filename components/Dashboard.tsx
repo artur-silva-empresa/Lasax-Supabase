@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend
 } from 'recharts';
-import { TrendingUp, AlertCircle, Calendar, CheckCircle2 } from 'lucide-react';
+import { TrendingUp, AlertCircle, Calendar, CheckCircle2, BarChart3 } from 'lucide-react';
 import { Order, DashboardKPIs } from '../types';
 import { calculateKPIs, getWeekRange } from '../services/dataService';
 import { SECTORS } from '../constants';
@@ -155,6 +155,78 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders }) => 
     ];
   }, [orders]);
 
+  // Gráfico de Barras: Encomendas concluídas por semana durante o último mês
+  const completedOrdersWeeklyData = React.useMemo(() => {
+    const now = new Date();
+    // 4 semanas do último mês: 3 semanas anteriores (-3, -2, -1) e semana corrente (0)
+    const offsets = [-3, -2, -1, 0];
+
+    const weeks = offsets.map(offset => {
+      const d = new Date(now);
+      d.setDate(d.getDate() + offset * 7);
+      const { start, end } = getWeekRange(d);
+
+      // Calcular número da semana ISO
+      const dateForWeek = new Date(Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()));
+      const dayNum = dateForWeek.getUTCDay() || 7;
+      dateForWeek.setUTCDate(dateForWeek.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(dateForWeek.getUTCFullYear(), 0, 1));
+      const weekNum = Math.ceil((((dateForWeek.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+
+      const monthStart = start.toLocaleString('pt-PT', { month: 'short' });
+      const monthEnd = end.toLocaleString('pt-PT', { month: 'short' });
+      const dateRangeStr = monthStart === monthEnd
+        ? `${start.getDate()} a ${end.getDate()} ${monthStart}`
+        : `${start.getDate()} ${monthStart} a ${end.getDate()} ${monthEnd}`;
+
+      return {
+        offset,
+        start,
+        end,
+        weekNum,
+        label: `Sem. ${weekNum}`,
+        fullLabel: `Semana ${weekNum} (${dateRangeStr})`,
+        dateRange: dateRangeStr,
+        isCurrentWeek: offset === 0
+      };
+    });
+
+    return weeks.map(w => {
+      const completedDocSet = new Set<string>();
+      let completedPieces = 0;
+
+      orders.forEach(order => {
+        const isCompleted = order.qtyOpen === 0 || 
+          (order.stockCxQty >= order.qtyRequested && order.qtyRequested > 0);
+
+        if (!isCompleted) return;
+
+        // Data de conclusão relevante
+        const compDate = order.armExpDate || order.dataEnt || order.archivedAt || order.requestedDate || order.issueDate;
+        if (!compDate) return;
+
+        const date = new Date(compDate);
+        if (date >= w.start && date <= w.end) {
+          completedDocSet.add(order.docNr);
+          completedPieces += (order.stockCxQty || order.qtyRequested || 0);
+        }
+      });
+
+      return {
+        label: w.label,
+        semana: w.fullLabel,
+        dateRange: w.dateRange,
+        concluidas: completedDocSet.size,
+        pecas: completedPieces,
+        isCurrentWeek: w.isCurrentWeek
+      };
+    });
+  }, [orders]);
+
+  const totalCompletedLastMonth = React.useMemo(() => {
+    return completedOrdersWeeklyData.reduce((acc, curr) => acc + curr.concluidas, 0);
+  }, [completedOrdersWeeklyData]);
+
   return (
     <div className="h-full overflow-y-auto p-4 md:p-8 scroll-smooth">
       <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-4">
@@ -206,14 +278,14 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders }) => 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col transition-colors">
             <h3 className="font-black text-slate-700 dark:text-slate-200 text-xs uppercase tracking-widest mb-1">Carga por Sector (Em Falta)</h3>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-4">Total de encomendas para execução em cada secção nas próximas 4 semanas (Documentos Únicos).</p>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-3">Total de encomendas para execução em cada secção nas próximas 4 semanas (Documentos Únicos).</p>
             <div className="w-full overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-              <table className="w-full min-w-max text-left border-collapse">
+              <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800/50">
-                    <th className="px-4 py-3 text-xs font-bold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">Sector</th>
+                    <th className="px-2.5 py-2 text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">Sector</th>
                     {weeklyLoadData.columns.map((col, i) => (
-                      <th key={i} className="px-4 py-3 text-xs font-bold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                      <th key={i} className="px-2 py-2 text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 text-center">
                         {col.label}
                       </th>
                     ))}
@@ -222,27 +294,27 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders }) => 
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                   {weeklyLoadData.data.map((row, i) => (
                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      <td className="px-2.5 py-2 text-[11px] sm:text-sm font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         {row.name}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                        <span className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 py-1 px-2 rounded-md font-medium text-xs">
-                           {row.w0} Docs
+                      <td className="px-1.5 py-2 text-center">
+                        <span className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 py-0.5 px-1.5 rounded text-[10px] font-bold">
+                           {row.w0}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                        <span className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 py-1 px-2 rounded-md font-medium text-xs">
-                           {row.w1} Docs
+                      <td className="px-1.5 py-2 text-center">
+                        <span className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 py-0.5 px-1.5 rounded text-[10px] font-bold">
+                           {row.w1}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                        <span className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 py-1 px-2 rounded-md font-medium text-xs">
-                           {row.w2} Docs
+                      <td className="px-1.5 py-2 text-center">
+                        <span className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 py-0.5 px-1.5 rounded text-[10px] font-bold">
+                           {row.w2}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                        <span className="bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300 py-1 px-2 rounded-md font-medium text-xs">
-                           {row.w3} Docs
+                      <td className="px-1.5 py-2 text-center">
+                        <span className="bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300 py-0.5 px-1.5 rounded text-[10px] font-bold">
+                           {row.w3}
                         </span>
                       </td>
                     </tr>
@@ -280,9 +352,110 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders }) => 
           </div>
         </div>
 
-        {/* Charts Grid Row 2 */}
-        <div className="grid grid-cols-1 gap-4 md:gap-6">
-          {/* Gráfico de Progresso por Sector (Barras Verticais) */}
+        {/* Charts Grid Row 2: Fluxo de Produção & Taxa de Conclusão */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+          {/* Gráfico 1: Encomendas Concluídas por Semana (Último Mês) */}
+          <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col transition-colors">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-black text-slate-700 dark:text-slate-200 text-xs uppercase tracking-widest">
+                    Encomendas Concluídas por Semana
+                  </h3>
+                  <span className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                    Último Mês
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                  Fluxo de produção e expedição nas últimas 4 semanas de laboração (documentos concluídos).
+                </p>
+              </div>
+              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-700/80">
+                  <span className="text-[10px] text-slate-400 uppercase font-black">Total Mês:</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-black text-xs">{totalCompletedLastMonth} Docs</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="h-[250px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={completedOrdersWeeklyData} margin={{ top: 15, right: 10, left: -15, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="completedWeekGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.95}/>
+                      <stop offset="100%" stopColor="#059669" stopOpacity={0.75}/>
+                    </linearGradient>
+                    <linearGradient id="completedCurrentGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.95}/>
+                      <stop offset="100%" stopColor="#2563eb" stopOpacity={0.75}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
+                  <XAxis 
+                    dataKey="label" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }} 
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    allowDecimals={false}
+                    tick={{ fill: '#64748b', fontSize: 11 }} 
+                  />
+                  <Tooltip 
+                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-slate-900/95 backdrop-blur-sm border border-slate-700/80 p-3 rounded-xl shadow-xl text-white text-xs">
+                            <p className="font-bold text-slate-200 mb-1.5 flex items-center justify-between gap-3">
+                              <span>{data.semana}</span>
+                              {data.isCurrentWeek && (
+                                <span className="text-[9px] bg-blue-500/30 text-blue-300 px-1.5 py-0.2 rounded font-black border border-blue-400/30">
+                                  Corrente
+                                </span>
+                              )}
+                            </p>
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between gap-4">
+                                <span className="text-slate-400">Encomendas:</span>
+                                <span className="font-black text-emerald-400 text-sm">{data.concluidas} docs</span>
+                              </div>
+                              {data.pecas > 0 && (
+                                <div className="flex items-center justify-between gap-4">
+                                  <span className="text-slate-400">Peças Fechadas:</span>
+                                  <span className="font-bold text-slate-200">{data.pecas.toLocaleString('pt-PT')} UN</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar 
+                    dataKey="concluidas" 
+                    radius={[6, 6, 0, 0]} 
+                    barSize={38} 
+                    name="Encomendas Concluídas"
+                  >
+                    {completedOrdersWeeklyData.map((entry, index) => (
+                      <Cell 
+                        key={`completed-cell-${index}`} 
+                        fill={entry.isCurrentWeek ? "url(#completedCurrentGradient)" : "url(#completedWeekGradient)"} 
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Gráfico 2: Taxa de Conclusão por Sector (Barras Verticais) */}
           <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col transition-colors">
             <h3 className="font-black text-slate-700 dark:text-slate-200 text-xs uppercase tracking-widest mb-1">Taxa de Conclusão por Sector</h3>
             <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-4">Percentagem de peças concluídas face ao total encomendado em cada secção.</p>

@@ -85,12 +85,56 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
   const [selectedOrderIds, setSelectedOrderIds] = React.useState<Set<string>>(new Set());
   const [bulkArchiveConfirm, setBulkArchiveConfirm] = React.useState(false);
   const [bulkUnarchiveConfirm, setBulkUnarchiveConfirm] = React.useState(false);
-  const [showMobileFilters, setShowMobileFilters] = React.useState(true);
+  // Menu de filtros por predefinição colapsado
+  const [showMobileFilters, setShowMobileFilters] = React.useState(false);
+  // Visibilidade do cabeçalho da tabela de encomendas no smartphone (ocultado ao fazer scroll)
+  const [isHeaderVisible, setIsHeaderVisible] = React.useState(true);
   const lastScrollTop = React.useRef(0);
+
+  // Deteta smartphone em posição normal (portrait < 768px) ou landscape (altura compacta <= 560px)
+  const [isCompactDevice, setIsCompactDevice] = React.useState(() => {
+    if (typeof window === 'undefined') return false;
+    return (
+      window.innerWidth < 768 ||
+      (window.innerHeight <= 560 && window.innerWidth > window.innerHeight) ||
+      (typeof window.matchMedia === 'function' && window.matchMedia('(orientation: landscape) and (max-height: 560px)').matches)
+    );
+  });
+
+  React.useEffect(() => {
+    const handleDeviceCheck = () => {
+      const isMobile = window.innerWidth < 768;
+      const isLandscapeMobile = (window.innerHeight <= 560 && window.innerWidth > window.innerHeight) ||
+        (typeof window.matchMedia === 'function' && window.matchMedia('(orientation: landscape) and (max-height: 560px)').matches);
+      setIsCompactDevice(isMobile || isLandscapeMobile);
+    };
+
+    window.addEventListener('resize', handleDeviceCheck);
+    window.addEventListener('orientationchange', handleDeviceCheck);
+    return () => {
+      window.removeEventListener('resize', handleDeviceCheck);
+      window.removeEventListener('orientationchange', handleDeviceCheck);
+    };
+  }, []);
 
   const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const scrollTop = e.currentTarget.scrollTop;
     const isScrollingDown = scrollTop > lastScrollTop.current;
+    const delta = scrollTop - lastScrollTop.current;
+
+    // Em smartphone (posição normal ou landscape): auto-hide do cabeçalho ao fazer scroll
+    if (isCompactDevice) {
+      if (scrollTop <= 20) {
+        setIsHeaderVisible(true);
+      } else if (isScrollingDown && delta > 6 && scrollTop > 30) {
+        setIsHeaderVisible(false);
+        if (showMobileFilters) {
+          setShowMobileFilters(false);
+        }
+      } else if (delta < -6) {
+        setIsHeaderVisible(true);
+      }
+    }
 
     if (window.innerWidth < 1280) {
       if (isScrollingDown && scrollTop > 50) {
@@ -111,6 +155,25 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
 
     lastScrollTop.current = scrollTop;
   };
+
+  React.useEffect(() => {
+    const handleAppScroll = (e: any) => {
+      if (!isCompactDevice) return;
+      const { scrollTop, isScrollingDown, isAtTop } = e.detail || {};
+      if (typeof scrollTop === 'number') {
+        if (isAtTop || scrollTop <= 20) {
+          setIsHeaderVisible(true);
+        } else if (isScrollingDown && scrollTop > 30) {
+          setIsHeaderVisible(false);
+          setShowMobileFilters(false);
+        } else if (!isScrollingDown) {
+          setIsHeaderVisible(true);
+        }
+      }
+    };
+    window.addEventListener('app-scroll', handleAppScroll);
+    return () => window.removeEventListener('app-scroll', handleAppScroll);
+  }, [isCompactDevice]);
   
   // Ref para fechar menu ao clicar fora
   const menuRef = React.useRef<HTMLDivElement>(null);
@@ -806,167 +869,176 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
 
   return (
     <div className="flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500">
-      <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400">
-            <ListFilter size={24} />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-800 dark:text-white transition-colors">Listagem de Encomendas</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-xs text-slate-500 dark:text-slate-400">{documentGroups.length} documentos ({finalFilteredOrders.length} linhas)</p>
-              {filterDate && (
-                  <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-in fade-in">
-                      Filtro: Semana {getISOWeek(filterDate)}
-                  </span>
-              )}
-              {filterManual && (
-                  <span className="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 animate-in fade-in">
-                      Filtro: Conf. Manual
-                  </span>
-              )}
-              {filterArchived === 'archived' && (
-                  <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 animate-in fade-in flex items-center gap-1">
-                      <Archive size={10} /> Arquivadas
-                  </span>
-              )}
-              {filterArchived === 'all' && (
-                  <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 animate-in fade-in">
-                      A mostrar tudo
-                  </span>
-              )}
+      {/* Barra de Topo do Cabeçalho com Auto-Hide no Smartphone (Normal e Landscape) */}
+      <div 
+        className={`transition-all duration-300 ease-in-out shrink-0 overflow-hidden ${
+          isCompactDevice && !isHeaderVisible
+            ? 'max-h-0 opacity-0 pointer-events-none -translate-y-2'
+            : 'max-h-[500px] opacity-100 translate-y-0'
+        }`}
+      >
+        <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="p-1.5 sm:p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400 shrink-0">
+              <ListFilter size={20} className="sm:w-6 sm:h-6" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white transition-colors truncate">Listagem de Encomendas</h2>
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1">
+                <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">{documentGroups.length} documentos ({finalFilteredOrders.length} linhas)</p>
+                {filterDate && (
+                    <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-in fade-in">
+                        Filtro: Semana {getISOWeek(filterDate)}
+                    </span>
+                )}
+                {filterManual && (
+                    <span className="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 animate-in fade-in">
+                        Filtro: Conf. Manual
+                    </span>
+                )}
+                {filterArchived === 'archived' && (
+                    <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 animate-in fade-in flex items-center gap-1">
+                        <Archive size={10} /> Arquivadas
+                    </span>
+                )}
+                {filterArchived === 'all' && (
+                    <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 animate-in fade-in">
+                        A mostrar tudo
+                    </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-        
-        <div className="hidden xl:flex items-center gap-2">
-            {/* Botão Exportar Tabela (Personalizada) */}
-            <button
-              onClick={handleTableExport}
-              disabled={isExportingTable}
-              className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[150px] justify-center ${
-                tableExportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
-              }`}
-              title="Exportar Tabela (Colunas Personalizadas)"
-            >
-               {isExportingTable ? (
-                  <>
-                      <Loader2 size={16} className="animate-spin" />
-                      <span className="text-xs font-bold uppercase">A Gerar...</span>
-                  </>
-               ) : tableExportSuccess ? (
-                  <>
-                      <Check size={16} />
-                      <span className="text-xs font-bold uppercase">Sucesso</span>
-                  </>
-               ) : (
-                  <>
-                      <Download size={16} />
-                      <span className="text-xs font-bold uppercase">Exportar Tabela Editável</span>
-                  </>
-               )}
-            </button>
-
-            {/* Botão Exportar Excel */}
-            <button 
-              onClick={handleExcelExport}
-              disabled={isExportingExcel}
-              className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[150px] justify-center ${
-                excelExportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
-              }`}
-              title="Exportar Lista para Excel"
-            >
-               {isExportingExcel ? (
-                  <>
-                      <Loader2 size={16} className="animate-spin" />
-                      <span className="text-xs font-bold uppercase">A Gerar...</span>
-                  </>
-               ) : excelExportSuccess ? (
-                  <>
-                      <Check size={16} />
-                      <span className="text-xs font-bold uppercase">Sucesso</span>
-                  </>
-               ) : (
-                  <>
-                      <FileSpreadsheet size={16} />
-                      <span className="text-xs font-bold uppercase">Exportar Excel</span>
-                  </>
-               )}
-            </button>
-
-            {/* Botão Exportar BD */}
-            {user?.permissions?.config === 'write' && (
-            <button 
-                onClick={handleExport}
-                disabled={isExporting}
-                className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[140px] justify-center ${
-                    exportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400'
+          
+          <div className="hidden xl:flex items-center gap-2">
+              {/* Botão Exportar Tabela (Personalizada) */}
+              <button
+                onClick={handleTableExport}
+                disabled={isExportingTable}
+                className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[150px] justify-center ${
+                  tableExportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
                 }`}
-                title="Exportar Base de Dados (SQLite)"
-                >
-                {isExporting ? (
+                title="Exportar Tabela (Colunas Personalizadas)"
+              >
+                 {isExportingTable ? (
                     <>
                         <Loader2 size={16} className="animate-spin" />
                         <span className="text-xs font-bold uppercase">A Gerar...</span>
                     </>
-                ) : exportSuccess ? (
+                 ) : tableExportSuccess ? (
                     <>
                         <Check size={16} />
-                        <span className="text-xs font-bold uppercase">Guardado</span>
+                        <span className="text-xs font-bold uppercase">Sucesso</span>
                     </>
-                ) : (
+                 ) : (
                     <>
-                        <Database size={16} />
-                        <span className="text-xs font-bold uppercase">Exportar BD</span>
+                        <Download size={16} />
+                        <span className="text-xs font-bold uppercase">Exportar Tabela Editável</span>
                     </>
-                )}
-            </button>
-            )}
+                 )}
+              </button>
+
+              {/* Botão Exportar Excel */}
+              <button 
+                onClick={handleExcelExport}
+                disabled={isExportingExcel}
+                className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[150px] justify-center ${
+                  excelExportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
+                }`}
+                title="Exportar Lista para Excel"
+              >
+                 {isExportingExcel ? (
+                    <>
+                        <Loader2 size={16} className="animate-spin" />
+                        <span className="text-xs font-bold uppercase">A Gerar...</span>
+                    </>
+                 ) : excelExportSuccess ? (
+                    <>
+                        <Check size={16} />
+                        <span className="text-xs font-bold uppercase">Sucesso</span>
+                    </>
+                 ) : (
+                    <>
+                        <FileSpreadsheet size={16} />
+                        <span className="text-xs font-bold uppercase">Exportar Excel</span>
+                    </>
+                 )}
+              </button>
+
+              {/* Botão Exportar BD */}
+              {user?.permissions?.config === 'write' && (
+              <button 
+                  onClick={handleExport}
+                  disabled={isExporting}
+                  className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[140px] justify-center ${
+                      exportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400'
+                  }`}
+                  title="Exportar Base de Dados (SQLite)"
+                  >
+                  {isExporting ? (
+                      <>
+                          <Loader2 size={16} className="animate-spin" />
+                          <span className="text-xs font-bold uppercase">A Gerar...</span>
+                      </>
+                  ) : exportSuccess ? (
+                      <>
+                          <Check size={16} />
+                          <span className="text-xs font-bold uppercase">Guardado</span>
+                      </>
+                  ) : (
+                      <>
+                          <Database size={16} />
+                          <span className="text-xs font-bold uppercase">Exportar BD</span>
+                      </>
+                  )}
+              </button>
+              )}
+          </div>
+        </div>
+
+        {/* Mobile/Tablet Header Row */}
+        <div className="xl:hidden flex justify-between items-center py-2 px-3 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
+          <span className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Filtros & Pesquisa</span>
+          <button
+            onClick={() => setShowMobileFilters(!showMobileFilters)}
+            className={`py-1 px-2.5 rounded-lg border transition-all active:scale-95 flex items-center gap-1.5 text-xs ${
+              showMobileFilters 
+                ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-600 dark:border-blue-600' 
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'
+            }`}
+            title={showMobileFilters ? "Ocultar Pesquisa" : "Mostrar Pesquisa"}
+          >
+            <Filter size={13} className={showMobileFilters ? "fill-white/10" : "text-slate-500"} />
+            <span className="font-bold">{showMobileFilters ? "Ocultar" : "Filtrar"}</span>
+            {(() => {
+              let count = 0;
+              if (searchTerm) count++;
+              if (filterDate) count++;
+              if (filterPriority !== 'All') count++;
+              if (filterDocSeries !== 'All') count++;
+              if (filterComercial !== 'All') count++;
+              if (filterReference !== 'All') count++;
+              if (filterStatus !== 'All') count++;
+              if (filterArchived !== 'active') count++;
+              if (filterManual) count++;
+              if (filterHasObservations) count++;
+              if (count > 0) {
+                return (
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                    showMobileFilters ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
+                  }`}>
+                    {count}
+                  </span>
+                );
+              }
+              return null;
+            })()}
+          </button>
         </div>
       </div>
 
-      {/* Mobile/Tablet Header Row */}
-      <div className="xl:hidden flex justify-between items-center py-2 px-3 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-        <span className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">Filtros & Pesquisa</span>
-        <button
-          onClick={() => setShowMobileFilters(!showMobileFilters)}
-          className={`py-1 px-2.5 rounded-lg border transition-all active:scale-95 flex items-center gap-1.5 text-xs ${
-            showMobileFilters 
-              ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-600 dark:border-blue-600' 
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800'
-          }`}
-          title={showMobileFilters ? "Ocultar Pesquisa" : "Mostrar Pesquisa"}
-        >
-          <Filter size={13} className={showMobileFilters ? "fill-white/10" : "text-slate-500"} />
-          <span className="font-bold">{showMobileFilters ? "Ocultar" : "Filtrar"}</span>
-          {(() => {
-            let count = 0;
-            if (searchTerm) count++;
-            if (filterDate) count++;
-            if (filterPriority !== 'All') count++;
-            if (filterDocSeries !== 'All') count++;
-            if (filterComercial !== 'All') count++;
-            if (filterReference !== 'All') count++;
-            if (filterStatus !== 'All') count++;
-            if (filterArchived !== 'active') count++;
-            if (filterManual) count++;
-            if (filterHasObservations) count++;
-            if (count > 0) {
-              return (
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
-                  showMobileFilters ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
-                }`}>
-                  {count}
-                </span>
-              );
-            }
-            return null;
-          })()}
-        </button>
-      </div>
-
       <div className={`transition-all duration-300 ease-in-out xl:max-h-none xl:opacity-100 xl:overflow-visible xl:pointer-events-auto ${
-        showMobileFilters 
+        showMobileFilters && (!isCompactDevice || isHeaderVisible)
           ? 'max-h-[1400px] opacity-100' 
           : 'max-h-0 opacity-0 overflow-hidden pointer-events-none'
       }`}>
@@ -1151,7 +1223,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
       </div>
       
       <div className="flex-1 overflow-y-auto w-full relative" onScroll={handleListScroll}>
-        <div className="hidden md:block overflow-x-auto h-full min-h-[300px]">
+        <div className="compact-desktop-only overflow-x-auto h-full min-h-[300px]">
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-100 dark:bg-slate-900 sticky top-0 z-10 shadow-sm transition-colors">
               <tr>
@@ -1513,8 +1585,8 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
           </table>
         </div>
         
-        {/* Mobile Grid - 1 Cartão por Documento com expansão ao clicar */}
-        <div className="md:hidden grid grid-cols-1 gap-2 p-2">
+        {/* Mobile Grid - 1 Cartão por Documento com expansão ao clicar (Vertical e Landscape sem scroll lateral) */}
+        <div className="compact-mobile-only grid grid-cols-1 gap-1.5 p-1.5 sm:p-2 w-full max-w-full overflow-x-hidden">
           {paginatedGroups.map((group, index) => {
             const isExpanded = expandedDocNrs.has(group.docNr);
             const isGroupSelected = isDocGroupSelected(group);

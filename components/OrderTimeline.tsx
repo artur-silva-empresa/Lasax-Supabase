@@ -13,7 +13,8 @@ import {
   Tag,
   ChevronLeft,
   ChevronRight,
-  Flag
+  Flag,
+  Filter
 } from 'lucide-react';
 
 interface OrderTimelineProps {
@@ -33,6 +34,8 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, onViewDetails, gl
   const [filterClient, setFilterClient] = React.useState('All');
   const [filterReference, setFilterReference] = React.useState('All');
   const [filterStatus, setFilterStatus] = React.useState('All');
+  // Filtros fechados por predefinição em smartphone
+  const [showMobileFilters, setShowMobileFilters] = React.useState(false);
 
   // Paginação
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -214,7 +217,26 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, onViewDetails, gl
             </div>
           </div>
 
-          <div className="flex flex-col xl:flex-row gap-3">
+          {/* Mobile Filter Toggle */}
+          <div className="xl:hidden flex justify-between items-center py-1.5 px-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+            <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Filtros & Pesquisa</span>
+            <button
+              onClick={() => setShowMobileFilters(!showMobileFilters)}
+              className={`py-1 px-2.5 rounded-lg border transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold ${
+                showMobileFilters 
+                  ? 'bg-blue-600 text-white border-blue-600' 
+                  : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <Filter size={12} className={showMobileFilters ? "fill-white/20" : "text-slate-400"} />
+              <span>{showMobileFilters ? "Ocultar" : "Filtrar"}</span>
+              {hasActiveFilters && (
+                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+              )}
+            </button>
+          </div>
+
+          <div className={`${showMobileFilters ? 'flex' : 'hidden'} xl:flex flex-col xl:flex-row gap-3 transition-all`}>
             {/* Search Bar */}
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
@@ -223,7 +245,7 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, onViewDetails, gl
                 placeholder="Pesquisar (PO, Ref, Doc...)" 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm transition-all h-full dark:text-white"
+                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs md:text-sm shadow-sm transition-all h-full dark:text-white"
               />
             </div>
 
@@ -297,9 +319,10 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, onViewDetails, gl
       </div>
 
       {/* Timeline Grid Area */}
-      <div className="flex-1 overflow-hidden p-4 md:p-6">
+      <div className="flex-1 overflow-hidden p-2 md:p-6">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden h-full flex flex-col transition-colors">
-          <div className="overflow-auto flex-1">
+          {/* Desktop Table View */}
+          <div className="compact-desktop-only overflow-auto flex-1">
             <div className="min-w-[1000px]">
               {/* Table Header */}
               <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 sticky top-0 z-10 shadow-sm">
@@ -329,15 +352,11 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, onViewDetails, gl
                         className="w-60 p-1 border-r border-slate-200 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900 group-hover:bg-blue-50/50 dark:group-hover:bg-slate-800/50 flex flex-col justify-center cursor-pointer transition-colors"
                         title="Clique para ver detalhes do fluxo de produção"
                       >
-                        
-                        {/* 1 - Referência (Fonte reduzida) */}
                         <div className="mb-0.5">
                            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200 truncate block leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400" title={order.reference}>
                               {order.reference}
                            </span>
                         </div>
-
-                        {/* 2 - Cor + Medida (Fonte reduzida) */}
                         <div className="flex items-center gap-1 text-[9px] text-slate-500 dark:text-slate-400 mb-1 leading-none">
                            <span className="truncate font-medium max-w-[120px]" title={order.colorDesc}>
                               {order.colorDesc}
@@ -346,11 +365,9 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, onViewDetails, gl
                            <span className="font-bold uppercase truncate" title={order.sizeDesc}>
                               {order.sizeDesc}
                            </span>
-                           {/* Flag de Prioridade */}
                            {(order.priority || 0) > 0 && (
                                <Flag size={10} className={`ml-1 ${getPriorityColor(order.priority || 0)}`} strokeWidth={3} />
                            )}
-                           {/* Flag de Confeção Manual */}
                            {order.isManual ? (
                                <div 
                                    className="ml-0.5 w-3 h-3 rounded-[3px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-[7px] font-black leading-none shrink-0"
@@ -360,8 +377,6 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, onViewDetails, gl
                                </div>
                            ) : null}
                         </div>
-                        
-                        {/* 3 - Nr Documento + Cliente (Lado a Lado) */}
                         <div className="flex items-center gap-1.5 border-t border-slate-100 dark:border-slate-800 pt-1 mt-0.5">
                            <span className="text-[9px] font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700 whitespace-nowrap leading-none group-hover:border-blue-200 dark:group-hover:border-slate-600" title="Nr. Documento">
                               {order.docNr}
@@ -407,6 +422,70 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, onViewDetails, gl
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Mobile / Landscape Cards View (Zero horizontal scroll) */}
+          <div className="compact-mobile-only overflow-y-auto flex-1 p-2 space-y-2 w-full max-w-full overflow-x-hidden">
+            {paginatedOrders.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs">
+                Nenhuma encomenda corresponde aos filtros selecionados.
+              </div>
+            ) : (
+              paginatedOrders.map(order => (
+                <div 
+                  key={order.id}
+                  onClick={() => onViewDetails(order)}
+                  className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs hover:border-blue-400 transition-all cursor-pointer flex flex-col gap-1.5"
+                >
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-black text-[11px] text-slate-800 dark:text-white truncate">{order.docNr}</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">• {order.clientName}</span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {(order.priority || 0) > 0 && (
+                        <Flag size={10} className={getPriorityColor(order.priority || 0)} strokeWidth={3} />
+                      )}
+                      {order.isManual && (
+                        <span className="w-3 h-3 rounded-[3px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[8px] font-black flex items-center justify-center">M</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-slate-500">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 truncate">{order.reference} ({order.colorDesc})</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-100 shrink-0">Qtd: {order.qtyRequested?.toLocaleString('pt-PT')} UN</span>
+                  </div>
+
+                  {/* Fluxo dos 6 Sectores responsivo */}
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 pt-1 border-t border-slate-100 dark:border-slate-800/80">
+                    {SECTORS.map(s => {
+                      const state = getSectorState(order, s.id);
+                      const date = getSectorDate(order, s.id);
+                      const producedQty = getSectorProducedQty(order, s.id);
+                      const now = new Date();
+                      now.setHours(0,0,0,0);
+                      const isLate = date && date < now && state !== SectorState.COMPLETED;
+                      const bgColor = isLate ? 'bg-rose-400 dark:bg-rose-500' : STATUS_COLORS[state as keyof typeof STATUS_COLORS];
+
+                      return (
+                        <div key={s.id} className="flex flex-col items-center">
+                          <span className="text-[8px] font-black uppercase text-slate-400 truncate w-full text-center">{s.name}</span>
+                          <div className={`w-full py-1 rounded ${bgColor} flex flex-col items-center justify-center shadow-xs mt-0.5`}>
+                            <span className="text-[8px] font-black text-slate-900 leading-none">
+                              {date ? formatDate(date) : '-'}
+                            </span>
+                            <span className="text-[7px] text-slate-800/90 font-medium leading-none mt-0.5">
+                              {producedQty}/{order.qtyRequested}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
           
            {/* Pagination Footer */}

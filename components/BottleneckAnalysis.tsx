@@ -311,9 +311,9 @@ const BottleneckAnalysis: React.FC<BottleneckAnalysisProps> = ({ orders, capacit
               </div>
             )}
 
-            {/* Queue Table */}
+            {/* Queue Table Desktop */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
+              <div className="compact-desktop-only overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
@@ -338,6 +338,51 @@ const BottleneckAnalysis: React.FC<BottleneckAnalysisProps> = ({ orders, capacit
                   </tbody>
                 </table>
               </div>
+
+              {/* Queue Cards Mobile / Landscape (Zero lateral scroll) */}
+              <div className="compact-mobile-only divide-y divide-slate-100 dark:divide-slate-800/80 p-2 space-y-1.5 w-full max-w-full overflow-x-hidden">
+                {currentSectorAnalysis?.infos.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 text-xs">
+                    <CheckCircle2 size={18} className="mx-auto mb-1.5 text-emerald-500" />
+                    Sector sem encomendas pendentes
+                  </div>
+                ) : (
+                  currentSectorAnalysis?.infos.map((info, idx) => {
+                    const { order, remainingQty, estimatedDays, isAtRisk, daysLate } = info;
+                    const producedQty = (order.qtyRequested || 0) - remainingQty;
+                    return (
+                      <div 
+                        key={order.id}
+                        className={`p-2 rounded-xl border transition-all ${isAtRisk ? 'border-rose-300 dark:border-rose-900/60 bg-rose-50/30 dark:bg-rose-900/10' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900'}`}
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-[9px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 py-0.2 rounded">#{idx + 1}</span>
+                            <span className="font-black text-[11px] text-slate-800 dark:text-white truncate">{order.docNr}</span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">• {order.clientName}</span>
+                          </div>
+                          {isAtRisk ? (
+                            <span className="text-[9px] font-black text-rose-600 bg-rose-100 dark:bg-rose-900/40 px-1.5 py-0.5 rounded-full shrink-0 flex items-center gap-0.5">
+                              <AlertTriangle size={9} /> +{daysLate}d
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-full shrink-0">
+                              {estimatedDays}d est.
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1">
+                          <span className="truncate">{order.reference} ({order.colorDesc})</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200 shrink-0">
+                            Ped: {order.qtyRequested?.toLocaleString('pt-PT')} / Falta: <strong className="text-rose-600 dark:text-rose-400">{remainingQty.toLocaleString('pt-PT')}</strong>
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -359,7 +404,8 @@ const BottleneckAnalysis: React.FC<BottleneckAnalysisProps> = ({ orders, capacit
                     {allAtRisk.length} encomenda{allAtRisk.length !== 1 ? 's' : ''} com risco de atraso na data de entrega ao cliente
                   </p>
                 </div>
-                <div className="overflow-x-auto">
+                {/* Desktop Table View */}
+                <div className="compact-desktop-only overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
@@ -414,6 +460,42 @@ const BottleneckAnalysis: React.FC<BottleneckAnalysisProps> = ({ orders, capacit
                       })}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile / Landscape Cards View (Zero horizontal scroll) */}
+                <div className="compact-mobile-only divide-y divide-slate-100 dark:divide-slate-800/80 p-2 space-y-1.5 w-full max-w-full overflow-x-hidden">
+                  {allAtRisk.map(({ order, sectors }) => {
+                    const maxDelay = Math.max(...sectors.map(s => s.daysLate));
+                    return (
+                      <div key={order.id} className="p-2 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/20 dark:bg-rose-900/10 flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-black text-[11px] text-slate-800 dark:text-white truncate">{order.docNr}</span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">• {order.clientName}</span>
+                          </div>
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md ${maxDelay > 14 ? 'bg-rose-600 text-white' : 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300'}`}>
+                            <AlertTriangle size={9} />
+                            +{maxDelay}d
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[10px] text-slate-500">
+                          <span className="truncate">{order.reference} ({order.colorDesc})</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200 shrink-0">
+                            Qtd: {order.qtyRequested?.toLocaleString('pt-PT')} • {order.requestedDate ? formatDate(order.requestedDate) : '-'}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1 pt-1 border-t border-rose-100 dark:border-rose-900/30">
+                          {sectors.map(s => (
+                            <span key={s.sectorName} className="text-[9px] font-bold bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-800/60 text-rose-600 dark:text-rose-300 px-1.5 py-0.2 rounded">
+                              {s.sectorName} (+{s.daysLate}d)
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

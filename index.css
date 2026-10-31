@@ -85,3 +85,57 @@
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
   background: #334155;
 }
+
+/* ========================================================
+   RESPONSIVIDADE PARA SMARTPHONES (VERTICAL E LANDSCAPE)
+   - Elimina scroll lateral em smartphones
+   - Tipografia refinada e compacta para leitura ótima
+   ======================================================== */
+@media (max-width: 767px), (orientation: landscape) and (max-height: 560px) {
+  html, body, #root {
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
+  }
+
+  /* Classes auxiliares para alternar entre cartões e tabela desktop */
+  .compact-mobile-only {
+    display: block !important;
+  }
+  .compact-mobile-flex {
+    display: flex !important;
+  }
+  .compact-mobile-grid {
+    display: grid !important;
+  }
+  .compact-desktop-only {
+    display: none !important;
+  }
+
+  /* Ajustes globais de densidade em smartphone */
+  .mobile-text-dense {
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+  }
+
+  .mobile-heading-dense {
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Ajustar inputs para não dar zoom automático em iOS e ocupar espaço ideal */
+  input, select, textarea {
+    font-size: 12px !important;
+  }
+}
+
+@media (min-width: 768px) and (min-height: 561px) {
+  .compact-mobile-only,
+  .compact-mobile-flex,
+  .compact-mobile-grid {
+    display: none !important;
+  }
+  .compact-desktop-only {
+    display: block !important;
+  }
+}
+
