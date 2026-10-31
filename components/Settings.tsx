@@ -7,6 +7,7 @@ import { User, PermissionLevel, UserPermissions, Order } from '../types';
 import { SECTORS } from '../constants';
 import StopReasons from './StopReasons';
 import ExportableColumns from './ExportableColumns';
+import { PWAInstallButton } from './PWAInstallButton';
 import { 
   getKeepAliveConfig, 
   saveKeepAliveConfig, 
@@ -64,22 +65,66 @@ const Settings: React.FC<SettingsProps> = ({
   const [importHandle, setImportHandle] = React.useState<any>(null);
   const [statusMsg, setStatusMsg] = React.useState('');
   const [notifPermission, setNotifPermission] = React.useState<NotificationPermission>(() => notificationService.getPermissionStatus());
+  const [isPushSubscribed, setIsPushSubscribed] = React.useState<boolean>(false);
+  const [isSubscribing, setIsSubscribing] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    notificationService.getPushSubscription().then(sub => {
+      setIsPushSubscribed(!!sub);
+    });
+  }, []);
 
   const handleRequestPushPermission = async () => {
-    const granted = await notificationService.requestPermission();
-    setNotifPermission(notificationService.getPermissionStatus());
-    if (granted) {
-      setStatusMsg('Notificações Push ativadas com sucesso!');
-      setTimeout(() => setStatusMsg(''), 4000);
+    setIsSubscribing(true);
+    try {
+      const granted = await notificationService.subscribeToPushNotifications();
+      setNotifPermission(notificationService.getPermissionStatus());
+      const sub = await notificationService.getPushSubscription();
+      setIsPushSubscribed(!!sub);
+      if (granted) {
+        setStatusMsg('Subscrição Push API ativa! O seu dispositivo receberá alertas de encomendas urgentes em segundo plano.');
+        setTimeout(() => setStatusMsg(''), 5000);
+      }
+    } finally {
+      setIsSubscribing(false);
     }
   };
 
-  const handleTestPushNotification = () => {
-    notificationService.sendNotification({
-      title: '🔔 Teste de Notificação Push',
-      body: 'Service Worker ativo! Receberá alertas em tempo real das encomendas.',
-      tag: 'test-push-notification'
+  const handleTogglePushSubscription = async () => {
+    setIsSubscribing(true);
+    try {
+      if (isPushSubscribed) {
+        await notificationService.unsubscribeFromPushNotifications();
+        setIsPushSubscribed(false);
+        setStatusMsg('Subscrição Push desativada neste dispositivo.');
+      } else {
+        const ok = await notificationService.subscribeToPushNotifications();
+        const sub = await notificationService.getPushSubscription();
+        setIsPushSubscribed(!!sub);
+        if (ok) {
+          setStatusMsg('Alertas Push para Gestores ativados com sucesso!');
+        }
+      }
+      setTimeout(() => setStatusMsg(''), 4000);
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
+
+  const handleTestUrgentPushNotification = async () => {
+    setStatusMsg('A enviar alerta de teste de Encomenda Urgente...');
+    await notificationService.notifyUrgentOrderChange({
+      orderDocNr: '515-2026000292',
+      clientName: 'CARRE BLANC (URGENTE)',
+      changeType: 'PRIORITY_CHANGED',
+      description: 'Prioridade alterada para ALTA. Nova data de entrega no Setor Tecelagem.',
+      priority: 1,
+      changedBy: 'Gestor de Produção'
     });
+    setTimeout(() => {
+      setStatusMsg('Alerta de Encomenda Urgente despachado! Verifique a barra de notificações do seu telemóvel/computador.');
+      setTimeout(() => setStatusMsg(''), 5000);
+    }, 600);
   };
 
   // Supabase Keep-Alive Cron Job States
@@ -392,44 +437,97 @@ const Settings: React.FC<SettingsProps> = ({
           </div>
         </div>
 
-        {/* Notificações Push (Service Worker) */}
+        {/* Instalar Aplicação como PWA no Telemóvel */}
+        <PWAInstallButton variant="card" />
+
+        {/* Notificações Push (Push API & Service Worker para Gestores) */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-5">
             <div className="flex items-start gap-4">
               <div className="p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-xl">
                 <Bell size={24} />
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  Notificações Push no Navegador
-                  {notifPermission === 'granted' && (
-                    <span className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-0.5 rounded-full font-semibold">
-                      Ativas
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                    Notificações Push & Alertas em Tempo Real
+                  </h3>
+                  {isPushSubscribed ? (
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-0.5 rounded-full font-black uppercase tracking-wider flex items-center gap-1 border border-emerald-200 dark:border-emerald-800">
+                      <CheckCircle size={10} /> Push API Ativa
+                    </span>
+                  ) : notifPermission === 'granted' ? (
+                    <span className="text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
+                      Permissão Concedida
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
+                      Não Subscrito
                     </span>
                   )}
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Receba alertas instantâneos via Service Worker quando uma encomenda mudar de estado ou quando outro utilizador inserir uma nova previsão de data.
+                </div>
+                <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xl">
+                  Utiliza a <strong>Push API</strong> e <strong>Service Workers</strong> para que os gestores recebam alertas no telemóvel sempre que uma <strong>encomenda urgente</strong> for alterada, mesmo com a aplicação em segundo plano ou fechada.
                 </p>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-end gap-2">
-              {notifPermission !== 'granted' ? (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+              {!isPushSubscribed ? (
                 <button
                   onClick={handleRequestPushPermission}
-                  className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm flex items-center gap-2"
+                  disabled={isSubscribing}
+                  className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  <Bell size={16} /> Ativar Notificações
+                  <Bell size={16} /> {isSubscribing ? 'A Ativar...' : 'Ativar Push API'}
                 </button>
               ) : (
                 <button
-                  onClick={handleTestPushNotification}
-                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 border border-slate-200 dark:border-slate-700"
+                  onClick={handleTogglePushSubscription}
+                  disabled={isSubscribing}
+                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700"
                 >
-                  <Bell size={14} /> Testar Notificação
+                  Desativar Alertas
                 </button>
               )}
+
+              <button
+                onClick={handleTestUrgentPushNotification}
+                className="bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-95"
+                title="Testar disparo de push urgente"
+              >
+                <AlertTriangle size={15} /> Testar Alerta Urgente
+              </button>
+            </div>
+          </div>
+
+          {/* Lista de eventos monitorizados para encomendas urgentes */}
+          <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div className="bg-slate-50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
+              <span className="font-bold text-slate-700 dark:text-slate-200 block mb-0.5">
+                🚨 Nova Urgência / Prioridade
+              </span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                Alerta imediato quando uma encomenda é marcada como Alta Prioridade.
+              </span>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
+              <span className="font-bold text-slate-700 dark:text-slate-200 block mb-0.5">
+                📅 Alteração de Datas em Urgentes
+              </span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                Notificação push quando um setor altera ou atrasa previsões numa encomenda urgente.
+              </span>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
+              <span className="font-bold text-slate-700 dark:text-slate-200 block mb-0.5">
+                ⚠️ Paragens & Conclusão
+              </span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                Aviso instantâneo ao registar motivos de paragem ou ao faturar uma encomenda urgente.
+              </span>
             </div>
           </div>
         </div>

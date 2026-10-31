@@ -1,0 +1,21 @@
+{
+  "id": "/",
+  "short_name": "Prod. Lasa",
+  "name": "Prod. Lasa",
+  "description": "Prod. Lasa - Gestão e Acompanhamento de Encomendas Têxteis",
+  "icons": [
+    { "src": "icons/icon-192x192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "icons/icon-512x512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "icons/icone.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "icons/apple-touch-icon.png", "type": "image/png", "sizes": "180x180", "purpose": "any" },
+    { "src": "icons/icon-maskable-192x192.png", "type": "image/png", "sizes": "192x192", "purpose": "maskable" },
+    { "src": "icons/icon-maskable-512x512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ],
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#C30F18",
+  "background_color": "#C30F18",
+  "categories": ["business", "productivity"]
+}

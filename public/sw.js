@@ -1,6 +1,6 @@
 
 // ⚠️ Incrementar a versão a cada deploy para forçar refresh do cache em todos os clientes
-const CACHE_VERSION = 'v13';
+const CACHE_VERSION = 'v15';
 const CACHE_NAME = `prod-lasa-${CACHE_VERSION}`;
 
 // Assets que são pré-cacheados na instalação (shell da aplicação)
@@ -132,14 +132,17 @@ self.addEventListener('push', (event) => {
     }
   }
 
+  const isUrgent = payload.data?.urgent || payload.title?.includes('URGENTE') || payload.title?.includes('🚨');
+
   const options = {
     body: payload.body,
     icon: payload.icon || './icons/icone.png',
     badge: payload.badge || './icons/icone.png',
-    vibrate: [150, 50, 150],
-    tag: payload.tag || 'texflow-notification',
+    vibrate: isUrgent ? [250, 100, 250, 100, 250] : [150, 50, 150],
+    tag: payload.tag || (isUrgent ? 'urgent-order-alert' : 'texflow-notification'),
     renotify: true,
-    data: payload.data || { url: '/' },
+    requireInteraction: isUrgent, // Mantém o alerta visível no ecrã de bloqueio para gestores
+    data: payload.data || { url: './' },
     actions: [
       { action: 'open', title: 'Ver Detalhes' },
       { action: 'dismiss', title: 'Fechar' }

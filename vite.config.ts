@@ -19,35 +19,44 @@ const copySqlWasm = () => ({
   }
 });
 
-// Plugin inline que copia o logótipo oficial (icone.png) para todas as outras variantes de ícones
-// garantindo que nenhum ícone padrão ou de template (ex: ícone Vite "V") seja carregado pelo browser.
+// Plugin inline que assegura que as variantes dos ícones PWA da Lasa (192x192, 512x512, maskable e favicon)
+// são replicadas e sincronizadas corretamente para a pasta dist e mantidas em public/icons/
 const overrideDefaultIcons = () => ({
   name: 'override-default-icons',
   buildStart() {
+    const icone512 = path.resolve(__dirname, 'public/icons/icon-512x512.png');
+    const icone192 = path.resolve(__dirname, 'public/icons/icon-192x192.png');
     const iconeSrc = path.resolve(__dirname, 'public/icons/icone.png');
-    if (existsSync(iconeSrc)) {
-      const targets = [
-        'public/icons/apple-touch-icon.png',
-        'public/icons/icon-48x48.png',
-        'public/icons/icon-72x72.png',
-        'public/icons/icon-96x96.png',
-        'public/icons/icon-128x128.png',
-        'public/icons/icon-144x144.png',
-        'public/icons/icon-152x152.png',
-        'public/icons/icon-192x192.png',
+
+    // Se icone.png não existir, replica de icon-512x512.png
+    if (!existsSync(iconeSrc) && existsSync(icone512)) {
+      copyFileSync(icone512, iconeSrc);
+    }
+
+    // Se icon-512x512.png não existir, replica de icone.png
+    if (!existsSync(icone512) && existsSync(iconeSrc)) {
+      copyFileSync(iconeSrc, icone512);
+    }
+
+    // Se icon-192x192.png não existir, cria a partir de iconeSrc
+    if (!existsSync(icone192) && existsSync(iconeSrc)) {
+      copyFileSync(iconeSrc, icone192);
+    }
+
+    // Replicar para tamanhos genéricos que não existam
+    const masterSrc = existsSync(icone512) ? icone512 : iconeSrc;
+    if (existsSync(masterSrc)) {
+      const fallbackTargets = [
         'public/icons/icon-256x256.png',
         'public/icons/icon-384x384.png',
-        'public/icons/icon-512x512.png',
-        'public/icons/favicon-32x32.png',
-        'public/icons/favicon-96x96.png',
       ];
-      targets.forEach(target => {
+      fallbackTargets.forEach(target => {
         const dest = path.resolve(__dirname, target);
-        copyFileSync(iconeSrc, dest);
+        if (!existsSync(dest)) {
+          copyFileSync(masterSrc, dest);
+        }
       });
-      console.log('✅ Ícones padrão substituídos por public/icons/icone.png');
-    } else {
-      console.warn('⚠️  public/icons/icone.png não encontrado!');
+      console.log('✅ Ícones PWA (192x192 e 512x512) validados e replicados com sucesso.');
     }
   }
 });

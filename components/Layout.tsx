@@ -27,6 +27,7 @@ import {
 import { User, Order } from '../types';
 import { SECTORS } from '../constants';
 import { formatDate } from '../utils/formatters';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -573,6 +574,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                               <span>Tabelas Editáveis</span>
                             </button>
                           </li>
+                          <li className="px-2 pt-1 border-t border-slate-700/60 mt-1">
+                            <PWAInstallButton variant="menu-item" />
+                          </li>
                         </>
                       )}
                       </ul>
@@ -636,6 +640,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                             <Layers size={16} />
                             <span>Tabelas Editáveis</span>
                           </button>
+                        </li>
+                        <li className="pt-1 border-t border-slate-700/60 mt-1">
+                          <PWAInstallButton variant="menu-item" />
                         </li>
                       </>
                     )}
@@ -1270,6 +1277,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                             <Layers size={14} />
                             <span>Tabelas Editáveis</span>
                           </button>
+                        </li>
+                        <li className="pt-1 border-t border-slate-800 mt-1">
+                          <PWAInstallButton variant="menu-item" />
                         </li>
                       </>
                     )}

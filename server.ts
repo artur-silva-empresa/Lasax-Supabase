@@ -3,6 +3,7 @@ import path from 'path';
 import cors from 'cors';
 import { rateLimit } from 'express-rate-limit';
 import { createServer as createViteServer } from 'vite';
+import webpush from 'web-push';
 
 async function startServer() {
   const app = express();
@@ -175,25 +176,152 @@ async function startServer() {
     res.json({ success: true, timestamp: new Date().toISOString() });
   });
 
-  // Endpoints para Gerenciamento de Notificações Push
-  const pushSubscriptions = new Map<string, any>();
+  // Configuração VAPID para Web Push Notifications (Push API e Service Worker)
+  let vapidKeys = {
+    publicKey: process.env.VAPID_PUBLIC_KEY || '',
+    privateKey: process.env.VAPID_PRIVATE_KEY || ''
+  };
 
+  if (!vapidKeys.publicKey || !vapidKeys.privateKey) {
+    // Gerar chaves VAPID seguras se não fornecidas no ambiente
+    vapidKeys = webpush.generateVAPIDKeys();
+  }
+
+  const vapidEmail = process.env.VAPID_MAILTO || 'mailto:gestao.producao@lasa.pt';
+  try {
+    webpush.setVapidDetails(
+      vapidEmail,
+      vapidKeys.publicKey,
+      vapidKeys.privateKey
+    );
+    console.log('🔔 Web Push VAPID ativo. Chave Pública pronta para subscrições de gestores.');
+  } catch (err) {
+    console.warn('[Web Push] Erro ao configurar VAPID:', err);
+  }
+
+  // Armazenamento em memória das subscrições Push dos gestores e utilizadores
+  interface StoredPushSub {
+    subscription: webpush.PushSubscription;
+    userId?: string;
+    userName?: string;
+    userRole?: string;
+    subscribedAt: string;
+  }
+  const pushSubscriptions = new Map<string, StoredPushSub>();
+
+  // Rota pública para o cliente obter a VAPID Public Key necessária para `pushManager.subscribe`
+  app.get('/api/notifications/vapid-public-key', (_req, res) => {
+    res.json({
+      publicKey: vapidKeys.publicKey
+    });
+  });
+
+  // Registar ou atualizar subscrição Push de um gestor/dispositivo móvel
   app.post('/api/notifications/push-subscription', apiLimiter, (req, res) => {
-    const { subscription, userId } = req.body || {};
+    const { subscription, userId, userName, userRole } = req.body || {};
     if (!subscription || !subscription.endpoint) {
-      return res.status(400).json({ error: 'Inscrição Push inválida.' });
+      return res.status(400).json({ error: 'Inscrição Push inválida ou endpoint em falta.' });
     }
-    const key = userId || req.ip;
-    pushSubscriptions.set(key, subscription);
-    console.log(`[Push Notification] Nova subscrição de notificação registada para ${key}`);
+    const key = subscription.endpoint;
+    pushSubscriptions.set(key, {
+      subscription,
+      userId: userId || 'anonymous',
+      userName: userName || 'Gestor',
+      userRole: userRole || 'manager',
+      subscribedAt: new Date().toISOString()
+    });
+    console.log(`[Push API] Subscrição registada para ${userName || 'Gestor'} (${key.slice(0, 32)}...). Total ativos: ${pushSubscriptions.size}`);
+    res.json({
+      success: true,
+      registeredCount: pushSubscriptions.size,
+      message: 'Subscrição Push registada com sucesso.'
+    });
+  });
+
+  // Cancelar subscrição Push
+  app.delete('/api/notifications/push-subscription', apiLimiter, (req, res) => {
+    const { endpoint } = req.body || {};
+    if (endpoint && pushSubscriptions.has(endpoint)) {
+      pushSubscriptions.delete(endpoint);
+      console.log(`[Push API] Subscrição cancelada para: ${endpoint.slice(0, 32)}...`);
+    }
     res.json({ success: true, registeredCount: pushSubscriptions.size });
   });
 
+  // Estado das notificações push
+  app.get('/api/notifications/status', (_req, res) => {
+    res.json({
+      vapidConfigured: Boolean(vapidKeys.publicKey),
+      activeSubscriptions: pushSubscriptions.size
+    });
+  });
+
+  // Disparo em tempo real de alerta de Encomenda Urgente alterada (para gestores em segundo plano)
+  app.post('/api/notifications/trigger-urgent', apiLimiter, async (req, res) => {
+    const { orderDocNr, clientName, changeType, description, priority, changedBy } = req.body || {};
+    console.log(`🚨 [Alerta de Encomenda Urgente] #${orderDocNr || 'N/A'} - ${description || 'Alteração detetada'} (Por: ${changedBy || 'Sistema'})`);
+
+    const title = `🚨 URGENTE: Encomenda #${orderDocNr || ''}`;
+    const bodyText = description || `${clientName || 'Cliente'}: Encomenda urgente atualizada.`;
+
+    const pushPayload = JSON.stringify({
+      title,
+      body: bodyText,
+      icon: './icons/icone.png',
+      badge: './icons/icone.png',
+      tag: `urgent-order-${orderDocNr || Date.now()}`,
+      data: {
+        url: `./?docNr=${orderDocNr || ''}`,
+        docNr: orderDocNr,
+        priority: priority ?? 1,
+        urgent: true,
+        changeType: changeType || 'UPDATE',
+        timestamp: Date.now()
+      }
+    });
+
+    const results: { success: number; failed: number } = { success: 0, failed: 0 };
+    const expiredKeys: string[] = [];
+
+    // Enviar notificação push via Web Push API para todos os gestores inscritos
+    for (const [key, item] of pushSubscriptions.entries()) {
+      try {
+        await webpush.sendNotification(item.subscription, pushPayload, {
+          urgency: 'high',
+          TTL: 86400 // 24 horas no push service caso o telemóvel esteja temporariamente offline
+        });
+        results.success++;
+      } catch (err: any) {
+        results.failed++;
+        console.warn(`[Push API] Erro ao entregar push a ${key.slice(0, 30)}...:`, err?.statusCode || err?.message);
+        // Se o serviço (Google FCM / Apple APNs) retornar 404 Not Found ou 410 Gone, a subscrição expirou
+        if (err?.statusCode === 404 || err?.statusCode === 410) {
+          expiredKeys.push(key);
+        }
+      }
+    }
+
+    // Limpar subscrições expiradas
+    for (const expKey of expiredKeys) {
+      pushSubscriptions.delete(expKey);
+    }
+
+    res.json({
+      success: true,
+      deliveredCount: results.success,
+      failedCount: results.failed,
+      activeSubscribers: pushSubscriptions.size,
+      orderDocNr,
+      title,
+      body: bodyText
+    });
+  });
+
+  // Endpoint legado de compatibilidade
   app.post('/api/notifications/trigger', apiLimiter, (req, res) => {
     const { type, orderNr, clientName, sectorName, newDate, message } = req.body || {};
     console.log(`[Push Notification Trigger] Evento: ${type} na Encomenda #${orderNr}`);
     
-    // Broadcast / Notificar todos os clientes registados
     res.json({
       success: true,
       deliveredTo: pushSubscriptions.size,

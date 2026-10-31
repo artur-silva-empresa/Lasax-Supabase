@@ -472,6 +472,22 @@ const App: React.FC = () => {
 
     setOrders(prev => prev.map(o => o.id === finalOrder.id ? finalOrder : o));
     saveOrderToDB(finalOrder);
+
+    // Se for encomenda urgente e houve alteração relevante, despacha push alert para os gestores
+    if (finalOrder.priority && finalOrder.priority > 0 && changedSectorId) {
+      const changedSector = SECTORS.find(s => s.id === changedSectorId);
+      const newD = finalOrder.sectorPredictedDates?.[changedSectorId];
+      if (newD) {
+        notificationService.notifyUrgentOrderChange({
+          orderDocNr: finalOrder.docNr,
+          clientName: finalOrder.clientName,
+          changeType: 'PREDICTION_CHANGED',
+          description: `Setor ${changedSector?.name || changedSectorId}: Nova previsão ${new Date(newD).toLocaleDateString('pt-PT')}`,
+          priority: finalOrder.priority,
+          changedBy: currentUser?.name || currentUser?.username
+        });
+      }
+    }
   };
   
   // Função para atualizar prioridade em lote (por Nr Doc)
@@ -479,6 +495,20 @@ const App: React.FC = () => {
     const updated = orders.filter(o => o.docNr === docNr).map(o => ({ ...o, priority }));
     setOrders(prev => prev.map(o => o.docNr === docNr ? { ...o, priority } : o));
     updated.forEach(saveOrderToDB);
+
+    // Se passou a ser urgente ou mudou prioridade de urgente, envia push notification aos gestores
+    if (priority > 0) {
+      const sample = orders.find(o => o.docNr === docNr);
+      const labels: Record<number, string> = { 1: 'Alta (Vermelho)', 2: 'Média (Laranja)', 3: 'Baixa (Amarelo)' };
+      notificationService.notifyUrgentOrderChange({
+        orderDocNr: docNr,
+        clientName: sample?.clientName || 'Cliente',
+        changeType: 'PRIORITY_CHANGED',
+        description: `Prioridade alterada para ${labels[priority] || priority} — Encomenda Urgente`,
+        priority,
+        changedBy: currentUser?.name || currentUser?.username
+      });
+    }
   };
 
   // Função para atualizar flag manual em lote (por Nr Doc)
@@ -521,6 +551,20 @@ const App: React.FC = () => {
     }));
     setOrders(prev => prev.map(o => o.docNr === docNr ? updated.find(u => u.id === o.id)! : o));
     updated.forEach(saveOrderToDB);
+
+    // Se a encomenda for urgente e foi adicionado um motivo de paragem, alerta os gestores
+    const targetOrder = orders.find(o => o.docNr === docNr);
+    if (targetOrder?.priority && targetOrder.priority > 0 && stopReason) {
+      const s = SECTORS.find(sec => sec.id === sectorId);
+      notificationService.notifyUrgentOrderChange({
+        orderDocNr: docNr,
+        clientName: targetOrder.clientName,
+        changeType: 'STOP_REASON',
+        description: `Paragem no Setor ${s?.name || sectorId}: "${stopReason}"`,
+        priority: targetOrder.priority,
+        changedBy: currentUser?.name || currentUser?.username
+      });
+    }
   };
 
   const handleSaveCapacities = (newCapacities: ProductionCapacity[]) => {
@@ -637,6 +681,47 @@ const App: React.FC = () => {
     setSelectedOrderId(order.id);
     setActiveView('order-details');
   }, [activeView]);
+
+  // Abertura e foco automático em encomendas quando o utilizador clica numa Notificação Push
+  React.useEffect(() => {
+    const handlePushMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'PUSH_NOTIFICATION_CLICK') {
+        const docNr = e.data.data?.docNr;
+        if (docNr) {
+          const match = orders.find(o => o.docNr === docNr);
+          if (match) {
+            handleViewDetails(match);
+          }
+        }
+      }
+    };
+
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener('message', handlePushMessage);
+    }
+
+    // Se a aplicação abriu a partir de um link da notificação push (?docNr=...)
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlDocNr = params.get('docNr');
+      if (urlDocNr && orders.length > 0) {
+        const match = orders.find(o => o.docNr === urlDocNr);
+        if (match) {
+          handleViewDetails(match);
+          const cleanUrl = window.location.pathname;
+          window.history.replaceState({}, '', cleanUrl);
+        }
+      }
+    } catch (err) {
+      console.warn('Erro ao ler docNr da URL:', err);
+    }
+
+    return () => {
+      if (navigator.serviceWorker) {
+        navigator.serviceWorker.removeEventListener('message', handlePushMessage);
+      }
+    };
+  }, [orders, handleViewDetails]);
   
   // Função chamada pelo Dashboard ao clicar num cartão
   const handleNavigateToOrders = (filter: ActiveFilterType) => {
