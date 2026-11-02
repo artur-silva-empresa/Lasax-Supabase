@@ -78,6 +78,8 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
   
   // Alterado de boolean para Date | null para suportar navegação
   const [filterDate, setFilterDate] = React.useState<Date | null>(null);
+  // Modo de filtro de semana: 'exact' (só a semana escolhida) ou 'cumulative' (todas as anteriores e até à semana escolhida)
+  const [filterWeekMode, setFilterWeekMode] = React.useState<'exact' | 'cumulative'>('exact');
 
   // Estado para controlar qual menu de prioridade está aberto
   const [openPriorityMenuId, setOpenPriorityMenuId] = React.useState<string | null>(null);
@@ -116,6 +118,53 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
       window.removeEventListener('orientationchange', handleDeviceCheck);
     };
   }, []);
+
+  // Gestos de toque para permitir ocultar/mostrar o cabeçalho mesmo quando há apenas 1 ou 2 documentos em landscape
+  const touchStartYRef = React.useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    touchStartYRef.current = e.touches[0].clientY;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartYRef.current === null) return;
+    const currentY = e.touches[0].clientY;
+    const deltaY = touchStartYRef.current - currentY; // Positivo = arrasto para cima (scroll para baixo)
+
+    if (isCompactDevice) {
+      if (deltaY > 12) {
+        // Arrasto para cima: utilizador quer ver mais conteúdo e ocultar o cabeçalho
+        setIsHeaderVisible(false);
+        if (showMobileFilters) {
+          setShowMobileFilters(false);
+        }
+        window.dispatchEvent(new CustomEvent('app-scroll', {
+          detail: {
+            scrollTop: 50,
+            isScrollingDown: true,
+            isAtTop: false
+          }
+        }));
+      } else if (deltaY < -12) {
+        // Arrasto para baixo: utilizador quer voltar ao topo / mostrar cabeçalho
+        const scrollTop = e.currentTarget.scrollTop;
+        if (scrollTop <= 25) {
+          setIsHeaderVisible(true);
+          window.dispatchEvent(new CustomEvent('app-scroll', {
+            detail: {
+              scrollTop: 0,
+              isScrollingDown: false,
+              isAtTop: true
+            }
+          }));
+        }
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchStartYRef.current = null;
+  };
 
   const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const scrollTop = e.currentTarget.scrollTop;
@@ -344,11 +393,19 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
          if (!isCompletedOrShipped) matchesStatus = false;
       }
 
-      // Filtro de Semana (Dinâmico)
+      // Filtro de Semana (Dinâmico: só da semana ou todas as anteriores e até à semana selecionada)
       let matchesWeek = true;
       if (filterDate) {
           const dateToCheck = o.requestedDate || o.armExpDate;
-          matchesWeek = !!dateToCheck && dateToCheck >= weekStart && dateToCheck <= weekEnd;
+          if (!dateToCheck) {
+              matchesWeek = false;
+          } else {
+              if (filterWeekMode === 'cumulative') {
+                  matchesWeek = dateToCheck <= weekEnd;
+              } else {
+                  matchesWeek = dateToCheck >= weekStart && dateToCheck <= weekEnd;
+              }
+          }
       }
 
       const matchesObservations = !filterHasObservations || hasObservations(o);
@@ -420,6 +477,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
     setFilterManual(false);
     setFilterHasObservations(false);
     setFilterDate(null);
+    setFilterWeekMode('exact');
     setFilterArchived('active');
   };
 
@@ -666,8 +724,18 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
   // Estado dos docNrs que estão expandidos (por padrão, colapsados)
   const [expandedDocNrs, setExpandedDocNrs] = React.useState<Set<string>>(new Set());
   const lastTapRef = React.useRef<{ [key: string]: number }>({});
+  const lastToggleTimeRef = React.useRef<{ [key: string]: number }>({});
+  const lastTouchTimeRef = React.useRef<number>(0);
 
   const toggleExpandDocNr = React.useCallback((docNr: string) => {
+    const now = Date.now();
+    const lastToggle = lastToggleTimeRef.current[docNr] || 0;
+    // Evitar que cliques duplos rápidos ou toques com eventos duplicados fechem imediatamente a linha (debounce 280ms)
+    if (now - lastToggle < 280) {
+      return;
+    }
+    lastToggleTimeRef.current[docNr] = now;
+
     setExpandedDocNrs(prev => {
       const next = new Set(prev);
       if (next.has(docNr)) {
@@ -682,9 +750,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
   const handleDocNrTouchEnd = React.useCallback((docNr: string, e: React.TouchEvent) => {
     const now = Date.now();
     const lastTap = lastTapRef.current[docNr] || 0;
-    if (now - lastTap < 350) {
+    if (now - lastTap < 380) {
       e.preventDefault();
       e.stopPropagation();
+      lastTouchTimeRef.current = now;
       toggleExpandDocNr(docNr);
       lastTapRef.current[docNr] = 0;
     } else {
@@ -888,7 +957,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">{documentGroups.length} documentos ({finalFilteredOrders.length} linhas)</p>
                 {filterDate && (
                     <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-in fade-in">
-                        Filtro: Semana {getISOWeek(filterDate)}
+                        {filterWeekMode === 'cumulative' ? `Filtro: ≤ Até Semana ${getISOWeek(filterDate)}` : `Filtro: Só Semana ${getISOWeek(filterDate)}`}
                     </span>
                 )}
                 {filterManual && (
@@ -1067,7 +1136,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 </button>
               )}
               
-              {/* Seletor de Semana Atualizado */}
+              {/* Seletor de Semana com modo Só Semana vs Até à Semana */}
               {!filterDate ? (
                 <button 
                   onClick={() => setFilterDate(new Date())}
@@ -1078,12 +1147,14 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                    <span className="text-xs font-bold">Filtrar Semana</span>
                 </button>
               ) : (
-                <div className="flex items-center bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-xl shadow-sm overflow-hidden grow md:grow-0">
-                  <button onClick={handlePrevWeek} className="px-2 py-2 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors">
+                <div className="flex flex-wrap sm:flex-nowrap items-center bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-xl shadow-sm overflow-hidden grow md:grow-0">
+                  <button onClick={handlePrevWeek} className="px-2 py-2 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors" title="Semana anterior">
                     <ChevronLeft size={16} />
                   </button>
-                  <div className="px-2 flex flex-col items-center justify-center min-w-[100px]">
-                    <span className="text-[10px] font-black uppercase text-blue-500 dark:text-blue-400 leading-none">Semana {getISOWeek(filterDate)}</span>
+                  <div className="px-2 flex flex-col items-center justify-center min-w-[95px]">
+                    <span className="text-[10px] font-black uppercase text-blue-500 dark:text-blue-400 leading-none">
+                      Semana {getISOWeek(filterDate)}
+                    </span>
                     <span className="text-[10px] font-medium text-blue-700 dark:text-blue-200 leading-none mt-0.5">
                        {(() => {
                          const {start, end} = getWeekRange(filterDate);
@@ -1091,11 +1162,40 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                        })()}
                     </span>
                   </div>
-                  <button onClick={handleNextWeek} className="px-2 py-2 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors">
+                  <button onClick={handleNextWeek} className="px-2 py-2 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors" title="Semana seguinte">
                     <ChevronRight size={16} />
                   </button>
-                  <div className="w-px h-6 bg-blue-200 dark:bg-blue-800 mx-1"></div>
-                  <button onClick={() => setFilterDate(null)} className="px-2 py-2 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-blue-400 dark:text-blue-300 hover:text-rose-500 dark:hover:text-rose-400 transition-colors">
+                  
+                  {/* Seletor de Modo: Só Semana vs Até à Semana */}
+                  <div className="flex items-center border-l border-blue-200 dark:border-blue-800 px-1 py-1 gap-1 bg-white/60 dark:bg-slate-900/60">
+                    <button
+                      type="button"
+                      onClick={() => setFilterWeekMode('exact')}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                        filterWeekMode === 'exact'
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40'
+                      }`}
+                      title="Apenas encomendas com entrega na semana selecionada"
+                    >
+                      Só Semana
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFilterWeekMode('cumulative')}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                        filterWeekMode === 'cumulative'
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40'
+                      }`}
+                      title="Todas as encomendas anteriores e até à semana selecionada"
+                    >
+                      ≤ Até à Semana
+                    </button>
+                  </div>
+
+                  <div className="w-px h-6 bg-blue-200 dark:bg-blue-800 mx-0.5"></div>
+                  <button onClick={() => setFilterDate(null)} className="px-2 py-2 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-blue-400 dark:text-blue-300 hover:text-rose-500 dark:hover:text-rose-400 transition-colors" title="Remover filtro de semana">
                     <X size={16} />
                   </button>
                 </div>
@@ -1222,8 +1322,16 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto w-full relative" onScroll={handleListScroll}>
-        <div className="compact-desktop-only overflow-x-auto h-full min-h-[300px]">
+      <div 
+        className="flex-1 overflow-y-auto w-full relative" 
+        onScroll={handleListScroll}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className={`compact-desktop-only overflow-x-auto h-full ${
+          paginatedGroups.length <= 3 ? 'min-h-[calc(100vh+80px)] pb-56' : 'min-h-[300px]'
+        }`}>
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-100 dark:bg-slate-900 sticky top-0 z-10 shadow-sm transition-colors">
               <tr>
@@ -1312,7 +1420,11 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                     <tr 
                       id={`order-row-${group.docNr}`}
                       onClick={() => {
-                        toggleExpandDocNr(group.docNr);
+                        if (group.items.length === 1) {
+                          onViewDetails(group.mainOrder);
+                        } else {
+                          toggleExpandDocNr(group.docNr);
+                        }
                         setFocusedRowIndex(index);
                       }}
                       className={`hover:bg-blue-50/70 dark:hover:bg-slate-900/80 transition-colors group cursor-pointer scroll-mt-20 border-b border-slate-100 dark:border-slate-800/80 ${
@@ -1343,10 +1455,14 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              toggleExpandDocNr(group.docNr);
+                              if (group.items.length === 1) {
+                                onViewDetails(group.mainOrder);
+                              } else {
+                                toggleExpandDocNr(group.docNr);
+                              }
                             }}
-                            className="p-1 -ml-1 text-slate-400 hover:text-blue-600 transition-colors shrink-0 mt-0.5"
-                            title={isExpanded ? "Ocultar linhas" : "Ver linhas"}
+                            className="p-1 -ml-1 text-slate-400 hover:text-blue-600 transition-colors shrink-0 mt-0.5 cursor-pointer"
+                            title={group.items.length === 1 ? "Ver detalhes da encomenda" : isExpanded ? "Ocultar linhas" : "Ver linhas"}
                           >
                             <ChevronRight size={15} className={`transition-transform duration-200 ${isExpanded ? 'rotate-90 text-blue-600' : ''}`} />
                           </button>
@@ -1422,20 +1538,55 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-3.5 align-top">
+                      <td className="px-6 py-3.5 align-top" onClick={(e) => e.stopPropagation()}>
                         <span className="text-sm font-black text-slate-800 dark:text-slate-200 block">
                           {group.items.length} {group.items.length === 1 ? 'linha' : 'linhas'}
                         </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleExpandDocNr(group.docNr);
-                          }}
-                          className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline block mt-0.5 cursor-pointer text-left"
-                        >
-                          {isExpanded ? 'Ocultar linhas' : 'Ver linhas'}
-                        </button>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {group.items.length === 1 ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                onViewDetails(group.mainOrder);
+                              }}
+                              className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer text-left flex items-center gap-0.5"
+                              title="Ver detalhes da encomenda"
+                            >
+                              <span>Ver Detalhes</span>
+                              <span className="text-[10px]">→</span>
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  toggleExpandDocNr(group.docNr);
+                                }}
+                                className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer text-left"
+                                title={isExpanded ? "Ocultar linhas" : "Ver todas as linhas"}
+                              >
+                                {isExpanded ? '▲ Ocultar linhas' : '▼ Ver linhas'}
+                              </button>
+                              <span className="text-slate-300 dark:text-slate-600 text-xs">•</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  onViewDetails(group.mainOrder);
+                                }}
+                                className="text-xs text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 font-semibold hover:underline cursor-pointer text-left"
+                                title="Ver detalhes da encomenda"
+                              >
+                                Detalhes →
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-3.5 align-top">
                         <span className="text-sm font-black text-slate-900 dark:text-slate-100 block">
@@ -1520,7 +1671,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                                 {group.items.map((item, idx) => (
                                   <tr
                                     key={item.id}
-                                    onClick={() => onViewDetails(item)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onViewDetails(item);
+                                    }}
                                     className="hover:bg-blue-50/70 dark:hover:bg-slate-900 cursor-pointer transition-colors"
                                   >
                                     <td className="px-3 py-2 text-center font-bold text-slate-400 text-[11px]">
@@ -1557,8 +1711,13 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                                     </td>
                                     <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                                       <button
-                                        onClick={() => onViewDetails(item)}
-                                        className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 text-[10px] font-bold transition-colors shadow-2xs"
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          e.preventDefault();
+                                          onViewDetails(item);
+                                        }}
+                                        className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 text-[10px] font-bold transition-colors shadow-2xs cursor-pointer"
                                       >
                                         Ver Detalhes
                                       </button>
@@ -1586,17 +1745,28 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
         </div>
         
         {/* Mobile Grid - 1 Cartão por Documento com expansão ao clicar (Vertical e Landscape sem scroll lateral) */}
-        <div className="compact-mobile-only grid grid-cols-1 gap-1.5 p-1.5 sm:p-2 w-full max-w-full overflow-x-hidden">
+        <div className={`compact-mobile-only grid grid-cols-1 gap-1.5 p-1.5 sm:p-2 w-full max-w-full overflow-x-hidden ${
+          paginatedGroups.length <= 3 ? 'min-h-[calc(100vh+80px)] pb-60' : 'pb-24'
+        }`}>
           {paginatedGroups.map((group, index) => {
             const isExpanded = expandedDocNrs.has(group.docNr);
             const isGroupSelected = isDocGroupSelected(group);
             const isGroupPartial = isDocGroupPartiallySelected(group);
+            const isSingleItem = group.items.length === 1;
 
             return (
               <div 
                 key={group.docNr}
                 id={`order-card-${group.docNr}`}
-                onClick={() => toggleExpandDocNr(group.docNr)}
+                onClick={() => {
+                  const now = Date.now();
+                  if (now - lastTouchTimeRef.current < 450) return;
+                  if (isSingleItem) {
+                    onViewDetails(group.mainOrder);
+                  } else {
+                    toggleExpandDocNr(group.docNr);
+                  }
+                }}
                 className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
                   isExpanded 
                     ? 'border-blue-400 dark:border-blue-600 bg-white dark:bg-slate-900 shadow-sm ring-1 ring-blue-500/20' 
@@ -1658,10 +1828,18 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                       )}
                     </div>
 
-                    {/* docNr e botão para expandir */}
+                    {/* docNr e botão para expandir ou abrir detalhes */}
                     <div 
                       onTouchEnd={(e) => handleDocNrTouchEnd(group.docNr, e)}
-                      className="select-none flex items-center gap-1 min-w-0 group/doc"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isSingleItem) {
+                          onViewDetails(group.mainOrder);
+                        } else {
+                          toggleExpandDocNr(group.docNr);
+                        }
+                      }}
+                      className="select-none flex items-center gap-1 min-w-0 group/doc cursor-pointer"
                     >
                       <h3 className="font-black text-slate-800 dark:text-white text-xs leading-none tracking-tight group-hover/doc:text-blue-600 transition-colors">
                         {group.docNr ? <HighlightText text={group.docNr} highlight={highlights} /> : '-'}
@@ -1675,7 +1853,9 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                         }`}
                       >
                         <span>{group.items.length} {group.items.length === 1 ? 'linha' : 'linhas'}</span>
-                        <ChevronDown size={10} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                        {!isSingleItem && (
+                          <ChevronDown size={10} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                        )}
                       </span>
                     </div>
 
@@ -1738,9 +1918,34 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                       <span className="truncate">{group.referenceSummary}</span>
                     </span>
 
-                    <span className="text-[9px] text-blue-600 dark:text-blue-400 font-bold hover:underline shrink-0">
-                      Ver linhas ▼
-                    </span>
+                    {isSingleItem ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          onViewDetails(group.mainOrder);
+                        }}
+                        className="text-[9px] text-blue-600 dark:text-blue-400 font-bold hover:underline shrink-0 flex items-center gap-0.5 cursor-pointer"
+                        title="Ver detalhes da encomenda"
+                      >
+                        <span>Ver Detalhes</span>
+                        <span>→</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          toggleExpandDocNr(group.docNr);
+                        }}
+                        className="text-[9px] text-blue-600 dark:text-blue-400 font-bold hover:underline shrink-0 cursor-pointer"
+                        title="Ver todas as linhas deste documento"
+                      >
+                        Ver linhas ({group.items.length}) ▼
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -1756,8 +1961,12 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                       </span>
                       <button
                         type="button"
-                        onClick={() => toggleExpandDocNr(group.docNr)}
-                        className="text-[9px] text-blue-600 dark:text-blue-400 font-bold hover:underline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          toggleExpandDocNr(group.docNr);
+                        }}
+                        className="text-[9px] text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer"
                       >
                         ▲ Ocultar linhas
                       </button>
@@ -1767,7 +1976,11 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                       {group.items.map((item, itemIdx) => (
                         <div 
                           key={item.id}
-                          onClick={() => onViewDetails(item)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            onViewDetails(item);
+                          }}
                           className="p-2 bg-slate-50 dark:bg-slate-850/60 hover:bg-blue-50/50 dark:hover:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-800 transition-colors cursor-pointer flex flex-col gap-1 active:scale-99"
                         >
                           <div className="flex items-center justify-between gap-2">
@@ -1791,11 +2004,21 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                             <span className="truncate">
                               {item.sizeDesc || item.size || '-'} {item.family ? `• ${item.family}` : ''}
                             </span>
-                            <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <div 
+                              className="flex items-center gap-1.5 shrink-0" 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                onViewDetails(item);
+                              }}
+                            >
                               {hasObservations(item) && <Eye size={12} className="text-blue-500" title="Tem observações" />}
-                              <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                              <button
+                                type="button"
+                                className="text-[9px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                              >
                                 Detalhes →
-                              </span>
+                              </button>
                             </div>
                           </div>
                         </div>
