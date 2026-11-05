@@ -1,24 +1,49 @@
 
 import React from 'react';
-import { X, User, ShoppingBag, Palette, Ruler, CheckCircle, Package, MessageSquare, Save, FileText as FileIcon, Trash2, Lock, Flag, Hand, AlertCircle } from 'lucide-react';
+import { X, User, ShoppingBag, Palette, Ruler, CheckCircle, Package, MessageSquare, Save, FileText as FileIcon, Trash2, Lock, Flag, Hand, AlertCircle, Calendar } from 'lucide-react';
 import { Order, Sector, SectorState, User as UserType } from '../types';
 import { getSectorState } from '../services/dataService';
 import { formatDate, formatDateTime } from '../utils/formatters';
 import { SECTORS, STATUS_COLORS } from '../constants';
 import StopReasonSelector from './StopReasonSelector';
+import OrderChangeModal from './OrderChangeModal';
 
 interface OrderDetailsProps {
   order: Order;
+  allOrders?: Order[];
   onClose: () => void;
   onUpdateOrder: (updatedOrder: Order) => void;
+  onUpdateMultipleOrders?: (updatedOrders: Order[]) => void;
   user: UserType | null;
   stopReasonsHierarchy: any[];
 }
 
-const OrderDetails: React.FC<OrderDetailsProps> = ({ order, onClose, onUpdateOrder, user, stopReasonsHierarchy }) => {
+const OrderDetails: React.FC<OrderDetailsProps> = ({ 
+  order, 
+  allOrders,
+  onClose, 
+  onUpdateOrder, 
+  onUpdateMultipleOrders,
+  user, 
+  stopReasonsHierarchy 
+}) => {
   const [editingSector, setEditingSector] = React.useState<Sector | null>(null);
   const [obsText, setObsText] = React.useState('');
   const [stopReason, setStopReason] = React.useState('');
+  const [editDate, setEditDate] = React.useState('');
+  
+  const [pendingChange, setPendingChange] = React.useState<{
+    docNr: string;
+    items: Order[];
+    clientName?: string;
+    sectorName?: string;
+    sectorId: string;
+    currentReason?: string;
+    newReason?: string;
+    currentDate?: Date | null;
+    newDate?: Date | null;
+    initialObservation?: string;
+  } | null>(null);
 
   const canEdit = editingSector ? (user?.permissions?.sectors?.[editingSector.id] === 'write') : false;
 
@@ -26,17 +51,112 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ order, onClose, onUpdateOrd
     setEditingSector(sector);
     setObsText(order.sectorObservations?.[sector.id] || '');
     setStopReason(order.sectorStopReasons?.[sector.id] || '');
+    const predDate = order.sectorPredictedDates?.[sector.id];
+    setEditDate(predDate ? new Date(predDate).toISOString().split('T')[0] : '');
   };
 
   const handleSaveObservation = () => {
     if (!editingSector || user?.permissions?.sectors?.[editingSector.id] !== 'write') return;
-    const updatedObservations = { ...(order.sectorObservations || {}), [editingSector.id]: obsText };
-    const updatedStopReasons = { ...(order.sectorStopReasons || {}), [editingSector.id]: stopReason };
+
+    const initialReason = order.sectorStopReasons?.[editingSector.id] || '';
+    const initialDateStr = order.sectorPredictedDates?.[editingSector.id] 
+      ? new Date(order.sectorPredictedDates[editingSector.id]!).toISOString().split('T')[0]
+      : '';
+
+    const isReasonChanged = stopReason !== initialReason;
+    const isDateChanged = editDate !== initialDateStr;
+
+    // Se a Classificação ou a Data foram alteradas, a observação é OBRIGATÓRIA e devemos perguntar se é para guardar em todos os itens ou marcar itens!
+    if (isReasonChanged || isDateChanged) {
+      const pool = allOrders || [order];
+      const docItems = pool.filter(o => o.docNr === order.docNr);
+      setPendingChange({
+        docNr: order.docNr || '-',
+        items: docItems.length > 0 ? docItems : [order],
+        clientName: order.clientName,
+        sectorName: editingSector.name,
+        sectorId: editingSector.id,
+        currentReason: initialReason,
+        newReason: stopReason,
+        currentDate: order.sectorPredictedDates?.[editingSector.id] || null,
+        newDate: editDate ? new Date(editDate) : null,
+        initialObservation: obsText
+      });
+      return;
+    }
+
+    // Se apenas foram alteradas observações e há mais do que 1 item no documento
+    const initialObs = order.sectorObservations?.[editingSector.id] || '';
+    if (obsText !== initialObs) {
+      const pool = allOrders || [order];
+      const docItems = pool.filter(o => o.docNr === order.docNr);
+      if (docItems.length > 1) {
+        setPendingChange({
+          docNr: order.docNr || '-',
+          items: docItems,
+          clientName: order.clientName,
+          sectorName: editingSector.name,
+          sectorId: editingSector.id,
+          initialObservation: obsText
+        });
+        return;
+      }
+    }
+
     onUpdateOrder({ 
       ...order, 
-      sectorObservations: updatedObservations,
-      sectorStopReasons: updatedStopReasons
+      sectorObservations: { ...(order.sectorObservations || {}), [editingSector.id]: obsText },
+      sectorStopReasons: { ...(order.sectorStopReasons || {}), [editingSector.id]: stopReason }
     });
+    setEditingSector(null);
+  };
+
+  const handleConfirmDetailsChange = (result: {
+    observation: string;
+    targetOrderIds: string[];
+    applyToAll: boolean;
+  }) => {
+    if (!pendingChange || !editingSector) return;
+
+    const targetSet = new Set(result.targetOrderIds);
+    const pool = allOrders || [order];
+    const itemsToUpdate = pool.filter(o => targetSet.has(o.id));
+
+    const updatedList: Order[] = itemsToUpdate.map(target => {
+      let updatedObservations = { ...(target.sectorObservations || {}) };
+      if (result.observation) {
+        updatedObservations[editingSector.id] = result.observation;
+      }
+
+      let updatedStopReasons = { ...(target.sectorStopReasons || {}) };
+      if (pendingChange.newReason !== undefined) {
+        updatedStopReasons[editingSector.id] = pendingChange.newReason;
+      }
+
+      let updatedPredictedDates = { ...(target.sectorPredictedDates || {}) };
+      let updatedPending = { ...(target.sectorPredictedDatesPending || {}) };
+
+      if (pendingChange.newDate !== undefined) {
+        updatedPredictedDates[editingSector.id] = pendingChange.newDate;
+        delete updatedPending[editingSector.id];
+      }
+
+      return {
+        ...target,
+        sectorObservations: updatedObservations,
+        sectorStopReasons: updatedStopReasons,
+        sectorPredictedDates: updatedPredictedDates,
+        sectorPredictedDatesPending: updatedPending
+      };
+    });
+
+    if (onUpdateMultipleOrders) {
+      onUpdateMultipleOrders(updatedList);
+    } else {
+      updatedList.forEach(onUpdateOrder);
+    }
+
+    setPendingChange(null);
     setEditingSector(null);
   };
 
@@ -203,26 +323,38 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ order, onClose, onUpdateOrd
                     <div className="mt-4 bg-white dark:bg-slate-900 border-2 border-blue-500 rounded-2xl p-4 shadow-2xl animate-in slide-in-from-bottom-4">
                         <div className="flex justify-between items-center mb-3">
                             <h4 className="text-xs font-black text-blue-600 uppercase flex items-center gap-2">
-                                <MessageSquare size={16} /> Editar Notas: {editingSector.name}
+                                <MessageSquare size={16} /> Editar Notas & Previsão: {editingSector.name}
                             </h4>
                             <button onClick={() => setEditingSector(null)} className="text-slate-400 hover:text-slate-600"><X size={18}/></button>
                         </div>
-                        <div className="flex items-center gap-3 mb-3 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
-                             <span className="text-[10px] font-black text-rose-500 uppercase flex items-center gap-1 shrink-0">
-                                <AlertCircle size={14}/> Motivo:
-                             </span>
-                             <StopReasonSelector
-                                currentReason={stopReason} 
-                                onSelect={setStopReason} 
-                                hierarchy={stopReasonsHierarchy}
-                             />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                             <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                                 <span className="text-[10px] font-black text-rose-500 uppercase flex items-center gap-1 shrink-0">
+                                    <AlertCircle size={14}/> Motivo:
+                                 </span>
+                                 <StopReasonSelector
+                                    currentReason={stopReason} 
+                                    onSelect={setStopReason} 
+                                    hierarchy={stopReasonsHierarchy}
+                                 />
+                             </div>
+                             <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                                 <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase flex items-center gap-1 shrink-0">
+                                    <Calendar size={14}/> Data Prevista / Saída:
+                                 </span>
+                                 <input
+                                    type="date"
+                                    value={editDate}
+                                    onChange={(e) => setEditDate(e.target.value)}
+                                    className="text-xs p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none font-bold text-slate-700 dark:text-slate-200 flex-1 min-w-0"
+                                 />
+                             </div>
                         </div>
                         <textarea
                             value={obsText}
                             onChange={(e) => setObsText(e.target.value)}
-                            className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 outline-none h-32 resize-none"
+                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 outline-none h-28 resize-none"
                             placeholder="Escreva as observações aqui..."
-                            autoFocus
                         />
                         <div className="flex justify-end gap-3 mt-3">
                             <button
@@ -327,6 +459,24 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({ order, onClose, onUpdateOrd
                 </div>
             </aside>
         </div>
+
+        {/* Modal de Validação Obrigatória de Observações e Seleção de Âmbito de Itens */}
+        {pendingChange && (
+          <OrderChangeModal
+            isOpen={true}
+            onClose={() => setPendingChange(null)}
+            docNr={pendingChange.docNr}
+            items={pendingChange.items}
+            clientName={pendingChange.clientName}
+            sectorName={pendingChange.sectorName}
+            currentReason={pendingChange.currentReason}
+            newReason={pendingChange.newReason}
+            currentDate={pendingChange.currentDate}
+            newDate={pendingChange.newDate}
+            initialObservation={pendingChange.initialObservation}
+            onConfirm={handleConfirmDetailsChange}
+          />
+        )}
     </div>
   );
 };

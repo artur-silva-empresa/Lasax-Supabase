@@ -33,6 +33,7 @@ import { SECTORS } from '../constants';
 import StopReasonSelector from './StopReasonSelector';
 import ConfirmModal from './ConfirmModal';
 import HighlightText from './HighlightText';
+import OrderChangeModal from './OrderChangeModal';
 
 // Definição dos tipos de filtros ativos vindos do Dashboard
 export type ActiveFilterType = 'LATE' | 'WEEK_DELIVERIES' | 'WEEK_COMPLETED' | null;
@@ -45,7 +46,7 @@ interface OrderTableProps {
   user: User | null;
   onUpdatePriority?: (docNr: string, priority: number) => void;
   onUpdateManual?: (docNr: string, isManual: boolean) => void;
-  onUpdateStopReason?: (docNr: string, sectorId: string, reason: string) => void;
+  onUpdateStopReason?: (docNr: string, sectorId: string, reason: string, observation?: string, targetOrderIds?: string[]) => void;
   stopReasonsHierarchy: any[];
   onArchiveOrder?: (docNr: string, archive: boolean) => void;
   globalSearchTerm?: string;
@@ -87,6 +88,73 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
   const [selectedOrderIds, setSelectedOrderIds] = React.useState<Set<string>>(new Set());
   const [bulkArchiveConfirm, setBulkArchiveConfirm] = React.useState(false);
   const [bulkUnarchiveConfirm, setBulkUnarchiveConfirm] = React.useState(false);
+  
+  // Estado para validação de alterações em Classificação / Data (com obrigatoriedade de observação e escolha de itens)
+  const [pendingChange, setPendingChange] = React.useState<{
+    docNr: string;
+    items: Order[];
+    clientName?: string;
+    sectorId: string;
+    sectorName: string;
+    currentReason?: string;
+    newReason?: string;
+    currentDate?: Date | null;
+    newDate?: Date | null;
+  } | null>(null);
+
+  const handleOpenClassificationModal = (group: DocumentGroup, newReason: string) => {
+    const current = group.mainOrder.sectorStopReasons?.['planeamento'] || '';
+    if (newReason === current) return;
+    setPendingChange({
+      docNr: group.docNr,
+      items: group.items,
+      clientName: group.clientName,
+      sectorId: 'planeamento',
+      sectorName: 'Planeamento',
+      currentReason: current,
+      newReason: newReason
+    });
+  };
+
+  const handleConfirmChange = (result: {
+    observation: string;
+    targetOrderIds: string[];
+    applyToAll: boolean;
+  }) => {
+    if (!pendingChange) return;
+
+    if (onUpdateStopReason && pendingChange.newReason !== undefined) {
+      if (pendingChange.items.every(it => it.docNr === pendingChange.docNr)) {
+        onUpdateStopReason(
+          pendingChange.docNr,
+          pendingChange.sectorId,
+          pendingChange.newReason,
+          result.observation,
+          result.targetOrderIds
+        );
+      } else {
+        const docs = Array.from(new Set(
+          pendingChange.items
+            .filter(it => result.targetOrderIds.includes(it.id))
+            .map(it => it.docNr)
+            .filter(Boolean)
+        )) as string[];
+
+        docs.forEach(d => {
+          onUpdateStopReason(
+            d,
+            pendingChange.sectorId,
+            pendingChange.newReason || '',
+            result.observation,
+            result.targetOrderIds
+          );
+        });
+        setSelectedOrderIds(new Set());
+      }
+    }
+    setPendingChange(null);
+  };
+
   // Menu de filtros por predefinição colapsado
   const [showMobileFilters, setShowMobileFilters] = React.useState(false);
   // Visibilidade do cabeçalho da tabela de encomendas no smartphone (ocultado ao fazer scroll)
@@ -316,9 +384,42 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
     return Array.from(set).sort();
   }, [orders, filterDocSeries, filterComercial]);
 
-  const hasObservations = (order: Order) => {
-    return order.sectorObservations && Object.values(order.sectorObservations).some(v => v && v.trim() !== '');
-  };
+  const hasObservations = React.useCallback((order: Order) => {
+    // 1. Observações explícitas
+    const hasSector = !!(order.sectorObservations && Object.values(order.sectorObservations).some(v => typeof v === 'string' && v.trim() !== ''));
+    if (hasSector) return true;
+
+    // 2. Classificações / Motivos de paragem (Considerados como "Observações")
+    const hasStopReason = !!(order.sectorStopReasons && Object.values(order.sectorStopReasons).some(v => typeof v === 'string' && v.trim() !== ''));
+    if (hasStopReason) return true;
+
+    // 3. Alterações de Data de Saída / Previsões
+    const hasPredictedDates = !!(order.sectorPredictedDates && Object.values(order.sectorPredictedDates).some(v => v !== null && v !== undefined));
+    const hasPendingDates = !!(order.sectorPredictedDatesPending && Object.values(order.sectorPredictedDatesPending).some(Boolean));
+    const hasDateHistory = !!(order.predictedDatesHistory && order.predictedDatesHistory.length > 0);
+    if (hasPredictedDates || hasPendingDates || hasDateHistory) return true;
+
+    // 4. Colunas brutas de observações do ficheiro
+    if (order._raw) {
+      for (const [key, val] of Object.entries(order._raw)) {
+        if (/obs|nota|coment/i.test(key) && val && typeof val === 'string' && val.trim() !== '') {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, []);
+
+  // Conjunto de docNrs que possuem pelo menos uma linha com observações
+  const docNrsWithObservations = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const ord of orders) {
+      if (hasObservations(ord) && ord.docNr) {
+        set.add(ord.docNr.trim());
+      }
+    }
+    return set;
+  }, [orders, hasObservations]);
 
   // Funções de Navegação de Semana
   const handlePrevWeek = () => {
@@ -408,7 +509,9 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
           }
       }
 
-      const matchesObservations = !filterHasObservations || hasObservations(o);
+      const matchesObservations = !filterHasObservations || 
+        hasObservations(o) || 
+        (!!o.docNr && docNrsWithObservations.has(o.docNr.trim()));
 
       // Filtro arquivado
       let matchesArchived = true;
@@ -448,7 +551,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
       
       return matchesDocSeries && matchesComercial && matchesReference && matchesStatus && matchesSearch && matchesObservations && matchesWeek && matchesFlags && matchesArchived;
     });
-  }, [orders, deferredSearch, globalSearchTerm, filterStatus, filterDocSeries, filterComercial, filterReference, filterHasObservations, filterDate, filterPriority, filterManual, activeFilter, filterArchived]);
+  }, [orders, deferredSearch, globalSearchTerm, filterStatus, filterDocSeries, filterComercial, filterReference, filterHasObservations, docNrsWithObservations, hasObservations, filterDate, filterWeekMode, filterPriority, filterManual, activeFilter, filterArchived]);
 
   React.useEffect(() => {
     setCurrentPage(1);
@@ -892,10 +995,15 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
 
   const handleBulkStopReason = (reason: string) => {
     if (onUpdateStopReason && selectedDocNrs.length > 0) {
-      selectedDocNrs.forEach(docNr => {
-        onUpdateStopReason(docNr, 'planeamento', reason === 'none' ? '' : reason);
+      const selectedItems = orders.filter(o => selectedOrderIds.has(o.id));
+      setPendingChange({
+        docNr: selectedDocNrs.length === 1 ? selectedDocNrs[0] : `${selectedDocNrs.length} documentos selecionados`,
+        items: selectedItems,
+        sectorId: 'planeamento',
+        sectorName: 'Planeamento',
+        currentReason: '',
+        newReason: reason === 'none' ? '' : reason
       });
-      setSelectedOrderIds(new Set());
     }
   };
 
@@ -958,6 +1066,19 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 {filterDate && (
                     <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-in fade-in">
                         {filterWeekMode === 'cumulative' ? `Filtro: ≤ Até Semana ${getISOWeek(filterDate)}` : `Filtro: Só Semana ${getISOWeek(filterDate)}`}
+                    </span>
+                )}
+                {filterHasObservations && (
+                    <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-in fade-in flex items-center gap-1">
+                        <Eye size={11} className="text-blue-600 dark:text-blue-400" />
+                        <span>Com Observações</span>
+                        <button
+                          onClick={() => setFilterHasObservations(false)}
+                          className="ml-0.5 hover:text-blue-900 dark:hover:text-white cursor-pointer"
+                          title="Remover filtro de observações"
+                        >
+                          <X size={10} />
+                        </button>
                     </span>
                 )}
                 {filterManual && (
@@ -1201,6 +1322,24 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 </div>
               )}
 
+              {/* Botão Filtro de Observações */}
+              <button
+                type="button"
+                onClick={() => setFilterHasObservations(!filterHasObservations)}
+                className={`flex items-center gap-2 border rounded-xl px-3 py-2 shadow-sm grow md:grow-0 transition-all text-xs font-bold active:scale-95 cursor-pointer select-none ${
+                  filterHasObservations
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-400/30'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+                title={filterHasObservations ? "A mostrar apenas encomendas com observações (clique para mostrar todas)" : "Filtrar encomendas onde o campo com observações esteja preenchido"}
+              >
+                <Eye size={14} className={filterHasObservations ? "text-white" : "text-blue-500"} />
+                <span>Com Observações</span>
+                {filterHasObservations && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-white ml-0.5 animate-pulse" />
+                )}
+              </button>
+
               <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
                 <Flag size={14} className="text-slate-400" />
                 <select 
@@ -1378,12 +1517,17 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap w-[15%]">Qtd. Pedida / Entrega</th>
                 <th className="px-2 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center w-[5%]">
                     <button 
+                        type="button"
                         onClick={() => setFilterHasObservations(!filterHasObservations)}
-                        className={`flex items-center justify-center gap-1 mx-auto transition-all ${filterHasObservations ? 'text-blue-600 dark:text-blue-400 scale-110' : 'hover:text-slate-600 dark:hover:text-slate-300'}`}
-                        title={filterHasObservations ? "Mostrar todas" : "Filtrar apenas com observações"}
+                        className={`flex items-center justify-center gap-1 mx-auto px-1.5 py-1 rounded-lg transition-all cursor-pointer ${
+                          filterHasObservations 
+                            ? 'bg-blue-600 text-white font-black shadow-xs ring-2 ring-blue-400/40' 
+                            : 'hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800'
+                        }`}
+                        title={filterHasObservations ? "A mostrar apenas com observações (clique para mostrar todas)" : "Filtrar apenas encomendas com observações"}
                     >
-                        Obs.
-                        <Filter size={10} strokeWidth={3} className={filterHasObservations ? "fill-blue-100 dark:fill-blue-900" : ""} />
+                        <span>Obs.</span>
+                        <Eye size={10} className={filterHasObservations ? "text-white" : "text-blue-500"} />
                     </button>
                 </th>
                 <th className="px-2 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center w-[10%]">Classificação</th>
@@ -1609,7 +1753,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                       <td className="px-2 py-3.5 align-middle text-center" onClick={(e) => e.stopPropagation()}>
                         <StopReasonSelector 
                           currentReason={group.mainOrder.sectorStopReasons?.['planeamento']} 
-                          onSelect={(reason) => onUpdateStopReason?.(group.docNr, 'planeamento', reason)}
+                          onSelect={(reason) => handleOpenClassificationModal(group, reason)}
                           disabled={user?.permissions?.orders !== 'write'}
                           hierarchy={stopReasonsHierarchy}
                         />
@@ -2216,6 +2360,23 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
           isDestructive={false}
           onConfirm={executeBulkUnarchive}
           onCancel={() => setBulkUnarchiveConfirm(false)}
+        />
+      )}
+
+      {/* Modal de Validação Obrigatória de Observações e Seleção de Âmbito de Itens */}
+      {pendingChange && (
+        <OrderChangeModal
+          isOpen={true}
+          onClose={() => setPendingChange(null)}
+          docNr={pendingChange.docNr}
+          items={pendingChange.items}
+          clientName={pendingChange.clientName}
+          sectorName={pendingChange.sectorName}
+          currentReason={pendingChange.currentReason}
+          newReason={pendingChange.newReason}
+          currentDate={pendingChange.currentDate}
+          newDate={pendingChange.newDate}
+          onConfirm={handleConfirmChange}
         />
       )}
     </div>

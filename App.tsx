@@ -543,13 +543,41 @@ const App: React.FC = () => {
     updated.forEach(saveOrderToDB);
   };
 
-  // Função para atualizar motivo de paragem em lote (por Nr Doc)
-  const handleUpdateStopReason = (docNr: string, sectorId: string, stopReason: string) => {
-    const updated = orders.filter(o => o.docNr === docNr).map(o => ({
-        ...o,
-        sectorStopReasons: { ...(o.sectorStopReasons || {}), [sectorId]: stopReason }
-    }));
-    setOrders(prev => prev.map(o => o.docNr === docNr ? updated.find(u => u.id === o.id)! : o));
+  // Função para atualizar várias encomendas em lote
+  const handleUpdateMultipleOrders = (updatedOrders: Order[]) => {
+    if (!updatedOrders || updatedOrders.length === 0) return;
+    const idMap = new Map(updatedOrders.map(u => [u.id, u]));
+    setOrders(prev => prev.map(o => idMap.get(o.id) || o));
+    updatedOrders.forEach(saveOrderToDB);
+  };
+
+  // Função para atualizar motivo de paragem e observações (com suporte a escopo/itens específicos)
+  const handleUpdateStopReason = (
+    docNr: string, 
+    sectorId: string, 
+    stopReason: string, 
+    observation?: string, 
+    targetOrderIds?: string[]
+  ) => {
+    const isTargeted = targetOrderIds && targetOrderIds.length > 0;
+    const targetSet = isTargeted ? new Set(targetOrderIds) : null;
+
+    const updated = orders
+      .filter(o => targetSet ? targetSet.has(o.id) : o.docNr === docNr)
+      .map(o => {
+        const nextSectorObservations = { ...(o.sectorObservations || {}) };
+        if (observation && observation.trim() !== '') {
+          nextSectorObservations[sectorId] = observation.trim();
+        }
+        return {
+          ...o,
+          sectorStopReasons: { ...(o.sectorStopReasons || {}), [sectorId]: stopReason },
+          sectorObservations: nextSectorObservations
+        };
+      });
+
+    const updatedIdMap = new Map(updated.map(u => [u.id, u]));
+    setOrders(prev => prev.map(o => updatedIdMap.get(o.id) || o));
     updated.forEach(saveOrderToDB);
 
     // Se a encomenda for urgente e foi adicionado um motivo de paragem, alerta os gestores
@@ -560,7 +588,7 @@ const App: React.FC = () => {
         orderDocNr: docNr,
         clientName: targetOrder.clientName,
         changeType: 'STOP_REASON',
-        description: `Paragem no Setor ${s?.name || sectorId}: "${stopReason}"`,
+        description: `Paragem no Setor ${s?.name || sectorId}: "${stopReason}"${observation ? ` - Obs: ${observation}` : ''}`,
         priority: targetOrder.priority,
         changedBy: currentUser?.name || currentUser?.username
       });
@@ -801,9 +829,11 @@ const App: React.FC = () => {
                     <SectorOrderTable 
                         key={sector.id}
                         orders={globalFilteredOrders} 
+                        allOrders={orders}
                         sector={sector!}
                         onViewDetails={handleViewDetails} 
                         onUpdateOrder={handleUpdateOrder}
+                        onUpdateMultipleOrders={handleUpdateMultipleOrders}
                         stopReasonsHierarchy={stopReasons}
                         user={currentUser}
                         capacities={capacities}
@@ -886,11 +916,13 @@ const App: React.FC = () => {
         return selectedOrder ? (
           <OrderDetails
             order={selectedOrder}
+            allOrders={orders}
             onClose={() => {
               setActiveView(previousView || 'orders');
               setSelectedOrderId(null);
             }}
             onUpdateOrder={handleUpdateOrder}
+            onUpdateMultipleOrders={handleUpdateMultipleOrders}
             user={currentUser}
             stopReasonsHierarchy={stopReasons}
           />

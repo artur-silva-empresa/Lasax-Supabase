@@ -23,7 +23,8 @@ import {
   Archive,
   Trash2,
   Download,
-  Loader2
+  Loader2,
+  Eye
 } from 'lucide-react';
 import { Order, Sector, User, ProductionCapacity, OrderState } from '../types';
 import { getOrderState, getWeekRange, exportCustomColumns, loadExportColumnsConfig, DEFAULT_SELECTED_COLUMNS } from '../services/dataService';
@@ -32,12 +33,15 @@ import StopReasonSelector from './StopReasonSelector';
 import { calcOrderCapacityInfo } from '../utils/capacityUtils';
 import { SECTORS } from '../constants';
 import HighlightText from './HighlightText';
+import OrderChangeModal from './OrderChangeModal';
 
 interface SectorOrderTableProps {
   orders: Order[];
+  allOrders?: Order[];
   sector: Sector;
   onViewDetails: (order: Order) => void;
   onUpdateOrder: (order: Order) => void;
+  onUpdateMultipleOrders?: (orders: Order[]) => void;
   stopReasonsHierarchy: any[];
   user: User | null;
   capacities?: ProductionCapacity[];
@@ -86,7 +90,20 @@ const ResizableHeader = ({
   );
 };
 
-const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onViewDetails, onUpdateOrder, stopReasonsHierarchy, user, capacities = [], globalSearchTerm, globalFilterDate, onGlobalFilterDateChange }) => {
+const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ 
+  orders, 
+  allOrders,
+  sector, 
+  onViewDetails, 
+  onUpdateOrder, 
+  onUpdateMultipleOrders,
+  stopReasonsHierarchy, 
+  user, 
+  capacities = [], 
+  globalSearchTerm, 
+  globalFilterDate, 
+  onGlobalFilterDateChange 
+}) => {
   const [searchTerm, setSearchTerm] = React.useState('');
   const deferredSearch = React.useDeferredValue(searchTerm);
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -209,6 +226,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
   const [filterStatus, setFilterStatus] = React.useState('All');
   const [filterPriority, setFilterPriority] = React.useState('All'); 
   const [filterArchived, setFilterArchived] = React.useState<'all' | 'active' | 'archived'>('active');
+  const [filterHasObservations, setFilterHasObservations] = React.useState(false);
   const [internalFilterDate, setInternalFilterDate] = React.useState<Date | null>(null);
 
   const filterDate = globalFilterDate !== undefined ? globalFilterDate : internalFilterDate;
@@ -286,6 +304,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                            filterReference !== 'All' || 
                            filterStatus !== 'All' || 
                            filterPriority !== 'All' || 
+                           filterHasObservations ||
                            filterDate !== null || 
                            filterArchived !== 'active' ||
                            !!searchTerm;
@@ -296,10 +315,45 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
       setFilterReference('All');
       setFilterStatus('All');
       setFilterPriority('All');
+      setFilterHasObservations(false);
       setFilterDate(null);
       setFilterArchived('active');
       setSearchTerm('');
   };
+
+  const hasSectorObservations = React.useCallback((o: Order) => {
+    // 1. Observações explícitas
+    const sectorObs = o.sectorObservations?.[sector.id];
+    const hasSpecificObs = typeof sectorObs === 'string' && sectorObs.trim() !== '';
+    const hasAnySectorObs = !!(o.sectorObservations && Object.values(o.sectorObservations).some(v => typeof v === 'string' && v.trim() !== ''));
+    
+    // 2. Classificações / Motivos de paragem (Considerados como "Observações")
+    const sectorReason = o.sectorStopReasons?.[sector.id];
+    const hasSpecificReason = typeof sectorReason === 'string' && sectorReason.trim() !== '';
+    const hasAnyReason = !!(o.sectorStopReasons && Object.values(o.sectorStopReasons).some(v => typeof v === 'string' && v.trim() !== ''));
+
+    // 3. Alterações de data de saída / previsões no setor
+    const hasPredDate = !!(o.sectorPredictedDates?.[sector.id]);
+    const hasPendingDate = !!(o.sectorPredictedDatesPending?.[sector.id]);
+    const hasDateHistory = !!(o.predictedDatesHistory && o.predictedDatesHistory.some(h => h.sectorId === sector.id));
+
+    // 4. Observações brutas do ficheiro
+    const hasRawObs = !!(o._raw && Object.entries(o._raw).some(([k, v]) => 
+      /obs|nota|coment/i.test(k) && typeof v === 'string' && v.trim() !== ''
+    ));
+
+    return hasSpecificObs || hasAnySectorObs || hasSpecificReason || hasAnyReason || hasPredDate || hasPendingDate || hasDateHistory || hasRawObs;
+  }, [sector.id]);
+
+  const docNrsWithSectorObservations = React.useMemo(() => {
+    const set = new Set<string>();
+    orders.forEach(o => {
+      if (hasSectorObservations(o) && o.docNr) {
+        set.add(o.docNr.trim());
+      }
+    });
+    return set;
+  }, [orders, hasSectorObservations]);
 
   const filteredOrders = React.useMemo(() => {
     let weekStart: Date, weekEnd: Date;
@@ -345,6 +399,11 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
          if (filterArchived === 'archived') matchesArchived = !!o.isArchived;
       }
 
+      let matchesObservations = true;
+      if (filterHasObservations) {
+        matchesObservations = hasSectorObservations(o) || (!!o.docNr && docNrsWithSectorObservations.has(o.docNr.trim()));
+      }
+
       const globalSearch = (globalSearchTerm || '').toLowerCase().trim();
       if (globalSearch) {
           const exitDateStr = formatDate(getSectorDate(o));
@@ -377,9 +436,10 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
              matchesPriority && 
              matchesDate &&
              matchesArchived &&
+             matchesObservations &&
              matchesSearch;
     });
-  }, [orders, filterDocSeries, filterComercial, filterReference, filterStatus, filterPriority, filterDate, filterArchived, deferredSearch, globalSearchTerm]);
+  }, [orders, filterDocSeries, filterComercial, filterReference, filterStatus, filterPriority, filterDate, filterArchived, filterHasObservations, deferredSearch, globalSearchTerm, sector.id, hasSectorObservations, docNrsWithSectorObservations]);
 
   const totalPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
   const paginatedOrders = React.useMemo(() => {
@@ -522,51 +582,146 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
     setEditDate(predictedDate ? new Date(predictedDate).toISOString().split('T')[0] : '');
   };
 
+  const [pendingChange, setPendingChange] = React.useState<{
+    docNr: string;
+    items: Order[];
+    clientName?: string;
+    sectorName?: string;
+    currentReason?: string;
+    newReason?: string;
+    currentDate?: Date | null;
+    newDate?: Date | null;
+    initialObservation?: string;
+  } | null>(null);
+
+  const handleOpenSectorClassification = (order: Order, reason: string) => {
+    const current = order.sectorStopReasons?.[sector.id] || '';
+    if (reason === current) return;
+    const pool = allOrders || orders;
+    const docItems = pool.filter(o => o.docNr === order.docNr);
+    setPendingChange({
+      docNr: order.docNr || '-',
+      items: docItems.length > 0 ? docItems : [order],
+      clientName: order.clientName,
+      sectorName: sector.name,
+      currentReason: current,
+      newReason: reason,
+      initialObservation: order.sectorObservations?.[sector.id] || ''
+    });
+  };
+
+  const handleConfirmSectorChange = (result: {
+    observation: string;
+    targetOrderIds: string[];
+    applyToAll: boolean;
+  }) => {
+    if (!pendingChange) return;
+
+    const targetSet = new Set(result.targetOrderIds);
+    const pool = allOrders || orders;
+    const itemsToUpdate = pool.filter(o => targetSet.has(o.id));
+
+    const updatedOrdersList: Order[] = itemsToUpdate.map(target => {
+      let updatedObservations = { ...(target.sectorObservations || {}) };
+      if (result.observation) {
+        updatedObservations[sector.id] = result.observation;
+      }
+
+      let updatedStopReasons = { ...(target.sectorStopReasons || {}) };
+      if (pendingChange.newReason !== undefined) {
+        updatedStopReasons[sector.id] = pendingChange.newReason;
+      }
+
+      let updatedPredictedDates = { ...(target.sectorPredictedDates || {}) };
+      let updatedPending = { ...(target.sectorPredictedDatesPending || {}) };
+
+      if (pendingChange.newDate !== undefined) {
+        updatedPredictedDates[sector.id] = pendingChange.newDate;
+        delete updatedPending[sector.id];
+
+        // Propagar cascata para os setores subsequentes
+        const sectorIdx = SECTORS.findIndex(s => s.id === sector.id);
+        if (sectorIdx !== -1) {
+          for (let i = sectorIdx + 1; i < SECTORS.length; i++) {
+            const nextSectorId = SECTORS[i].id;
+            if (updatedPredictedDates[nextSectorId]) {
+              if (updatedPending[nextSectorId]) {
+                updatedPredictedDates[nextSectorId] = null;
+                delete updatedPending[nextSectorId];
+              } else {
+                updatedPending[nextSectorId] = true;
+              }
+            }
+          }
+        }
+      }
+
+      return {
+        ...target,
+        sectorObservations: updatedObservations,
+        sectorStopReasons: updatedStopReasons,
+        sectorPredictedDates: updatedPredictedDates,
+        sectorPredictedDatesPending: updatedPending
+      };
+    });
+
+    if (onUpdateMultipleOrders) {
+      onUpdateMultipleOrders(updatedOrdersList);
+    } else {
+      updatedOrdersList.forEach(onUpdateOrder);
+    }
+
+    setPendingChange(null);
+    setEditingId(null);
+  };
+
   const handleSaveClick = (order: Order, e: React.MouseEvent) => {
     e.stopPropagation();
     
-    const updatedObservations = {
-        ...(order.sectorObservations || {}),
-        [sector.id]: editObs
-    };
-
-    const updatedPredictedDates = {
-        ...(order.sectorPredictedDates || {}),
-        [sector.id]: editDate ? new Date(editDate) : null
-    };
-
-    const updatedPending = {
-        ...(order.sectorPredictedDatesPending || {})
-    };
-    delete updatedPending[sector.id];
-
     const currentPredictedDate = order.sectorPredictedDates?.[sector.id] 
         ? new Date(order.sectorPredictedDates[sector.id]!).toISOString().split('T')[0] 
         : '';
     const dateChanged = editDate !== currentPredictedDate;
 
+    // Se a data de saída/previsão foi alterada, a observação é OBRIGATÓRIA e devemos perguntar se é para guardar em todos os itens ou marcar itens!
     if (dateChanged) {
-        const sectorIdx = SECTORS.findIndex(s => s.id === sector.id);
-        if (sectorIdx !== -1) {
-            for (let i = sectorIdx + 1; i < SECTORS.length; i++) {
-                const nextSectorId = SECTORS[i].id;
-                if (updatedPredictedDates[nextSectorId]) {
-                    if (updatedPending[nextSectorId]) {
-                        updatedPredictedDates[nextSectorId] = null;
-                        delete updatedPending[nextSectorId];
-                    } else {
-                        updatedPending[nextSectorId] = true;
-                    }
-                }
-            }
-        }
+      const pool = allOrders || orders;
+      const docItems = pool.filter(o => o.docNr === order.docNr);
+      setPendingChange({
+        docNr: order.docNr || '-',
+        items: docItems.length > 0 ? docItems : [order],
+        clientName: order.clientName,
+        sectorName: sector.name,
+        currentDate: order.sectorPredictedDates?.[sector.id] || null,
+        newDate: editDate ? new Date(editDate) : null,
+        initialObservation: editObs
+      });
+      return;
+    }
+
+    // Se apenas as observações foram alteradas num documento com múltiplos itens
+    const currentObs = order.sectorObservations?.[sector.id] || '';
+    if (editObs !== currentObs) {
+      const pool = allOrders || orders;
+      const docItems = pool.filter(o => o.docNr === order.docNr);
+      if (docItems.length > 1) {
+        setPendingChange({
+          docNr: order.docNr || '-',
+          items: docItems,
+          clientName: order.clientName,
+          sectorName: sector.name,
+          initialObservation: editObs
+        });
+        return;
+      }
     }
 
     onUpdateOrder({
-        ...order,
-        sectorObservations: updatedObservations,
-        sectorPredictedDates: updatedPredictedDates,
-        sectorPredictedDatesPending: updatedPending
+      ...order,
+      sectorObservations: {
+        ...(order.sectorObservations || {}),
+        [sector.id]: editObs
+      }
     });
 
     setEditingId(null);
@@ -579,14 +734,16 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
 
   const handleQuickValidate = (order: Order, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updatedPending = {
-        ...(order.sectorPredictedDatesPending || {})
-    };
-    delete updatedPending[sector.id];
-
-    onUpdateOrder({
-        ...order,
-        sectorPredictedDatesPending: updatedPending
+    const pool = allOrders || orders;
+    const docItems = pool.filter(o => o.docNr === order.docNr);
+    setPendingChange({
+      docNr: order.docNr || '-',
+      items: docItems.length > 0 ? docItems : [order],
+      clientName: order.clientName,
+      sectorName: sector.name,
+      currentDate: null,
+      newDate: order.sectorPredictedDates?.[sector.id] || null,
+      initialObservation: order.sectorObservations?.[sector.id] || ''
     });
   };
 
@@ -638,7 +795,22 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                   {sector?.icon && React.createElement(sector.icon, { size: 24 })}
               </div>
               <div>
-                  <h2 className="text-lg font-bold text-slate-800 dark:text-white">Sector: {sector?.name}</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-slate-800 dark:text-white">Sector: {sector?.name}</h2>
+                    {filterHasObservations && (
+                      <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800 flex items-center gap-1 shadow-xs">
+                        <Eye size={10} />
+                        <span>Com Observações</span>
+                        <button
+                          onClick={() => setFilterHasObservations(false)}
+                          className="hover:text-blue-900 dark:hover:text-white ml-0.5"
+                          title="Remover filtro de observações"
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400">Listagem de encomendas</p>
               </div>
           </div>
@@ -682,11 +854,11 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
         >
           <Filter size={13} className={showMobileFilters ? "fill-white/10" : "text-slate-500"} />
           <span className="font-bold">{showMobileFilters ? "Ocultar" : "Filtrar"}</span>
-          {searchTerm && (
+          {hasActiveFilters && (
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
               showMobileFilters ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
             }`}>
-              1
+              {(searchTerm ? 1 : 0) + (filterPriority !== 'All' ? 1 : 0) + (filterDocSeries !== 'All' ? 1 : 0) + (filterComercial !== 'All' ? 1 : 0) + (filterReference !== 'All' ? 1 : 0) + (filterStatus !== 'All' ? 1 : 0) + (filterArchived !== 'active' ? 1 : 0) + (filterDate ? 1 : 0) + (filterHasObservations ? 1 : 0)}
             </span>
           )}
         </button>
@@ -827,6 +999,21 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                   <option value="all" className="dark:bg-slate-900">Todas</option>
                 </select>
               </div>
+
+              {/* Botão de Filtro por Observações */}
+              <button
+                type="button"
+                onClick={() => setFilterHasObservations(!filterHasObservations)}
+                className={`flex items-center gap-2 border rounded-xl px-3 py-2 shadow-sm grow md:grow-0 transition-all text-xs font-bold active:scale-95 cursor-pointer ${
+                  filterHasObservations
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-400/30'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+                title={filterHasObservations ? "A mostrar apenas com observações (clique para limpar)" : "Filtrar apenas encomendas com observações preenchidas"}
+              >
+                <Eye size={14} className={filterHasObservations ? "text-white" : "text-blue-500"} />
+                <span>Com Observações</span>
+              </button>
             </div>
           </div>
 
@@ -860,7 +1047,27 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
               <ResizableHeader colId="exitDate" title="Data Saída" width={columnWidths['exitDate'] || 100} onResize={handleColResize} className="text-center" />
               <ResizableHeader colId="predDate" title="Data Prevista" width={columnWidths['predDate'] || 120} onResize={handleColResize} className="text-center" />
               <ResizableHeader colId="class" title="Classificação" width={columnWidths['class'] || 180} onResize={handleColResize} className="text-center" />
-              <ResizableHeader colId="obs" title="Observações" width={columnWidths['obs'] || 200} onResize={handleColResize} />
+              <ResizableHeader 
+                colId="obs" 
+                title={
+                  <button
+                    type="button"
+                    onClick={() => setFilterHasObservations(!filterHasObservations)}
+                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded transition-all cursor-pointer font-black text-[10px] tracking-wider uppercase ${
+                      filterHasObservations
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'hover:text-blue-600 dark:hover:text-blue-400'
+                    }`}
+                    title={filterHasObservations ? "A filtrar com observações (clique para limpar)" : "Filtrar apenas com observações"}
+                  >
+                    <Eye size={12} className={filterHasObservations ? "text-white" : "text-blue-500"} />
+                    <span>Observações</span>
+                    {filterHasObservations && <span className="w-1.5 h-1.5 rounded-full bg-white ml-0.5 animate-pulse" />}
+                  </button>
+                } 
+                width={columnWidths['obs'] || 200} 
+                onResize={handleColResize} 
+              />
               <th className="px-2 py-3 w-[50px] text-center sticky right-0 bg-slate-100 dark:bg-slate-900 z-10">
                 <button
                   onClick={(e) => {
@@ -999,10 +1206,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                   <td className="px-4 py-3 align-top text-center" onClick={e => e.stopPropagation()}>
                     <StopReasonSelector 
                         currentReason={order.sectorStopReasons?.[sector.id]} 
-                        onSelect={(reason) => onUpdateOrder({ 
-                          ...order, 
-                          sectorStopReasons: { ...(order.sectorStopReasons || {}), [sector.id]: reason } 
-                        })}
+                        onSelect={(reason) => handleOpenSectorClassification(order, reason)}
                         hierarchy={stopReasonsHierarchy}
                         disabled={!canEdit}
                     />
@@ -1069,6 +1273,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
         <div className="compact-mobile-only grid grid-cols-1 gap-1.5 p-1.5 sm:p-2 w-full max-w-full overflow-x-hidden">
           {mobilePaginatedGroups.map((group, index) => {
             const isExpanded = expandedDocNrs.has(group.docNr);
+            const groupHasObs = group.items.some(o => hasSectorObservations(o));
 
             return (
               <div 
@@ -1112,6 +1317,16 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                         <span>{group.items.length} {group.items.length === 1 ? 'item' : 'itens'}</span>
                         <ChevronDown size={10} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                       </button>
+
+                      {groupHasObs && (
+                        <span 
+                          className="text-[9px] font-bold px-1 py-0.2 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 flex items-center gap-0.5 shrink-0" 
+                          title="Contém observações"
+                        >
+                          <Eye size={10} />
+                          <span>Obs</span>
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -1272,10 +1487,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                                 <span className="text-[8px] font-black uppercase text-slate-400 block">Classificação</span>
                                 <StopReasonSelector 
                                   currentReason={order.sectorStopReasons?.[sector.id]} 
-                                  onSelect={(reason) => onUpdateOrder({ 
-                                    ...order, 
-                                    sectorStopReasons: { ...(order.sectorStopReasons || {}), [sector.id]: reason } 
-                                  })}
+                                  onSelect={(reason) => handleOpenSectorClassification(order, reason)}
                                   hierarchy={stopReasonsHierarchy}
                                   disabled={!canEdit}
                                 />
@@ -1346,6 +1558,23 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({ orders, sector, onV
                 </button>
             </div>
         </div>
+      )}
+      {/* Modal de Validação Obrigatória de Observações e Seleção de Âmbito de Itens */}
+      {pendingChange && (
+        <OrderChangeModal
+          isOpen={true}
+          onClose={() => setPendingChange(null)}
+          docNr={pendingChange.docNr}
+          items={pendingChange.items}
+          clientName={pendingChange.clientName}
+          sectorName={pendingChange.sectorName}
+          currentReason={pendingChange.currentReason}
+          newReason={pendingChange.newReason}
+          currentDate={pendingChange.currentDate}
+          newDate={pendingChange.newDate}
+          initialObservation={pendingChange.initialObservation}
+          onConfirm={handleConfirmSectorChange}
+        />
       )}
     </div>
   );
