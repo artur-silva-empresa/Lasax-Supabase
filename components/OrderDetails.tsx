@@ -115,12 +115,20 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
     observation: string;
     targetOrderIds: string[];
     applyToAll: boolean;
+    predictedDate?: Date | null;
+    isDateModified?: boolean;
   }) => {
     if (!pendingChange || !editingSector) return;
 
     const targetSet = new Set(result.targetOrderIds);
     const pool = allOrders || [order];
     const itemsToUpdate = pool.filter(o => targetSet.has(o.id));
+
+    const effectiveDate = result.isDateModified
+      ? result.predictedDate
+      : (pendingChange.newDate !== undefined ? pendingChange.newDate : undefined);
+
+    const isDateActuallyChanged = effectiveDate !== undefined;
 
     const updatedList: Order[] = itemsToUpdate.map(target => {
       let updatedObservations = { ...(target.sectorObservations || {}) };
@@ -136,8 +144,8 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
       let updatedPredictedDates = { ...(target.sectorPredictedDates || {}) };
       let updatedPending = { ...(target.sectorPredictedDatesPending || {}) };
 
-      if (pendingChange.newDate !== undefined) {
-        updatedPredictedDates[editingSector.id] = pendingChange.newDate;
+      if (isDateActuallyChanged) {
+        updatedPredictedDates[editingSector.id] = effectiveDate ?? null;
         delete updatedPending[editingSector.id];
       }
 

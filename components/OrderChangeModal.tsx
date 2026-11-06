@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, AlertCircle, Check, CheckSquare, Square, Calendar, Tag, AlertTriangle, FileText, Layers } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, AlertCircle, Check, CheckSquare, Square, Calendar, Tag, AlertTriangle, FileText, Layers, RotateCcw } from 'lucide-react';
 import { Order } from '../types';
 import { formatDate } from '../utils/formatters';
 
@@ -24,8 +24,24 @@ export interface OrderChangeModalProps {
     observation: string;
     targetOrderIds: string[];
     applyToAll: boolean;
+    predictedDate?: Date | null;
+    isDateModified?: boolean;
   }) => void;
 }
+
+const toISODateString = (dateInput: Date | string | null | undefined): string => {
+  if (!dateInput) return '';
+  try {
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  } catch {
+    return '';
+  }
+};
 
 export const OrderChangeModal: React.FC<OrderChangeModalProps> = ({
   isOpen,
@@ -46,6 +62,13 @@ export const OrderChangeModal: React.FC<OrderChangeModalProps> = ({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
+  // Initial reference date string
+  const baseDate = newDate !== undefined ? newDate : (currentDate !== undefined ? currentDate : (items[0]?.requestedDate || null));
+  const initialDateStr = useMemo(() => toISODateString(baseDate), [baseDate]);
+
+  // Editable predicted date inside modal
+  const [editableDateStr, setEditableDateStr] = useState<string>(initialDateStr);
+
   // Initialize or reset state when opening modal
   useEffect(() => {
     if (isOpen) {
@@ -53,17 +76,22 @@ export const OrderChangeModal: React.FC<OrderChangeModalProps> = ({
       setScope('all');
       setSelectedIds(new Set(items.map(it => it.id)));
       setHasAttemptedSubmit(false);
+      setEditableDateStr(initialDateStr);
     }
-  }, [isOpen, initialObservation, items]);
+  }, [isOpen, initialObservation, items, initialDateStr]);
 
   if (!isOpen) return null;
 
   const isObservationEmpty = !observation || observation.trim() === '';
-  const isDateChanged = newDate !== undefined && (
+  const isDateModifiedByUser = editableDateStr !== initialDateStr;
+  
+  const isInitialDateChanged = newDate !== undefined && (
     (!currentDate && !!newDate) ||
     (!!currentDate && !newDate) ||
     (!!currentDate && !!newDate && new Date(currentDate).getTime() !== new Date(newDate).getTime())
   );
+
+  const effectiveDateChanged = isDateModifiedByUser || isInitialDateChanged;
   const isReasonChanged = newReason !== undefined && (newReason || '') !== (currentReason || '');
   const hasItemsSelected = scope === 'all' || selectedIds.size > 0;
 
@@ -100,10 +128,14 @@ export const OrderChangeModal: React.FC<OrderChangeModalProps> = ({
       ? items.map(it => it.id) 
       : Array.from(selectedIds);
 
+    const parsedDate = editableDateStr ? new Date(`${editableDateStr}T12:00:00`) : null;
+
     onConfirm({
       observation: observation.trim(),
       targetOrderIds,
-      applyToAll: scope === 'all'
+      applyToAll: scope === 'all',
+      predictedDate: parsedDate,
+      isDateModified: effectiveDateChanged
     });
   };
 
@@ -155,7 +187,7 @@ export const OrderChangeModal: React.FC<OrderChangeModalProps> = ({
         {/* Content Body */}
         <div className="p-4 md:p-5 overflow-y-auto space-y-4 text-xs">
           
-          {/* Card Resumo das Alterações */}
+          {/* Card Resumo das Alterações Detetadas */}
           <div className="bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-900/50 rounded-xl p-3.5 space-y-2">
             <div className="flex items-center gap-1.5 text-blue-800 dark:text-blue-300 font-black text-[11px] uppercase tracking-wide">
               <FileText size={14} />
@@ -180,23 +212,86 @@ export const OrderChangeModal: React.FC<OrderChangeModalProps> = ({
                 </div>
               )}
 
-              {isDateChanged && (
+              {effectiveDateChanged && (
                 <div className="flex items-center justify-between bg-white dark:bg-slate-900 px-3 py-2 rounded-lg border border-blue-100 dark:border-blue-900/40">
                   <span className="font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                    <Calendar size={13} className="text-blue-500" /> Data de Saída / Previsão:
+                    <Calendar size={13} className="text-blue-500" /> Data Prevista:
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="line-through text-slate-400 dark:text-slate-500 font-medium">
-                      {currentDate ? formatDate(currentDate) : 'Sem data'}
+                      {currentDate ? formatDate(currentDate) : (initialDateStr ? formatDate(new Date(initialDateStr)) : 'Sem data')}
                     </span>
                     <span className="text-slate-400">→</span>
                     <span className="font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-900/40">
-                      {newDate ? formatDate(newDate) : 'Sem data'}
+                      {editableDateStr ? formatDate(new Date(`${editableDateStr}T12:00:00`)) : 'Sem data'}
                     </span>
                   </div>
                 </div>
               )}
+
+              {!isReasonChanged && !effectiveDateChanged && (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+                  Defina ou altere a Data Prevista e preencha as Observações para validar os itens.
+                </p>
+              )}
             </div>
+          </div>
+
+          {/* Campo de Alteração de Data Prevista */}
+          <div className="bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="font-black text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
+                <Calendar size={14} className="text-blue-600 dark:text-blue-400" />
+                <span>Data Prevista {sectorName ? `(${sectorName})` : ''}</span>
+              </label>
+
+              <div className="flex items-center gap-2">
+                {isDateModifiedByUser && (
+                  <button
+                    type="button"
+                    onClick={() => setEditableDateStr(initialDateStr)}
+                    className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-bold transition-colors cursor-pointer"
+                    title="Repor data inicial"
+                  >
+                    <RotateCcw size={11} />
+                    <span>Repor</span>
+                  </button>
+                )}
+                {editableDateStr && (
+                  <button
+                    type="button"
+                    onClick={() => setEditableDateStr('')}
+                    className="text-[10px] text-slate-400 hover:text-rose-500 font-bold transition-colors cursor-pointer"
+                    title="Remover data prevista"
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={editableDateStr}
+                onChange={(e) => setEditableDateStr(e.target.value)}
+                className={`w-full p-2.5 bg-white dark:bg-slate-900 border rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 outline-none transition-all cursor-pointer ${
+                  isDateModifiedByUser
+                    ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/20'
+                    : 'border-slate-200 dark:border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+                }`}
+              />
+
+              {isDateModifiedByUser && (
+                <span className="text-[10px] font-black uppercase text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/60 px-2 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 shrink-0">
+                  Alterada
+                </span>
+              )}
+            </div>
+
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+              Pode alterar a data prevista para ser aplicada aos itens selecionados do documento.
+            </p>
           </div>
 
           {/* Campo de Observações OBRIGATÓRIO */}

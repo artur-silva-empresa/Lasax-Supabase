@@ -599,6 +599,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
     if (reason === current) return;
     const pool = allOrders || orders;
     const docItems = pool.filter(o => o.docNr === order.docNr);
+    const predDate = order.sectorPredictedDates?.[sector.id] || null;
     setPendingChange({
       docNr: order.docNr || '-',
       items: docItems.length > 0 ? docItems : [order],
@@ -606,6 +607,8 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
       sectorName: sector.name,
       currentReason: current,
       newReason: reason,
+      currentDate: predDate,
+      newDate: predDate,
       initialObservation: order.sectorObservations?.[sector.id] || ''
     });
   };
@@ -614,12 +617,21 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
     observation: string;
     targetOrderIds: string[];
     applyToAll: boolean;
+    predictedDate?: Date | null;
+    isDateModified?: boolean;
   }) => {
     if (!pendingChange) return;
 
     const targetSet = new Set(result.targetOrderIds);
     const pool = allOrders || orders;
     const itemsToUpdate = pool.filter(o => targetSet.has(o.id));
+
+    // Determinar a nova data caso tenha sido alterada no modal ou já viesse em pendingChange
+    const effectiveDate = result.isDateModified 
+      ? result.predictedDate 
+      : (pendingChange.newDate !== undefined ? pendingChange.newDate : undefined);
+
+    const isDateActuallyChanged = effectiveDate !== undefined;
 
     const updatedOrdersList: Order[] = itemsToUpdate.map(target => {
       let updatedObservations = { ...(target.sectorObservations || {}) };
@@ -635,8 +647,8 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
       let updatedPredictedDates = { ...(target.sectorPredictedDates || {}) };
       let updatedPending = { ...(target.sectorPredictedDatesPending || {}) };
 
-      if (pendingChange.newDate !== undefined) {
-        updatedPredictedDates[sector.id] = pendingChange.newDate;
+      if (isDateActuallyChanged) {
+        updatedPredictedDates[sector.id] = effectiveDate ?? null;
         delete updatedPending[sector.id];
 
         // Propagar cascata para os setores subsequentes

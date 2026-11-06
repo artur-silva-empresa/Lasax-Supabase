@@ -46,7 +46,7 @@ interface OrderTableProps {
   user: User | null;
   onUpdatePriority?: (docNr: string, priority: number) => void;
   onUpdateManual?: (docNr: string, isManual: boolean) => void;
-  onUpdateStopReason?: (docNr: string, sectorId: string, reason: string, observation?: string, targetOrderIds?: string[]) => void;
+  onUpdateStopReason?: (docNr: string, sectorId: string, reason: string, observation?: string, targetOrderIds?: string[], predictedDate?: Date | null) => void;
   stopReasonsHierarchy: any[];
   onArchiveOrder?: (docNr: string, archive: boolean) => void;
   globalSearchTerm?: string;
@@ -105,6 +105,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
   const handleOpenClassificationModal = (group: DocumentGroup, newReason: string) => {
     const current = group.mainOrder.sectorStopReasons?.['planeamento'] || '';
     if (newReason === current) return;
+    const initialDate = group.mainOrder.sectorPredictedDates?.['planeamento'] || group.requestedDate || null;
     setPendingChange({
       docNr: group.docNr,
       items: group.items,
@@ -112,7 +113,9 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
       sectorId: 'planeamento',
       sectorName: 'Planeamento',
       currentReason: current,
-      newReason: newReason
+      newReason: newReason,
+      currentDate: initialDate,
+      newDate: initialDate
     });
   };
 
@@ -120,17 +123,22 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
     observation: string;
     targetOrderIds: string[];
     applyToAll: boolean;
+    predictedDate?: Date | null;
+    isDateModified?: boolean;
   }) => {
     if (!pendingChange) return;
 
-    if (onUpdateStopReason && pendingChange.newReason !== undefined) {
+    const newPredictedDate = result.isDateModified ? result.predictedDate : undefined;
+
+    if (onUpdateStopReason && (pendingChange.newReason !== undefined || newPredictedDate !== undefined)) {
       if (pendingChange.items.every(it => it.docNr === pendingChange.docNr)) {
         onUpdateStopReason(
           pendingChange.docNr,
           pendingChange.sectorId,
-          pendingChange.newReason,
+          pendingChange.newReason || '',
           result.observation,
-          result.targetOrderIds
+          result.targetOrderIds,
+          newPredictedDate
         );
       } else {
         const docs = Array.from(new Set(
@@ -146,7 +154,8 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
             pendingChange.sectorId,
             pendingChange.newReason || '',
             result.observation,
-            result.targetOrderIds
+            result.targetOrderIds,
+            newPredictedDate
           );
         });
         setSelectedOrderIds(new Set());

@@ -551,13 +551,14 @@ const App: React.FC = () => {
     updatedOrders.forEach(saveOrderToDB);
   };
 
-  // Função para atualizar motivo de paragem e observações (com suporte a escopo/itens específicos)
+  // Função para atualizar motivo de paragem, data prevista e observações (com suporte a escopo/itens específicos)
   const handleUpdateStopReason = (
     docNr: string, 
     sectorId: string, 
     stopReason: string, 
     observation?: string, 
-    targetOrderIds?: string[]
+    targetOrderIds?: string[],
+    predictedDate?: Date | null
   ) => {
     const isTargeted = targetOrderIds && targetOrderIds.length > 0;
     const targetSet = isTargeted ? new Set(targetOrderIds) : null;
@@ -569,10 +570,22 @@ const App: React.FC = () => {
         if (observation && observation.trim() !== '') {
           nextSectorObservations[sectorId] = observation.trim();
         }
+
+        const nextSectorPredictedDates = { ...(o.sectorPredictedDates || {}) };
+        const nextPending = { ...(o.sectorPredictedDatesPending || {}) };
+
+        if (predictedDate !== undefined) {
+          nextSectorPredictedDates[sectorId] = predictedDate;
+          delete nextPending[sectorId];
+        }
+
         return {
           ...o,
           sectorStopReasons: { ...(o.sectorStopReasons || {}), [sectorId]: stopReason },
-          sectorObservations: nextSectorObservations
+          sectorObservations: nextSectorObservations,
+          sectorPredictedDates: nextSectorPredictedDates,
+          sectorPredictedDatesPending: nextPending,
+          ...(sectorId === 'planeamento' && predictedDate !== undefined ? { requestedDate: predictedDate } : {})
         };
       });
 
