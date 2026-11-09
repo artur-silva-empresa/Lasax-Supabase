@@ -918,53 +918,53 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
 
   return (
     <div className="flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500">
-      <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400">
-                  {sector?.icon && React.createElement(sector.icon, { size: 24 })}
+      <div className="px-3 py-2 sm:px-4 sm:py-2.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+              <div className="p-1 sm:p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-md text-blue-600 dark:text-blue-400 shrink-0">
+                  {sector?.icon && React.createElement(sector.icon, { size: 16 })}
               </div>
-              <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-bold text-slate-800 dark:text-white">Sector: {sector?.name}</h2>
+              <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h2 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white truncate">Sector: {sector?.name}</h2>
                     {filterHasObservations && (
-                      <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800 flex items-center gap-1 shadow-xs">
-                        <Eye size={10} />
+                      <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-blue-200 dark:border-blue-800 flex items-center gap-1 shadow-2xs">
+                        <Eye size={9} />
                         <span>Com Observações</span>
                         <button
                           onClick={() => setFilterHasObservations(false)}
                           className="hover:text-blue-900 dark:hover:text-white ml-0.5"
                           title="Remover filtro de observações"
                         >
-                          <X size={10} />
+                          <X size={9} />
                         </button>
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Listagem de encomendas</p>
+                  <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400">Listagem de encomendas</p>
               </div>
           </div>
           <button
             onClick={handleTableExport}
             disabled={isExportingTable}
-            className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[150px] justify-center ${
+            className={`px-2.5 py-1.5 text-white rounded-lg transition-all shadow-2xs active:scale-95 flex items-center gap-1.5 text-[11px] font-semibold shrink-0 ${
               tableExportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
             }`}
             title="Exportar Tabela (Colunas Personalizadas)"
           >
              {isExportingTable ? (
                 <>
-                    <Loader2 size={16} className="animate-spin" />
-                    <span className="text-xs font-bold uppercase">A Gerar...</span>
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>A Gerar...</span>
                 </>
              ) : tableExportSuccess ? (
                 <>
-                    <Check size={16} />
-                    <span className="text-xs font-bold uppercase">Sucesso</span>
+                    <Check size={13} />
+                    <span>Sucesso</span>
                 </>
              ) : (
                 <>
-                    <Download size={16} />
-                    <span className="text-xs font-bold uppercase">Exportar Tabela Editável</span>
+                    <Download size={13} />
+                    <span>Exportar Tabela Editável</span>
                 </>
              )}
           </button>

@@ -295,38 +295,38 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
   return (
     <div className="flex h-screen h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden flex-col md:flex-row w-full transition-colors duration-300">
       {/* Desktop Sidebar */}
-      <aside className={`hidden md:flex ${isSidebarOpen ? 'w-64' : 'w-20'} bg-slate-900 dark:bg-slate-900 text-white transition-all duration-300 ease-in-out flex-col z-50 shrink-0 ${
+      <aside className={`hidden md:flex ${isSidebarOpen ? 'w-56' : 'w-16'} bg-slate-900 dark:bg-slate-900 text-white transition-all duration-300 ease-in-out flex-col z-50 shrink-0 ${
         isCompactLandscape && !isMobileNavVisible
-          ? `-translate-x-full ${isSidebarOpen ? '-ml-64' : '-ml-20'} pointer-events-none`
+          ? `-translate-x-full ${isSidebarOpen ? '-ml-56' : '-ml-16'} pointer-events-none`
           : 'translate-x-0 ml-0'
       }`}>
-        <div className="p-6 flex items-center gap-3">
-          <img src={`${import.meta.env.BASE_URL}icons/icone.png`} alt="Prod. Lasa" className="w-8 h-8 shrink-0 object-contain" />
+        <div className="py-3 px-3.5 flex items-center gap-2.5">
+          <img src={`${import.meta.env.BASE_URL}icons/icone.png`} alt="Prod. Lasa" className="w-6 h-6 shrink-0 object-contain" />
           {isSidebarOpen && (
-            <div className="flex items-center gap-3 animate-in fade-in duration-300">
-                <span className="font-bold text-xl tracking-tight overflow-hidden whitespace-nowrap">Prod. Lasa</span>
+            <div className="flex items-center gap-2 animate-in fade-in duration-300">
+                <span className="font-bold text-sm tracking-tight overflow-hidden whitespace-nowrap">Prod. Lasa</span>
             </div>
           )}
         </div>
 
-        <nav className={`flex-1 mt-6 scrollbar-hide ${isSidebarOpen ? 'overflow-y-auto' : 'overflow-visible z-50'}`}>
-          <ul className="space-y-1 px-3">
+        <nav className={`flex-1 mt-2 scrollbar-hide ${isSidebarOpen ? 'overflow-y-auto' : 'overflow-visible z-50'}`}>
+          <ul className="space-y-0.5 px-2">
             {menuItems.map((item) => (
               <li key={item.id} className="relative group">
                 <button
                   onClick={() => setActiveView(item.id)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors text-xs ${
                     activeView === item.id || (item.id === 'orders' && activeView === 'order-details')
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' 
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-900/20 font-semibold' 
                       : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                   }`}
                 >
-                  <item.icon size={20} />
+                  <item.icon size={16} />
                   {isSidebarOpen && <span className="font-medium whitespace-nowrap">{item.label}</span>}
                 </button>
                 {!isSidebarOpen && (
                   <div className="absolute left-full top-0 pl-2 z-50 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity whitespace-nowrap">
-                    <div className="px-3 py-2 bg-slate-800 text-white text-sm rounded-lg shadow-xl border border-slate-700">
+                    <div className="px-2.5 py-1 bg-slate-800 text-white text-xs rounded-md shadow-xl border border-slate-700">
                       {item.label}
                     </div>
                   </div>
@@ -338,40 +338,40 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
             <li className="relative group">
               <button
                 onClick={() => setIsSectorsOpen(!isSectorsOpen)}
-                className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors text-xs ${
                   activeView.startsWith('sector-')
-                    ? 'text-white bg-slate-800' 
+                    ? 'text-white bg-slate-800 font-semibold' 
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <Layers size={20} />
+                <div className="flex items-center gap-2.5">
+                  <Layers size={16} />
                   {isSidebarOpen && <span className="font-medium whitespace-nowrap">Sectores</span>}
                 </div>
                 {isSidebarOpen && (
-                  isSectorsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+                  isSectorsOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />
                 )}
               </button>
 
               {!isSidebarOpen && (
                 <div className="absolute left-full top-0 pl-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50">
-                  <div className="w-48 bg-slate-800 rounded-lg shadow-xl border border-slate-700 py-2">
-                    <h3 className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Sectores</h3>
+                  <div className="w-44 bg-slate-800 rounded-md shadow-xl border border-slate-700 py-1.5">
+                    <h3 className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Sectores</h3>
                     <ul>
                       {visibleSectors.map((sector) => {
                       const SectorIcon = sector.icon;
                       const isActive = activeView === `sector-${sector.id}`;
                       return (
-                        <li key={sector.id} className="px-2">
+                        <li key={sector.id} className="px-1.5">
                           <button
                             onClick={() => handleSectorClick(sector.id)}
-                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                               isActive
                                 ? 'text-blue-400 bg-slate-700 font-bold' 
                                 : 'text-slate-300 hover:text-white hover:bg-slate-700'
                             }`}
                           >
-                            <SectorIcon size={16} />
+                            <SectorIcon size={13} />
                             <span>{sector.name}</span>
                           </button>
                         </li>
@@ -384,7 +384,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
 
               {/* Submenu Sectores */}
               {isSectorsOpen && isSidebarOpen && visibleSectors.length > 0 && (
-                <ul className="mt-1 ml-4 space-y-1 border-l border-slate-700 pl-2 animate-in slide-in-from-top-2 duration-200">
+                <ul className="mt-0.5 ml-3 space-y-0.5 border-l border-slate-700/60 pl-1.5 animate-in slide-in-from-top-1 duration-150">
                   {visibleSectors.map((sector) => {
                     const SectorIcon = sector.icon;
                     const isActive = activeView === `sector-${sector.id}`;
@@ -392,13 +392,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                       <li key={sector.id}>
                         <button
                           onClick={() => handleSectorClick(sector.id)}
-                          className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                          className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                             isActive
                               ? 'text-blue-400 bg-slate-800/50 font-bold' 
-                              : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                           }`}
                         >
-                          <SectorIcon size={16} />
+                          <SectorIcon size={13} />
                           <span>{sector.name}</span>
                         </button>
                       </li>
@@ -412,48 +412,48 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
             {user?.role === 'admin' && (
               <li className="relative group">
                 <button
-                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors text-xs ${
                     activeView === 'bottleneck' || activeView === 'production-capacity'
-                      ? 'text-white bg-slate-800'
+                      ? 'text-white bg-slate-800 font-semibold'
                       : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                   }`}
                   onClick={() => setIsProductionOpen(!isProductionOpen)}
                 >
-                  <div className="flex items-center gap-3">
-                    <Target size={20} />
+                  <div className="flex items-center gap-2.5">
+                    <Target size={16} />
                     {isSidebarOpen && <span className="font-medium whitespace-nowrap">Controlo Produção</span>}
                   </div>
-                  {isSidebarOpen && (isProductionOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
+                  {isSidebarOpen && (isProductionOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />)}
                 </button>
 
                 {!isSidebarOpen && (
                   <div className="absolute left-full top-0 pl-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50">
-                    <div className="w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 py-2">
-                      <h3 className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Controlo Produção</h3>
+                    <div className="w-48 bg-slate-800 rounded-md shadow-xl border border-slate-700 py-1.5">
+                      <h3 className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Controlo Produção</h3>
                       <ul>
-                        <li className="px-2">
+                        <li className="px-1.5">
                         <button
                           onClick={() => setActiveView('bottleneck')}
-                          className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                          className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                             activeView === 'bottleneck'
                               ? 'text-blue-400 bg-slate-700 font-bold'
                               : 'text-slate-300 hover:text-white hover:bg-slate-700'
                           }`}
                         >
-                          <Target size={16} />
+                          <Target size={13} />
                           <span>Análise de Gargalos</span>
                         </button>
                       </li>
-                      <li className="px-2">
+                      <li className="px-1.5">
                         <button
                           onClick={() => setActiveView('production-capacity')}
-                          className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                          className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                             activeView === 'production-capacity'
                               ? 'text-blue-400 bg-slate-700 font-bold'
                               : 'text-slate-300 hover:text-white hover:bg-slate-700'
                           }`}
                         >
-                          <Zap size={16} />
+                          <Zap size={13} />
                           <span>Capacidades</span>
                         </button>
                         </li>
@@ -463,30 +463,30 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                 )}
 
                 {isProductionOpen && isSidebarOpen && (
-                  <ul className="mt-1 ml-4 space-y-1 border-l border-slate-700 pl-2 animate-in slide-in-from-top-2 duration-200">
+                  <ul className="mt-0.5 ml-3 space-y-0.5 border-l border-slate-700/60 pl-1.5 animate-in slide-in-from-top-1 duration-150">
                     <li>
                       <button
                         onClick={() => setActiveView('bottleneck')}
-                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                        className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                           activeView === 'bottleneck'
                             ? 'text-blue-400 bg-slate-800/50 font-bold'
-                            : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                         }`}
                       >
-                        <Target size={16} />
+                        <Target size={13} />
                         <span>Análise de Gargalos</span>
                       </button>
                     </li>
                     <li>
                       <button
                         onClick={() => setActiveView('production-capacity')}
-                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                        className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                           activeView === 'production-capacity'
                             ? 'text-blue-400 bg-slate-800/50 font-bold'
-                            : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                         }`}
                       >
-                        <Zap size={16} />
+                        <Zap size={13} />
                         <span>Capacidades</span>
                       </button>
                     </li>
@@ -500,94 +500,94 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
               <li className="relative group">
                  <button
                   onClick={() => setIsConfigOpen(!isConfigOpen)}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors text-xs ${
                     activeView.startsWith('config') || activeView === 'stop-reasons'
-                      ? 'text-white bg-slate-800' 
+                      ? 'text-white bg-slate-800 font-semibold' 
                       : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <Settings size={20} />
+                  <div className="flex items-center gap-2.5">
+                    <Settings size={16} />
                     {isSidebarOpen && <span className="font-medium whitespace-nowrap">Configurações</span>}
                   </div>
                   {isSidebarOpen && (
-                    isConfigOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+                    isConfigOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />
                   )}
                 </button>
 
                 {!isSidebarOpen && (
                   <div className="absolute left-full top-0 pl-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50">
-                    <div className="w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 py-2">
-                      <h3 className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Configurações</h3>
+                    <div className="w-48 bg-slate-800 rounded-md shadow-xl border border-slate-700 py-1.5">
+                      <h3 className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Configurações</h3>
                       <ul>
                         {user?.permissions?.config !== 'none' && (
                         <>
-                          <li className="px-2">
+                          <li className="px-1.5">
                             <button
                               onClick={() => setActiveView('config')}
-                              className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                              className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                                 activeView === 'config' || activeView === 'config-general'
                                   ? 'text-blue-400 bg-slate-700 font-bold'
                                   : 'text-slate-300 hover:text-white hover:bg-slate-700'
                               }`}
                             >
-                              <Settings size={16} />
+                              <Settings size={13} />
                               <span>Geral</span>
                             </button>
                           </li>
-                          <li className="px-2">
+                          <li className="px-1.5">
                             <button
                               onClick={() => setActiveView('config-notifications')}
-                              className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                              className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                                 activeView === 'config-notifications'
                                   ? 'text-blue-400 bg-slate-700 font-bold'
                                   : 'text-slate-300 hover:text-white hover:bg-slate-700'
                               }`}
                             >
-                              <Bell size={16} />
+                              <Bell size={13} />
                               <span>Notificações</span>
                             </button>
                           </li>
-                          <li className="px-2">
+                          <li className="px-1.5">
                             <button
                               onClick={() => setActiveView('config-users')}
-                              className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                              className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                                 activeView === 'config-users'
                                   ? 'text-blue-400 bg-slate-700 font-bold'
                                   : 'text-slate-300 hover:text-white hover:bg-slate-700'
                               }`}
                             >
-                              <UserIcon size={16} />
+                              <UserIcon size={13} />
                               <span>Utilizadores</span>
                             </button>
                           </li>
-                          <li className="px-2">
+                          <li className="px-1.5">
                             <button
                               onClick={() => setActiveView('config-stop-reasons')}
-                              className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                              className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                                 activeView === 'config-stop-reasons'
                                   ? 'text-blue-400 bg-slate-700 font-bold'
                                   : 'text-slate-300 hover:text-white hover:bg-slate-700'
                               }`}
                             >
-                              <AlertTriangle size={16} />
+                              <AlertTriangle size={13} />
                               <span>Motivos de Paragem</span>
                             </button>
                           </li>
-                          <li className="px-2">
+                          <li className="px-1.5">
                             <button
                               onClick={() => setActiveView('config-export-columns')}
-                              className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                              className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                                 activeView === 'config-export-columns'
                                   ? 'text-blue-400 bg-slate-700 font-bold'
                                   : 'text-slate-300 hover:text-white hover:bg-slate-700'
                               }`}
                             >
-                              <Layers size={16} />
+                              <Layers size={13} />
                               <span>Tabelas Editáveis</span>
                             </button>
                           </li>
-                          <li className="px-2 pt-1 border-t border-slate-700/60 mt-1">
+                          <li className="px-1.5 pt-1 border-t border-slate-700/60 mt-1">
                             <PWAInstallButton variant="menu-item" />
                           </li>
                         </>
@@ -599,71 +599,71 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
 
                 {/* Submenu Configurações */}
                 {isConfigOpen && isSidebarOpen && (
-                  <ul className="mt-1 ml-4 space-y-1 border-l border-slate-700 pl-2 animate-in slide-in-from-top-2 duration-200">
+                  <ul className="mt-0.5 ml-3 space-y-0.5 border-l border-slate-700/60 pl-1.5 animate-in slide-in-from-top-1 duration-150">
                     {user?.permissions?.config !== 'none' && (
                       <>
                         <li>
                           <button
                             onClick={() => setActiveView('config')}
-                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                               activeView === 'config' || activeView === 'config-general'
                                 ? 'text-blue-400 bg-slate-800/50 font-bold'
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                             }`}
                           >
-                            <Settings size={16} />
+                            <Settings size={13} />
                             <span>Geral</span>
                           </button>
                         </li>
                         <li>
                           <button
                             onClick={() => setActiveView('config-notifications')}
-                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                               activeView === 'config-notifications'
                                 ? 'text-blue-400 bg-slate-800/50 font-bold'
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                             }`}
                           >
-                            <Bell size={16} />
+                            <Bell size={13} />
                             <span>Notificações</span>
                           </button>
                         </li>
                         <li>
                           <button
                             onClick={() => setActiveView('config-users')}
-                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                               activeView === 'config-users'
                                 ? 'text-blue-400 bg-slate-800/50 font-bold'
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                             }`}
                           >
-                            <UserIcon size={16} />
+                            <UserIcon size={13} />
                             <span>Utilizadores</span>
                           </button>
                         </li>
                         <li>
                           <button
                             onClick={() => setActiveView('config-stop-reasons')}
-                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                               activeView === 'config-stop-reasons'
                                 ? 'text-blue-400 bg-slate-800/50 font-bold'
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                             }`}
                           >
-                            <AlertTriangle size={16} />
+                            <AlertTriangle size={13} />
                             <span>Motivos de Paragem</span>
                           </button>
                         </li>
                         <li>
                           <button
                             onClick={() => setActiveView('config-export-columns')}
-                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                               activeView === 'config-export-columns'
                                 ? 'text-blue-400 bg-slate-800/50 font-bold'
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                             }`}
                           >
-                            <Layers size={16} />
+                            <Layers size={13} />
                             <span>Tabelas Editáveis</span>
                           </button>
                         </li>
@@ -680,14 +680,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
         </nav>
 
         {user?.role === 'admin' && (
-        <div className="p-4 border-t border-slate-800 space-y-2">
+        <div className="p-2.5 border-t border-slate-800 space-y-1.5">
            {/* Botão de Importar */}
           <button
             onClick={onImportClick}
-            className={`w-full flex items-center justify-center gap-3 p-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-lg shadow-emerald-900/20`}
+            className={`w-full flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-2xs text-xs font-semibold`}
           >
-            <Upload size={20} />
-            {isSidebarOpen && <span className="font-medium">Importar</span>}
+            <Upload size={14} />
+            {isSidebarOpen && <span>Importar</span>}
           </button>
         </div>
         )}
@@ -695,47 +695,47 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
 
       {/* Main Content Container */}
       <div className="flex-1 flex flex-col min-w-0 relative h-full">
-        <header className={`h-12 md:h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 md:px-8 shrink-0 z-40 transition-all duration-300 ease-in-out ${
+        <header className={`h-10 md:h-12 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 md:px-5 shrink-0 z-40 transition-all duration-300 ease-in-out ${
           !isMobileNavVisible 
             ? isCompactLandscape
-              ? '-translate-y-full -mb-12 md:-mb-16 pointer-events-none'
-              : '-translate-y-full md:translate-y-0 -mb-12 md:mb-0 pointer-events-none md:pointer-events-auto' 
+              ? '-translate-y-full -mb-10 md:-mb-12 pointer-events-none'
+              : '-translate-y-full md:translate-y-0 -mb-10 md:mb-0 pointer-events-none md:pointer-events-auto' 
             : 'translate-y-0'
         }`}>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {/* Hamburger menu / Sidebar toggler */}
             <button 
               onClick={() => {
                 setIsMobileMenuOpen(!isMobileMenuOpen);
               }}
-              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 md:hidden"
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md text-slate-500 dark:text-slate-400 md:hidden"
             >
-              <Menu size={20} />
+              <Menu size={16} />
             </button>
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="hidden md:p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 md:block transition-colors"
+              className="hidden md:p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md text-slate-500 dark:text-slate-400 md:block transition-colors"
               title={isSidebarOpen ? "Recolher menu lateral" : "Expandir menu lateral"}
             >
-              {isSidebarOpen ? <PanelLeftClose size={20} /> : <Menu size={20} />}
+              {isSidebarOpen ? <PanelLeftClose size={16} /> : <Menu size={16} />}
             </button>
-            <img src={`${import.meta.env.BASE_URL}icons/icone.png`} alt="Prod. Lasa" className="md:hidden w-8 h-8 object-contain" />
+            <img src={`${import.meta.env.BASE_URL}icons/icone.png`} alt="Prod. Lasa" className="md:hidden w-6 h-6 object-contain" />
             
-            <div className="md:hidden flex items-center gap-2">
-                <h1 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Prod. Lasa</h1>
+            <div className="md:hidden flex items-center gap-1.5">
+                <h1 className="font-bold text-slate-800 dark:text-slate-100 text-xs">Prod. Lasa</h1>
             </div>
           </div>
 
           {/* Global Search Bar & Global Date Filter*/}
-          <div className="flex-1 max-w-2xl mx-4 hidden md:flex items-center gap-4">
+          <div className="flex-1 max-w-xl mx-3 hidden md:flex items-center gap-3">
             <div className="relative flex-1 group">
-                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 group-focus-within:text-blue-500 transition-colors" />
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 group-focus-within:text-blue-500 transition-colors" />
                 <input
                 type="text"
                 placeholder="Pesquisar Encomenda ou Artigo..."
                 value={localSearchTerm}
                 onChange={(e) => setLocalSearchTerm(e.target.value)}
-                className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-full py-2 pl-10 pr-10 text-sm focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-200 outline-none transition-shadow placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-lg py-1 pl-8 pr-8 text-xs focus:ring-1 focus:ring-blue-500 text-slate-700 dark:text-slate-200 outline-none transition-shadow placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
                 {localSearchTerm && (
                   <button
@@ -743,16 +743,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                       setLocalSearchTerm('');
                       if (onGlobalSearch) onGlobalSearch('');
                     }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                   >
-                    <X size={16} />
+                    <X size={13} />
                   </button>
                 )}
             </div>
             {onGlobalDateRangeChange && (
-            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-1.5 focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
-                <Calendar size={16} className="text-slate-400 dark:text-slate-500" />
-                <div className="flex items-center gap-1 text-sm">
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg px-2.5 py-1 focus-within:ring-1 focus-within:ring-blue-500 transition-shadow">
+                <Calendar size={13} className="text-slate-400 dark:text-slate-500" />
+                <div className="flex items-center gap-1 text-[11px]">
                     <input
                         type="date"
                         value={globalDateRange?.start || ''}
@@ -764,10 +764,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                                 onGlobalDateRangeChange({ start: newStart, end: globalDateRange?.end || '' });
                             }
                         }}
-                        className="bg-transparent border-none outline-none text-slate-700 dark:text-slate-200 w-28 text-xs cursor-pointer"
+                        className="bg-transparent border-none outline-none text-slate-700 dark:text-slate-200 w-24 text-[11px] cursor-pointer"
                         title="Data de Início"
                     />
-                    <span className="text-slate-400 dark:text-slate-500 text-xs font-medium">até</span>
+                    <span className="text-slate-400 dark:text-slate-500 text-[10px] font-medium">até</span>
                     <input
                         type="date"
                         value={globalDateRange?.end || ''}
@@ -779,16 +779,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                                 onGlobalDateRangeChange({ start: globalDateRange?.start || '', end: newEnd });
                             }
                         }}
-                        className="bg-transparent border-none outline-none text-slate-700 dark:text-slate-200 w-28 text-xs cursor-pointer"
+                        className="bg-transparent border-none outline-none text-slate-700 dark:text-slate-200 w-24 text-[11px] cursor-pointer"
                         title="Data de Fim"
                     />
                     {globalDateRange && (
                         <button 
                             onClick={() => onGlobalDateRangeChange(null)}
-                            className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-400 hover:text-rose-500 transition-colors ml-1"
+                            className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-400 hover:text-rose-500 transition-colors ml-0.5"
                             title="Limpar Datas"
                         >
-                            <X size={14} />
+                            <X size={12} />
                         </button>
                     )}
                 </div>
@@ -796,24 +796,24 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
             )}
           </div>
 
-          <div className="flex items-center gap-2 md:gap-4 relative">
+          <div className="flex items-center gap-1.5 md:gap-2.5 relative">
             {isFullscreenSupported && (
               <button
                 onClick={toggleFullscreen}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 transition-colors"
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md text-slate-500 dark:text-slate-400 transition-colors"
                 title={isFullscreen ? "Sair do Ecrã Inteiro" : "Entrar em Ecrã Inteiro"}
               >
-                {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+                {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
               </button>
             )}
             <button
               onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-              className={`relative p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors ${isNotificationsOpen ? 'bg-slate-100 dark:bg-slate-800 text-blue-600' : 'text-slate-500 dark:text-slate-400'}`}
+              className={`relative p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors ${isNotificationsOpen ? 'bg-slate-100 dark:bg-slate-800 text-blue-600' : 'text-slate-500 dark:text-slate-400'}`}
               title={`${alertCount} Notificações (Atrasos e Notas)`}
             >
-              <Bell size={20} />
+              <Bell size={16} />
               {alertCount > 0 && (
-                <span className="absolute -top-1.5 -right-3 min-w-[20px] h-[20px] px-2 bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white dark:border-slate-900 leading-none shadow-sm">
+                <span className="absolute -top-1 -right-2 min-w-[16px] h-[16px] px-1 bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center rounded-full border border-white dark:border-slate-900 leading-none shadow-xs">
                   {alertCount}
                 </span>
               )}
@@ -961,21 +961,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
               </>
             )}
             
-            <div className="pl-2 md:pl-4 border-l border-slate-200 dark:border-slate-700">
+            <div className="pl-1.5 md:pl-3 border-l border-slate-200 dark:border-slate-700">
               <button 
                 onClick={onLogout}
-                className="flex items-center gap-3 group hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-xl transition-all outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900"
+                className="flex items-center gap-2 group hover:bg-slate-50 dark:hover:bg-slate-800 p-1 rounded-lg transition-all outline-none focus:ring-1 focus:ring-blue-100 dark:focus:ring-blue-900"
                 title="Sair (Logout)"
               >
                 <div className="hidden md:block text-right">
-                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">{user?.name || 'Utilizador'}</p>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-medium group-hover:text-rose-400 dark:group-hover:text-rose-300 transition-colors">{user?.role === 'admin' ? 'Administrador' : 'Leitura'}</p>
+                  <p className="text-[11px] font-bold text-slate-800 dark:text-slate-200 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">{user?.name || 'Utilizador'}</p>
+                  <p className="text-[9px] text-slate-500 dark:text-slate-400 uppercase font-medium group-hover:text-rose-400 dark:group-hover:text-rose-300 transition-colors">{user?.role === 'admin' ? 'Administrador' : 'Leitura'}</p>
                 </div>
-                <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 group-hover:border-rose-200 dark:group-hover:border-rose-900 group-hover:bg-rose-50 dark:group-hover:bg-rose-900/20 group-hover:text-rose-500 dark:group-hover:text-rose-400 transition-colors shadow-sm">
-                  <UserIcon size={18} />
+                <div className="w-7 h-7 md:w-8 md:h-8 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 group-hover:border-rose-200 dark:group-hover:border-rose-900 group-hover:bg-rose-50 dark:group-hover:bg-rose-900/20 group-hover:text-rose-500 dark:group-hover:text-rose-400 transition-colors shadow-2xs">
+                  <UserIcon size={14} />
                 </div>
                 <div className="text-slate-300 dark:text-slate-600 group-hover:text-rose-500 dark:group-hover:text-rose-400 transition-colors">
-                    <LogOut size={16} />
+                    <LogOut size={14} />
                 </div>
               </button>
             </div>
@@ -1054,29 +1054,29 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
           isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950">
-          <div className="flex items-center gap-3">
-            <img src={`${import.meta.env.BASE_URL}icons/icone.png`} alt="Prod. Lasa" className="w-8 h-8 object-contain" />
-            <span className="font-bold text-xl tracking-tight">Prod. Lasa</span>
+        <div className="p-3.5 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+          <div className="flex items-center gap-2.5">
+            <img src={`${import.meta.env.BASE_URL}icons/icone.png`} alt="Prod. Lasa" className="w-6 h-6 object-contain" />
+            <span className="font-bold text-sm tracking-tight">Prod. Lasa</span>
           </div>
           <button 
             onClick={() => setIsMobileMenuOpen(false)}
-            className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+            className="p-1.5 hover:bg-slate-800 rounded-md text-slate-400 hover:text-white transition-colors"
           >
-            <X size={20} />
+            <X size={16} />
           </button>
         </div>
 
         {/* Global Search in Mobile Menu */}
-        <div className="p-4 border-b border-slate-800 bg-slate-950/40">
+        <div className="p-3 border-b border-slate-800 bg-slate-950/40">
           <div className="flex items-center relative w-full">
-            <Search size={16} className="absolute left-3 text-slate-500" />
+            <Search size={14} className="absolute left-2.5 text-slate-500" />
             <input
               type="text"
               placeholder="Pesquisar Encomenda ou Artigo..."
               value={localSearchTerm}
               onChange={(e) => setLocalSearchTerm(e.target.value)}
-              className="w-full bg-slate-800 border-none rounded-xl py-2 pl-9 pr-9 text-xs text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              className="w-full bg-slate-800 border-none rounded-lg py-1.5 pl-8 pr-8 text-xs text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500 outline-none"
             />
             {localSearchTerm && (
               <button
@@ -1084,16 +1084,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                   setLocalSearchTerm('');
                   if (onGlobalSearch) onGlobalSearch('');
                 }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
               >
-                <X size={16} />
+                <X size={14} />
               </button>
             )}
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-          <ul className="space-y-1">
+        <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
+          <ul className="space-y-0.5">
             {menuItems.map((item) => (
               <li key={item.id}>
                 <button
@@ -1101,13 +1101,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                     setActiveView(item.id);
                     setIsMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-sm ${
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors text-xs ${
                     activeView === item.id || (item.id === 'orders' && activeView === 'order-details')
-                      ? 'bg-blue-600 text-white shadow-lg' 
+                      ? 'bg-blue-600 text-white shadow-sm font-semibold' 
                       : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                   }`}
                 >
-                  <item.icon size={18} />
+                  <item.icon size={16} />
                   <span className="font-medium">{item.label}</span>
                 </button>
               </li>
@@ -1118,22 +1118,22 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
               <li>
                 <button
                   onClick={() => setIsSectorsOpen(!isSectorsOpen)}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors text-sm ${
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors text-xs ${
                     activeView.startsWith('sector-')
-                      ? 'text-white bg-slate-800 font-bold' 
+                      ? 'text-white bg-slate-800 font-semibold' 
                       : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <Layers size={18} />
+                  <div className="flex items-center gap-2.5">
+                    <Layers size={16} />
                     <span className="font-medium">Sectores</span>
                   </div>
-                  {isSectorsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {isSectorsOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 </button>
 
                 {/* Submenu Sectores */}
                 {isSectorsOpen && (
-                  <ul className="mt-1 ml-4 space-y-1 border-l border-slate-700 pl-2 animate-in slide-in-from-top-1 duration-200">
+                  <ul className="mt-0.5 ml-3 space-y-0.5 border-l border-slate-700/60 pl-1.5 animate-in slide-in-from-top-1 duration-150">
                     {visibleSectors.map((sector) => {
                       const SectorIcon = sector.icon;
                       const isActive = activeView === `sector-${sector.id}`;
@@ -1144,13 +1144,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                               handleSectorClick(sector.id);
                               setIsMobileMenuOpen(false);
                             }}
-                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-xs ${
+                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                               isActive
-                                ? 'text-blue-400 bg-slate-800/50 font-black' 
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                                ? 'text-blue-400 bg-slate-800/50 font-bold' 
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                             }`}
                           >
-                            <SectorIcon size={14} />
+                            <SectorIcon size={13} />
                             <span>{sector.name}</span>
                           </button>
                         </li>
@@ -1165,34 +1165,34 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
             {user?.role === 'admin' && (
               <li>
                 <button
-                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors text-sm ${
-                    activeView === 'bottleneck' || activeView === 'production-capacity font-bold'
-                      ? 'text-white bg-slate-800'
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors text-xs ${
+                    activeView === 'bottleneck' || activeView === 'production-capacity'
+                      ? 'text-white bg-slate-800 font-semibold'
                       : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                   }`}
                   onClick={() => setIsProductionOpen(!isProductionOpen)}
                 >
-                  <div className="flex items-center gap-3">
-                    <Target size={18} />
+                  <div className="flex items-center gap-2.5">
+                    <Target size={16} />
                     <span className="font-medium">Controlo Produção</span>
                   </div>
-                  {isProductionOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {isProductionOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 </button>
                 {isProductionOpen && (
-                  <ul className="mt-1 ml-4 space-y-1 border-l border-slate-700 pl-2 animate-in slide-in-from-top-1 duration-200">
+                  <ul className="mt-0.5 ml-3 space-y-0.5 border-l border-slate-700/60 pl-1.5 animate-in slide-in-from-top-1 duration-150">
                     <li>
                       <button
                         onClick={() => {
                           setActiveView('bottleneck');
                           setIsMobileMenuOpen(false);
                         }}
-                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-xs ${
+                        className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                           activeView === 'bottleneck'
-                            ? 'text-blue-400 bg-slate-800/50 font-black'
-                            : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                            ? 'text-blue-400 bg-slate-800/50 font-bold'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                         }`}
                       >
-                        <Target size={14} />
+                        <Target size={13} />
                         <span>Análise de Gargalos</span>
                       </button>
                     </li>
@@ -1202,13 +1202,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                           setActiveView('production-capacity');
                           setIsMobileMenuOpen(false);
                         }}
-                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-xs ${
+                        className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                           activeView === 'production-capacity'
-                            ? 'text-blue-400 bg-slate-800/50 font-black'
-                            : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                            ? 'text-blue-400 bg-slate-800/50 font-bold'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                         }`}
                       >
-                        <Zap size={14} />
+                        <Zap size={13} />
                         <span>Capacidades</span>
                       </button>
                     </li>
@@ -1222,22 +1222,22 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
               <li>
                 <button
                   onClick={() => setIsConfigOpen(!isConfigOpen)}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors text-sm ${
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors text-xs ${
                     activeView.startsWith('config') || activeView === 'stop-reasons'
-                      ? 'text-white bg-slate-800 font-bold' 
+                      ? 'text-white bg-slate-800 font-semibold' 
                       : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <Settings size={18} />
+                  <div className="flex items-center gap-2.5">
+                    <Settings size={16} />
                     <span className="font-medium">Configurações</span>
                   </div>
-                  {isConfigOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {isConfigOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 </button>
 
                 {/* Submenu Configurações */}
                 {isConfigOpen && (
-                  <ul className="mt-1 ml-4 space-y-1 border-l border-slate-700 pl-2 animate-in slide-in-from-top-1 duration-200">
+                  <ul className="mt-0.5 ml-3 space-y-0.5 border-l border-slate-700/60 pl-1.5 animate-in slide-in-from-top-1 duration-150">
                     {user?.permissions?.config !== 'none' && (
                       <>
                         <li>
@@ -1246,13 +1246,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                               setActiveView('config');
                               setIsMobileMenuOpen(false);
                             }}
-                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-xs ${
+                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                               activeView === 'config' || activeView === 'config-general'
-                                ? 'text-blue-400 bg-slate-800/50 font-black'
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                                ? 'text-blue-400 bg-slate-800/50 font-bold'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                             }`}
                           >
-                            <Settings size={14} />
+                            <Settings size={13} />
                             <span>Geral</span>
                           </button>
                         </li>
@@ -1262,13 +1262,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                               setActiveView('config-users');
                               setIsMobileMenuOpen(false);
                             }}
-                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-xs ${
+                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                               activeView === 'config-users'
-                                ? 'text-blue-400 bg-slate-800/50 font-black'
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                                ? 'text-blue-400 bg-slate-800/50 font-bold'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                             }`}
                           >
-                            <UserIcon size={14} />
+                            <UserIcon size={13} />
                             <span>Utilizadores</span>
                           </button>
                         </li>
@@ -1278,13 +1278,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                               setActiveView('config-stop-reasons');
                               setIsMobileMenuOpen(false);
                             }}
-                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-xs ${
+                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                               activeView === 'config-stop-reasons'
-                                ? 'text-blue-400 bg-slate-800/50 font-black'
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                                ? 'text-blue-400 bg-slate-800/50 font-bold'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                             }`}
                           >
-                            <AlertTriangle size={14} />
+                            <AlertTriangle size={13} />
                             <span>Motivos de Paragem</span>
                           </button>
                         </li>
@@ -1294,13 +1294,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                               setActiveView('config-export-columns');
                               setIsMobileMenuOpen(false);
                             }}
-                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-xs ${
+                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-md transition-colors text-[11px] ${
                               activeView === 'config-export-columns'
-                                ? 'text-blue-400 bg-slate-800/50 font-black'
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                                ? 'text-blue-400 bg-slate-800/50 font-bold'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                             }`}
                           >
-                            <Layers size={14} />
+                            <Layers size={13} />
                             <span>Tabelas Editáveis</span>
                           </button>
                         </li>
@@ -1317,21 +1317,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
         </nav>
 
         {/* User profile & logout in mobile drawer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950 flex flex-col gap-3">
-          <div className="flex items-center justify-between pb-1">
+        <div className="p-3 border-t border-slate-800 bg-slate-950 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-black text-slate-100 truncate">{user?.name || 'Utilizador'}</p>
-              <p className="text-[10px] text-slate-400 uppercase font-black">{user?.role === 'admin' ? 'Administrador' : 'Leitura'}</p>
+              <p className="text-xs font-bold text-slate-100 truncate">{user?.name || 'Utilizador'}</p>
+              <p className="text-[10px] text-slate-400 uppercase font-medium">{user?.role === 'admin' ? 'Administrador' : 'Leitura'}</p>
             </div>
             <button 
               onClick={() => {
                 onLogout();
                 setIsMobileMenuOpen(false);
               }}
-              className="p-2 rounded-xl text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 transition-colors"
+              className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 transition-colors"
               title="Terminar Sessão"
             >
-              <LogOut size={18} />
+              <LogOut size={16} />
             </button>
           </div>
         </div>

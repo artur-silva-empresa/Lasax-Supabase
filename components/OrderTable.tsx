@@ -1077,45 +1077,45 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
             : 'max-h-[500px] opacity-100 translate-y-0'
         }`}
       >
-        <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="p-1.5 sm:p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400 shrink-0">
-              <ListFilter size={20} className="sm:w-6 sm:h-6" />
+        <div className="px-3 py-2 sm:px-4 sm:py-2.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <div className="p-1 sm:p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-md text-blue-600 dark:text-blue-400 shrink-0">
+              <ListFilter size={15} />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white transition-colors truncate">Listagem de Encomendas</h2>
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1">
-                <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">{documentGroups.length} documentos ({finalFilteredOrders.length} linhas)</p>
+              <h2 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white transition-colors truncate">Listagem de Encomendas</h2>
+              <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400">{documentGroups.length} documentos ({finalFilteredOrders.length} linhas)</p>
                 {filterDate && (
-                    <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-in fade-in">
+                    <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[9px] font-bold px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-in fade-in">
                         {filterWeekMode === 'cumulative' ? `Filtro: ≤ Até Semana ${getISOWeek(filterDate)}` : `Filtro: Só Semana ${getISOWeek(filterDate)}`}
                     </span>
                 )}
                 {filterHasObservations && (
-                    <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-in fade-in flex items-center gap-1">
-                        <Eye size={11} className="text-blue-600 dark:text-blue-400" />
+                    <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[9px] font-bold px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-in fade-in flex items-center gap-1">
+                        <Eye size={10} className="text-blue-600 dark:text-blue-400" />
                         <span>Com Observações</span>
                         <button
                           onClick={() => setFilterHasObservations(false)}
                           className="ml-0.5 hover:text-blue-900 dark:hover:text-white cursor-pointer"
                           title="Remover filtro de observações"
                         >
-                          <X size={10} />
+                          <X size={9} />
                         </button>
                     </span>
                 )}
                 {filterManual && (
-                    <span className="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 animate-in fade-in">
+                    <span className="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[9px] font-bold px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 animate-in fade-in">
                         Filtro: Conf. Manual
                     </span>
                 )}
                 {filterArchived === 'archived' && (
-                    <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 animate-in fade-in flex items-center gap-1">
-                        <Archive size={10} /> Arquivadas
+                    <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[9px] font-bold px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800 animate-in fade-in flex items-center gap-1">
+                        <Archive size={9} /> Arquivadas
                     </span>
                 )}
                 {filterArchived === 'all' && (
-                    <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 animate-in fade-in">
+                    <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9px] font-bold px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 animate-in fade-in">
                         A mostrar tudo
                     </span>
                 )}
@@ -1123,30 +1123,30 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
             </div>
           </div>
           
-          <div className="hidden xl:flex items-center gap-2">
+          <div className="hidden xl:flex items-center gap-1.5">
               {/* Botão Exportar Tabela (Personalizada) */}
               <button
                 onClick={handleTableExport}
                 disabled={isExportingTable}
-                className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[150px] justify-center ${
+                className={`px-2.5 py-1.5 text-white rounded-lg transition-all shadow-2xs active:scale-95 flex items-center gap-1.5 text-[11px] font-semibold ${
                   tableExportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
                 }`}
                 title="Exportar Tabela (Colunas Personalizadas)"
               >
                  {isExportingTable ? (
                     <>
-                        <Loader2 size={16} className="animate-spin" />
-                        <span className="text-xs font-bold uppercase">A Gerar...</span>
+                        <Loader2 size={13} className="animate-spin" />
+                        <span>A Gerar...</span>
                     </>
                  ) : tableExportSuccess ? (
                     <>
-                        <Check size={16} />
-                        <span className="text-xs font-bold uppercase">Sucesso</span>
+                        <Check size={13} />
+                        <span>Sucesso</span>
                     </>
                  ) : (
                     <>
-                        <Download size={16} />
-                        <span className="text-xs font-bold uppercase">Exportar Tabela Editável</span>
+                        <Download size={13} />
+                        <span>Exportar Tabela Editável</span>
                     </>
                  )}
               </button>
@@ -1155,25 +1155,25 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
               <button 
                 onClick={handleExcelExport}
                 disabled={isExportingExcel}
-                className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[150px] justify-center ${
+                className={`px-2.5 py-1.5 text-white rounded-lg transition-all shadow-2xs active:scale-95 flex items-center gap-1.5 text-[11px] font-semibold ${
                   excelExportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
                 }`}
                 title="Exportar Lista para Excel"
               >
                  {isExportingExcel ? (
                     <>
-                        <Loader2 size={16} className="animate-spin" />
-                        <span className="text-xs font-bold uppercase">A Gerar...</span>
+                        <Loader2 size={13} className="animate-spin" />
+                        <span>A Gerar...</span>
                     </>
                  ) : excelExportSuccess ? (
                     <>
-                        <Check size={16} />
-                        <span className="text-xs font-bold uppercase">Sucesso</span>
+                        <Check size={13} />
+                        <span>Sucesso</span>
                     </>
                  ) : (
                     <>
-                        <FileSpreadsheet size={16} />
-                        <span className="text-xs font-bold uppercase">Exportar Excel</span>
+                        <FileSpreadsheet size={13} />
+                        <span>Exportar Excel</span>
                     </>
                  )}
               </button>
@@ -1183,25 +1183,25 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
               <button 
                   onClick={handleExport}
                   disabled={isExporting}
-                  className={`px-4 py-2 text-white rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2 min-w-[140px] justify-center ${
+                  className={`px-2.5 py-1.5 text-white rounded-lg transition-all shadow-2xs active:scale-95 flex items-center gap-1.5 text-[11px] font-semibold ${
                       exportSuccess ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400'
                   }`}
                   title="Exportar Base de Dados (SQLite)"
                   >
                   {isExporting ? (
                       <>
-                          <Loader2 size={16} className="animate-spin" />
-                          <span className="text-xs font-bold uppercase">A Gerar...</span>
+                          <Loader2 size={13} className="animate-spin" />
+                          <span>A Gerar...</span>
                       </>
                   ) : exportSuccess ? (
                       <>
-                          <Check size={16} />
-                          <span className="text-xs font-bold uppercase">Guardado</span>
+                          <Check size={13} />
+                          <span>Guardado</span>
                       </>
                   ) : (
                       <>
-                          <Database size={16} />
-                          <span className="text-xs font-bold uppercase">Exportar BD</span>
+                          <Database size={13} />
+                          <span>Exportar BD</span>
                       </>
                   )}
               </button>
@@ -1437,32 +1437,33 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
               </div>
 
               {/* Botões Mobile */}
-              <div className="md:hidden flex gap-2">
+              <div className="md:hidden flex gap-1.5">
                 <button
                   onClick={handleTableExport}
                   disabled={isExportingTable}
-                  className="p-2 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:bg-green-400 transition-all shadow-sm active:scale-95"
+                  className="p-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-green-400 transition-all shadow-2xs active:scale-95"
                   title="Exportar Tabela Editável"
                 >
-                  {isExportingTable ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                  {isExportingTable ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                 </button>
 
                 <button 
                   onClick={handleExcelExport}
                   disabled={isExportingExcel}
-                  className="p-2 bg-slate-600 text-white rounded-xl hover:bg-slate-700 disabled:bg-slate-400 transition-all shadow-sm active:scale-95"
+                  className="p-1.5 bg-slate-600 text-white rounded-lg hover:bg-slate-700 disabled:bg-slate-400 transition-all shadow-2xs active:scale-95"
                  title="Exportar Excel"
                 >
-                  {isExportingExcel ? <Loader2 size={18} className="animate-spin" /> : <FileSpreadsheet size={18} />}
+                  {isExportingExcel ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
                 </button>
 
                 {user?.permissions?.config === 'write' && (
                     <button 
                     onClick={handleExport}
                     disabled={isExporting}
-                    className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:bg-blue-400 transition-all shadow-sm active:scale-95"
+                    className="p-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 transition-all shadow-2xs active:scale-95"
+                    title="Exportar Base de Dados (SQLite)"
                     >
-                    {isExporting ? <Loader2 size={18} className="animate-spin" /> : <Database size={18} />}
+                    {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
                     </button>
                 )}
               </div>
