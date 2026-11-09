@@ -1257,26 +1257,26 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
       }`}>
         {/* Header / Toolbar */}
         <div className="flex-shrink-0 p-4 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-          <div className="flex flex-col xl:flex-row gap-3">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+          <div className="flex flex-col xl:flex-row gap-2.5 items-stretch xl:items-center">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
               <input 
                 type="text" 
                 placeholder="Pesquisar texto..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm transition-all h-full dark:text-white"
+                className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 text-[11px] shadow-2xs transition-all h-full dark:text-white placeholder:text-slate-400"
               />
             </div>
 
-            <div className="flex flex-wrap gap-2 items-center">
+            <div className="flex flex-wrap gap-1.5 items-center">
               {hasActiveFilters && (
                 <button
                   onClick={handleResetFilters}
-                  className="bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl p-2 shadow-sm transition-colors active:scale-95 flex items-center justify-center"
+                  className="bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-lg p-1.5 shadow-2xs transition-colors active:scale-95 flex items-center justify-center"
                   title="Limpar todos os filtros e pesquisa"
                 >
-                  <RotateCcw size={16} />
+                  <RotateCcw size={13} />
                 </button>
               )}
               
@@ -1284,38 +1284,38 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
               {!filterDate ? (
                 <button 
                   onClick={() => setFilterDate(new Date())}
-                  className="flex items-center gap-2 border rounded-xl px-3 py-2 shadow-sm grow md:grow-0 transition-colors bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="flex items-center gap-1.5 border rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0 transition-colors bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-[11px] font-semibold"
                   title="Filtrar por Semana"
                 >
-                   <Calendar size={14} className="text-slate-400" />
-                   <span className="text-xs font-bold">Filtrar Semana</span>
+                   <Calendar size={13} className="text-slate-400" />
+                   <span>Filtrar Semana</span>
                 </button>
               ) : (
-                <div className="flex flex-wrap sm:flex-nowrap items-center bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-xl shadow-sm overflow-hidden grow md:grow-0">
-                  <button onClick={handlePrevWeek} className="px-2 py-2 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors" title="Semana anterior">
-                    <ChevronLeft size={16} />
+                <div className="flex flex-wrap sm:flex-nowrap items-center bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-lg shadow-2xs overflow-hidden grow md:grow-0">
+                  <button onClick={handlePrevWeek} className="px-1.5 py-1.5 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors" title="Semana anterior">
+                    <ChevronLeft size={14} />
                   </button>
-                  <div className="px-2 flex flex-col items-center justify-center min-w-[95px]">
-                    <span className="text-[10px] font-black uppercase text-blue-500 dark:text-blue-400 leading-none">
+                  <div className="px-1.5 flex flex-col items-center justify-center min-w-[85px]">
+                    <span className="text-[9px] font-black uppercase text-blue-500 dark:text-blue-400 leading-none">
                       Semana {getISOWeek(filterDate)}
                     </span>
-                    <span className="text-[10px] font-medium text-blue-700 dark:text-blue-200 leading-none mt-0.5">
+                    <span className="text-[9px] font-medium text-blue-700 dark:text-blue-200 leading-none mt-0.5">
                        {(() => {
                          const {start, end} = getWeekRange(filterDate);
                          return `${start.getDate()} ${start.toLocaleString('pt-PT', {month: 'short'})} - ${end.getDate()} ${end.toLocaleString('pt-PT', {month: 'short'})}`;
                        })()}
                     </span>
                   </div>
-                  <button onClick={handleNextWeek} className="px-2 py-2 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors" title="Semana seguinte">
-                    <ChevronRight size={16} />
+                  <button onClick={handleNextWeek} className="px-1.5 py-1.5 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors" title="Semana seguinte">
+                    <ChevronRight size={14} />
                   </button>
                   
                   {/* Seletor de Modo: Só Semana vs Até à Semana */}
-                  <div className="flex items-center border-l border-blue-200 dark:border-blue-800 px-1 py-1 gap-1 bg-white/60 dark:bg-slate-900/60">
+                  <div className="flex items-center border-l border-blue-200 dark:border-blue-800 px-1 py-0.5 gap-0.5 bg-white/60 dark:bg-slate-900/60">
                     <button
                       type="button"
                       onClick={() => setFilterWeekMode('exact')}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all ${
                         filterWeekMode === 'exact'
                           ? 'bg-blue-600 text-white shadow-2xs'
                           : 'text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40'
@@ -1327,7 +1327,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                     <button
                       type="button"
                       onClick={() => setFilterWeekMode('cumulative')}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all ${
                         filterWeekMode === 'cumulative'
                           ? 'bg-blue-600 text-white shadow-2xs'
                           : 'text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40'
@@ -1338,9 +1338,9 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                     </button>
                   </div>
 
-                  <div className="w-px h-6 bg-blue-200 dark:bg-blue-800 mx-0.5"></div>
-                  <button onClick={() => setFilterDate(null)} className="px-2 py-2 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-blue-400 dark:text-blue-300 hover:text-rose-500 dark:hover:text-rose-400 transition-colors" title="Remover filtro de semana">
-                    <X size={16} />
+                  <div className="w-px h-5 bg-blue-200 dark:bg-blue-800 mx-0.5"></div>
+                  <button onClick={() => setFilterDate(null)} className="px-1.5 py-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-blue-400 dark:text-blue-300 hover:text-rose-500 dark:hover:text-rose-400 transition-colors" title="Remover filtro de semana">
+                    <X size={14} />
                   </button>
                 </div>
               )}
@@ -1349,24 +1349,24 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
               <button
                 type="button"
                 onClick={() => setFilterHasObservations(!filterHasObservations)}
-                className={`flex items-center gap-2 border rounded-xl px-3 py-2 shadow-sm grow md:grow-0 transition-all text-xs font-bold active:scale-95 cursor-pointer select-none ${
+                className={`flex items-center gap-1.5 border rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0 transition-all text-[11px] font-semibold active:scale-95 cursor-pointer select-none ${
                   filterHasObservations
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-400/30'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs ring-1 ring-blue-400/30'
                     : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
                 title={filterHasObservations ? "A mostrar apenas encomendas com observações (clique para mostrar todas)" : "Filtrar encomendas onde o campo com observações esteja preenchido"}
               >
-                <Eye size={14} className={filterHasObservations ? "text-white" : "text-blue-500"} />
+                <Eye size={13} className={filterHasObservations ? "text-white" : "text-blue-500"} />
                 <span>Com Observações</span>
                 {filterHasObservations && (
                   <span className="w-1.5 h-1.5 rounded-full bg-white ml-0.5 animate-pulse" />
                 )}
               </button>
 
-              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
-                <Flag size={14} className="text-slate-400" />
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0">
+                <Flag size={13} className="text-slate-400 shrink-0" />
                 <select 
-                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[110px] w-full md:w-auto"
+                  className="bg-transparent outline-none text-[11px] font-semibold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[105px] w-full md:w-auto"
                   value={filterPriority}
                   onChange={(e) => setFilterPriority(e.target.value)}
                 >
@@ -1374,10 +1374,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 </select>
               </div>
 
-              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
-                <FileText size={14} className="text-slate-400" />
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0">
+                <FileText size={13} className="text-slate-400 shrink-0" />
                 <select 
-                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[80px] w-full md:w-auto"
+                  className="bg-transparent outline-none text-[11px] font-semibold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[75px] w-full md:w-auto"
                   value={filterDocSeries}
                   onChange={(e) => setFilterDocSeries(e.target.value)}
                 >
@@ -1386,10 +1386,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 </select>
               </div>
 
-              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
-                <Users size={14} className="text-slate-400" />
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0">
+                <Users size={13} className="text-slate-400 shrink-0" />
                 <select 
-                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[120px] max-w-[200px] w-full md:w-auto truncate"
+                  className="bg-transparent outline-none text-[11px] font-semibold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[110px] max-w-[180px] w-full md:w-auto truncate"
                   value={filterComercial}
                   onChange={(e) => setFilterComercial(e.target.value)}
                   disabled={comercialOptions.length === 0 && filterDocSeries === 'All'}
@@ -1399,10 +1399,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 </select>
               </div>
 
-              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
-                <Tag size={14} className="text-slate-400" />
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0">
+                <Tag size={13} className="text-slate-400 shrink-0" />
                 <select 
-                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[120px] max-w-[200px] w-full md:w-auto truncate"
+                  className="bg-transparent outline-none text-[11px] font-semibold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[110px] max-w-[180px] w-full md:w-auto truncate"
                   value={filterReference}
                   onChange={(e) => setFilterReference(e.target.value)}
                   disabled={referenceOptions.length === 0}
@@ -1412,10 +1412,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 </select>
               </div>
 
-              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
-                <ListFilter size={14} className="text-slate-400" />
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0">
+                <ListFilter size={13} className="text-slate-400 shrink-0" />
                 <select 
-                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[110px] w-full md:w-auto"
+                  className="bg-transparent outline-none text-[11px] font-semibold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[100px] w-full md:w-auto"
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
                 >
@@ -1423,10 +1423,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 </select>
               </div>
 
-              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
-                <Archive size={14} className="text-slate-400 shrink-0" />
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0">
+                <Archive size={13} className="text-slate-400 shrink-0" />
                 <select
-                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[110px] w-full md:w-auto"
+                  className="bg-transparent outline-none text-[11px] font-semibold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[75px] w-full md:w-auto"
                   value={filterArchived}
                   onChange={(e) => setFilterArchived(e.target.value as 'all' | 'active' | 'archived')}
                 >

@@ -210,13 +210,13 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
 
   const getSectorDate = (order: Order): Date | null => {
     switch (sector.id) {
-      case 'tecelagem': return order.dataTec;
-      case 'felpo_cru': return order.felpoCruDate;
-      case 'tinturaria': return order.tinturariaDate;
-      case 'confeccao': return order.confDate;
-      case 'embalagem': return order.armExpDate;
-      case 'expedicao': return order.armExpDate;
-      default: return null;
+      case 'tecelagem': return order.dataTec || order.sectorPredictedDates?.['tecelagem'] || order.requestedDate || null;
+      case 'felpo_cru': return order.felpoCruDate || order.sectorPredictedDates?.['felpo_cru'] || order.requestedDate || null;
+      case 'tinturaria': return order.tinturariaDate || order.sectorPredictedDates?.['tinturaria'] || order.requestedDate || null;
+      case 'confeccao': return order.confDate || order.sectorPredictedDates?.['confeccao'] || order.requestedDate || null;
+      case 'embalagem': return order.armExpDate || order.sectorPredictedDates?.['embalagem'] || order.requestedDate || null;
+      case 'expedicao': return order.armExpDate || order.sectorPredictedDates?.['expedicao'] || order.requestedDate || null;
+      default: return order.requestedDate || null;
     }
   };
 
@@ -229,6 +229,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
   const [filterArchived, setFilterArchived] = React.useState<'all' | 'active' | 'archived'>('active');
   const [filterHasObservations, setFilterHasObservations] = React.useState(false);
   const [internalFilterDate, setInternalFilterDate] = React.useState<Date | null>(null);
+  const [filterWeekMode, setFilterWeekMode] = React.useState<'exact' | 'cumulative'>('exact');
 
   const filterDate = globalFilterDate !== undefined ? globalFilterDate : internalFilterDate;
   const setFilterDate = onGlobalFilterDateChange || setInternalFilterDate;
@@ -243,6 +244,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
 
   const priorityOptions = [
     { id: 'All', label: 'Todas Prioridades' },
+    { id: 'Any', label: 'Com Prioridade (Qualquer)' },
     { id: '1', label: 'Prioridade 1 (Alta)' },
     { id: '2', label: 'Prioridade 2 (Média)' },
     { id: '3', label: 'Prioridade 3 (Baixa)' },
@@ -307,6 +309,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                            filterPriority !== 'All' || 
                            filterHasObservations ||
                            filterDate !== null || 
+                           filterWeekMode !== 'exact' ||
                            filterArchived !== 'active' ||
                            !!searchTerm;
 
@@ -318,6 +321,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
       setFilterPriority('All');
       setFilterHasObservations(false);
       setFilterDate(null);
+      setFilterWeekMode('exact');
       setFilterArchived('active');
       setSearchTerm('');
   };
@@ -385,13 +389,21 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
       let matchesPriority = true;
       if (hasPriorityFilter) {
          const p = o.priority || 0;
-         matchesPriority = p.toString() === filterPriority;
+         if (filterPriority === 'Any') {
+            matchesPriority = p > 0;
+         } else {
+            matchesPriority = p.toString() === filterPriority;
+         }
       }
 
       let matchesDate = true;
       if (filterDate && weekStart! && weekEnd!) {
         const sectorDate = getSectorDate(o);
-        matchesDate = !!(sectorDate && sectorDate >= weekStart && sectorDate <= weekEnd);
+        if (filterWeekMode === 'cumulative') {
+          matchesDate = !!(sectorDate && sectorDate <= weekEnd);
+        } else {
+          matchesDate = !!(sectorDate && sectorDate >= weekStart && sectorDate <= weekEnd);
+        }
       }
 
       let matchesArchived = true;
@@ -987,67 +999,116 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
           : 'max-h-0 opacity-0 overflow-hidden pointer-events-none'
       }`}>
         {/* Header / Toolbar */}
-        <div className="flex-shrink-0 p-4 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
-          <div className="flex flex-col xl:flex-row gap-3">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+        <div className="flex-shrink-0 p-3 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800">
+          <div className="flex flex-col xl:flex-row gap-2.5 items-stretch xl:items-center">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
               <input 
                 type="text" 
                 placeholder="Pesquisar texto..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm transition-all h-full dark:text-white"
+                className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 text-[11px] shadow-2xs transition-all h-full dark:text-white placeholder:text-slate-400"
               />
             </div>
 
-            <div className="flex flex-wrap gap-2 items-center">
+            <div className="flex flex-wrap gap-1.5 items-center">
               {hasActiveFilters && (
                 <button
                   onClick={handleResetFilters}
-                  className="bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl p-2 shadow-sm transition-colors active:scale-95 flex items-center justify-center"
+                  className="bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-lg p-1.5 shadow-2xs transition-colors active:scale-95 flex items-center justify-center"
                   title="Limpar todos os filtros e pesquisa"
                 >
-                  <RotateCcw size={16} />
+                  <RotateCcw size={13} />
                 </button>
               )}
               
+              {/* Seletor de Semana com modo Só Semana vs Até à Semana */}
               {!filterDate ? (
                 <button 
                   onClick={() => setFilterDate(new Date())}
-                  className="flex items-center gap-2 border rounded-xl px-3 py-2 shadow-sm grow md:grow-0 transition-colors bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="flex items-center gap-1.5 border rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0 transition-colors bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-[11px] font-semibold"
                   title="Filtrar por Semana"
                 >
-                   <Calendar size={14} className="text-slate-400" />
-                   <span className="text-xs font-bold">Filtrar Semana</span>
+                   <Calendar size={13} className="text-slate-400" />
+                   <span>Filtrar Semana</span>
                 </button>
               ) : (
-                <div className="flex items-center bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-xl shadow-sm overflow-hidden grow md:grow-0">
-                  <button onClick={handlePrevWeek} className="px-2 py-2 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors">
-                    <ChevronLeft size={16} />
+                <div className="flex flex-wrap sm:flex-nowrap items-center bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-lg shadow-2xs overflow-hidden grow md:grow-0">
+                  <button onClick={handlePrevWeek} className="px-1.5 py-1.5 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors" title="Semana anterior">
+                    <ChevronLeft size={14} />
                   </button>
-                  <div className="px-2 flex flex-col items-center justify-center min-w-[100px]">
-                    <span className="text-[10px] font-black uppercase text-blue-500 dark:text-blue-400 leading-none">Semana {getISOWeek(filterDate)}</span>
-                    <span className="text-[10px] font-medium text-blue-700 dark:text-blue-200 leading-none mt-0.5">
+                  <div className="px-1.5 flex flex-col items-center justify-center min-w-[85px]">
+                    <span className="text-[9px] font-black uppercase text-blue-500 dark:text-blue-400 leading-none">Semana {getISOWeek(filterDate)}</span>
+                    <span className="text-[9px] font-medium text-blue-700 dark:text-blue-200 leading-none mt-0.5">
                        {(() => {
                          const {start, end} = getWeekRange(filterDate);
                          return `${start.getDate()} ${start.toLocaleString('pt-PT', {month: 'short'})} - ${end.getDate()} ${end.toLocaleString('pt-PT', {month: 'short'})}`;
                        })()}
                     </span>
                   </div>
-                  <button onClick={handleNextWeek} className="px-2 py-2 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors">
-                    <ChevronRight size={16} />
+                  <button onClick={handleNextWeek} className="px-1.5 py-1.5 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors" title="Semana seguinte">
+                    <ChevronRight size={14} />
                   </button>
-                  <div className="w-px h-6 bg-blue-200 dark:bg-blue-800 mx-1"></div>
-                  <button onClick={() => setFilterDate(null)} className="px-2 py-2 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-blue-400 dark:text-blue-300 hover:text-rose-500 dark:hover:text-rose-400 transition-colors">
-                    <X size={16} />
+                  
+                  {/* Seletor de Modo: Só Semana vs Até à Semana */}
+                  <div className="flex items-center border-l border-blue-200 dark:border-blue-800 px-1 py-0.5 gap-0.5 bg-white/60 dark:bg-slate-900/60">
+                    <button
+                      type="button"
+                      onClick={() => setFilterWeekMode('exact')}
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all ${
+                        filterWeekMode === 'exact'
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40'
+                      }`}
+                      title="Apenas encomendas com entrega no setor na semana selecionada"
+                    >
+                      Só Semana
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFilterWeekMode('cumulative')}
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all ${
+                        filterWeekMode === 'cumulative'
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40'
+                      }`}
+                      title="Todas as encomendas anteriores e até à semana selecionada"
+                    >
+                      ≤ Até à Semana
+                    </button>
+                  </div>
+
+                  <div className="w-px h-5 bg-blue-200 dark:bg-blue-800 mx-0.5"></div>
+                  <button onClick={() => setFilterDate(null)} className="px-1.5 py-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-blue-400 dark:text-blue-300 hover:text-rose-500 dark:hover:text-rose-400 transition-colors" title="Remover filtro de semana">
+                    <X size={14} />
                   </button>
                 </div>
               )}
 
-              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
-                <Flag size={14} className="text-slate-400" />
+              {/* Botão de Filtro por Observações (Posicionado após Filtrar Semana) */}
+              <button
+                type="button"
+                onClick={() => setFilterHasObservations(!filterHasObservations)}
+                className={`flex items-center gap-1.5 border rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0 transition-all text-[11px] font-semibold active:scale-95 cursor-pointer select-none ${
+                  filterHasObservations
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs ring-1 ring-blue-400/30'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+                title={filterHasObservations ? "A mostrar apenas com observações (clique para limpar)" : "Filtrar apenas encomendas com observações"}
+              >
+                <Eye size={13} className={filterHasObservations ? "text-white" : "text-blue-500"} />
+                <span>Com Observações</span>
+                {filterHasObservations && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-white ml-0.5 animate-pulse" />
+                )}
+              </button>
+
+              {/* Prioridades */}
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0">
+                <Flag size={13} className="text-slate-400 shrink-0" />
                 <select 
-                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[110px] w-full md:w-auto"
+                  className="bg-transparent outline-none text-[11px] font-semibold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[105px] w-full md:w-auto"
                   value={filterPriority}
                   onChange={(e) => setFilterPriority(e.target.value)}
                 >
@@ -1055,10 +1116,11 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                 </select>
               </div>
 
-              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
-                <FileText size={14} className="text-slate-400" />
+              {/* Séries */}
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0">
+                <FileText size={13} className="text-slate-400 shrink-0" />
                 <select 
-                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[80px] w-full md:w-auto"
+                  className="bg-transparent outline-none text-[11px] font-semibold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[75px] w-full md:w-auto"
                   value={filterDocSeries}
                   onChange={(e) => setFilterDocSeries(e.target.value)}
                 >
@@ -1067,10 +1129,11 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                 </select>
               </div>
 
-              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
-                <Users size={14} className="text-slate-400" />
+              {/* Comerciais */}
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0">
+                <Users size={13} className="text-slate-400 shrink-0" />
                 <select 
-                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[120px] max-w-[200px] w-full md:w-auto truncate"
+                  className="bg-transparent outline-none text-[11px] font-semibold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[110px] max-w-[180px] w-full md:w-auto truncate"
                   value={filterComercial}
                   onChange={(e) => setFilterComercial(e.target.value)}
                   disabled={comercialOptions.length === 0 && filterDocSeries === 'All'}
@@ -1080,10 +1143,11 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                 </select>
               </div>
 
-              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
-                <Tag size={14} className="text-slate-400" />
+              {/* Referências */}
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0">
+                <Tag size={13} className="text-slate-400 shrink-0" />
                 <select 
-                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[120px] max-w-[200px] w-full md:w-auto truncate"
+                  className="bg-transparent outline-none text-[11px] font-semibold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[110px] max-w-[180px] w-full md:w-auto truncate"
                   value={filterReference}
                   onChange={(e) => setFilterReference(e.target.value)}
                   disabled={referenceOptions.length === 0}
@@ -1093,10 +1157,11 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                 </select>
               </div>
 
-              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
-                <ListFilter size={14} className="text-slate-400" />
+              {/* Estados */}
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0">
+                <ListFilter size={13} className="text-slate-400 shrink-0" />
                 <select 
-                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[110px] w-full md:w-auto"
+                  className="bg-transparent outline-none text-[11px] font-semibold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[100px] w-full md:w-auto"
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
                 >
@@ -1104,10 +1169,11 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                 </select>
               </div>
 
-              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-sm grow md:grow-0">
-                <Archive size={14} className="text-slate-400 shrink-0" />
+              {/* Arquivadas */}
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-2xs grow md:grow-0">
+                <Archive size={13} className="text-slate-400 shrink-0" />
                 <select 
-                  className="bg-transparent outline-none text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[80px] w-full md:w-auto"
+                  className="bg-transparent outline-none text-[11px] font-semibold text-slate-600 dark:text-slate-300 cursor-pointer min-w-[75px] w-full md:w-auto"
                   value={filterArchived}
                   onChange={(e) => setFilterArchived(e.target.value as any)}
                 >
@@ -1116,21 +1182,6 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                   <option value="all" className="dark:bg-slate-900">Todas</option>
                 </select>
               </div>
-
-              {/* Botão de Filtro por Observações */}
-              <button
-                type="button"
-                onClick={() => setFilterHasObservations(!filterHasObservations)}
-                className={`flex items-center gap-2 border rounded-xl px-3 py-2 shadow-sm grow md:grow-0 transition-all text-xs font-bold active:scale-95 cursor-pointer ${
-                  filterHasObservations
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-400/30'
-                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                }`}
-                title={filterHasObservations ? "A mostrar apenas com observações (clique para limpar)" : "Filtrar apenas encomendas com observações preenchidas"}
-              >
-                <Eye size={14} className={filterHasObservations ? "text-white" : "text-blue-500"} />
-                <span>Com Observações</span>
-              </button>
             </div>
           </div>
 
