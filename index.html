@@ -72,9 +72,7 @@
                             const newWorker = reg.installing;
                             newWorker.addEventListener('statechange', () => {
                                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    if (confirm('Nova versão do Prod. Lasa disponível! Recarregar agora?')) {
-                                        window.location.reload();
-                                    }
+                                    window.location.reload();
                                 }
                             });
                         });

@@ -24,7 +24,8 @@ import {
   ArchiveRestore,
   Download,
   CheckCircle2,
-  Clock
+  Clock,
+  Pencil
 } from 'lucide-react';
 import { Order, OrderState, SectorState, User } from '../types';
 import { getOrderState, getSectorState, exportOrdersToSQLite, getDirectoryHandle, getWeekRange, exportOrdersToExcel, loadExportColumnsConfig, exportCustomColumns, DEFAULT_SELECTED_COLUMNS } from '../services/dataService';
@@ -100,12 +101,13 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
     newReason?: string;
     currentDate?: Date | null;
     newDate?: Date | null;
+    initialObservation?: string;
   } | null>(null);
 
-  const handleOpenClassificationModal = (group: DocumentGroup, newReason: string) => {
+  const handleOpenEditModal = (group: DocumentGroup) => {
     const current = group.mainOrder.sectorStopReasons?.['planeamento'] || '';
-    if (newReason === current) return;
     const initialDate = group.mainOrder.sectorPredictedDates?.['planeamento'] || group.requestedDate || null;
+    const initialObs = group.mainOrder.sectorObservations?.['planeamento'] || '';
     setPendingChange({
       docNr: group.docNr,
       items: group.items,
@@ -113,9 +115,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
       sectorId: 'planeamento',
       sectorName: 'Planeamento',
       currentReason: current,
-      newReason: newReason,
+      newReason: current,
       currentDate: initialDate,
-      newDate: initialDate
+      newDate: initialDate,
+      initialObservation: initialObs
     });
   };
 
@@ -125,18 +128,29 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
     applyToAll: boolean;
     predictedDate?: Date | null;
     isDateModified?: boolean;
+    classification?: string;
+    isClassificationModified?: boolean;
+    clearAll?: boolean;
   }) => {
     if (!pendingChange) return;
 
-    const newPredictedDate = result.isDateModified ? result.predictedDate : undefined;
+    const newPredictedDate = result.clearAll 
+      ? null 
+      : (result.isDateModified ? result.predictedDate : undefined);
 
-    if (onUpdateStopReason && (pendingChange.newReason !== undefined || newPredictedDate !== undefined)) {
+    const effectiveReason = result.clearAll 
+      ? '' 
+      : (result.isClassificationModified ? result.classification : (pendingChange.newReason ?? ''));
+
+    const effectiveObservation = result.clearAll ? '' : result.observation;
+
+    if (onUpdateStopReason) {
       if (pendingChange.items.every(it => it.docNr === pendingChange.docNr)) {
         onUpdateStopReason(
           pendingChange.docNr,
           pendingChange.sectorId,
-          pendingChange.newReason || '',
-          result.observation,
+          effectiveReason || '',
+          effectiveObservation,
           result.targetOrderIds,
           newPredictedDate
         );
@@ -152,8 +166,8 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
           onUpdateStopReason(
             d,
             pendingChange.sectorId,
-            pendingChange.newReason || '',
-            result.observation,
+            effectiveReason || '',
+            effectiveObservation,
             result.targetOrderIds,
             newPredictedDate
           );
@@ -703,26 +717,26 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
 
     switch (state) {
       case OrderState.COMPLETED: 
-        badges.push(<span key="status" className="px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-black uppercase tracking-wider border border-emerald-200 dark:border-emerald-800 flex items-center justify-center gap-1 w-full"><CheckCircle2 size={10} /> Concluída</span>);
+        badges.push(<span key="status" className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[9px] font-black uppercase tracking-wider border border-emerald-200 dark:border-emerald-800 flex items-center justify-center gap-1 w-full"><CheckCircle2 size={9} /> Concluída</span>);
         break;
       case OrderState.LATE: 
-        badges.push(<span key="status" className="px-2.5 py-1 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 text-[10px] font-black uppercase tracking-wider border border-rose-200 dark:border-rose-800 flex items-center justify-center gap-1 w-full"><AlertTriangle size={10} /> Atrasada</span>);
+        badges.push(<span key="status" className="px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 text-[9px] font-black uppercase tracking-wider border border-rose-200 dark:border-rose-800 flex items-center justify-center gap-1 w-full"><AlertTriangle size={9} /> Atrasada</span>);
         break;
       case OrderState.IN_PRODUCTION: 
-        badges.push(<span key="status" className="px-2.5 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-[10px] font-black uppercase tracking-wider border border-blue-200 dark:border-blue-800 flex items-center justify-center gap-1 w-full"><Clock size={10} /> No Prazo</span>);
+        badges.push(<span key="status" className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-[9px] font-black uppercase tracking-wider border border-blue-200 dark:border-blue-800 flex items-center justify-center gap-1 w-full"><Clock size={9} /> No Prazo</span>);
         break;
       default: 
-        badges.push(<span key="status" className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-black uppercase tracking-wider border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1 w-full">Em Aberto</span>);
+        badges.push(<span key="status" className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[9px] font-black uppercase tracking-wider border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1 w-full">Em Aberto</span>);
     }
 
     if (order.priority === 1) {
-       badges.push(<span key="priority" className="px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-[10px] font-black uppercase tracking-wider border border-red-200 dark:border-red-800 flex items-center justify-center gap-1 w-full"><Flag size={10} /> Alta Prioridade</span>);
+       badges.push(<span key="priority" className="px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-[9px] font-black uppercase tracking-wider border border-red-200 dark:border-red-800 flex items-center justify-center gap-1 w-full"><Flag size={9} /> Alta Prioridade</span>);
     } else if (order.priority === 2) {
-       badges.push(<span key="priority" className="px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 text-[10px] font-black uppercase tracking-wider border border-orange-200 dark:border-orange-800 flex items-center justify-center gap-1 w-full"><Flag size={10} /> Prioridade Média</span>);
+       badges.push(<span key="priority" className="px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 text-[9px] font-black uppercase tracking-wider border border-orange-200 dark:border-orange-800 flex items-center justify-center gap-1 w-full"><Flag size={9} /> Prioridade Média</span>);
     }
 
     return (
-        <div className="flex flex-col items-center gap-1.5 w-full">
+        <div className="flex flex-col items-center gap-1 w-full">
             {badges}
         </div>
     );
@@ -1495,8 +1509,8 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                     />
                   </th>
                 )}
-                <th className="px-6 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap w-[15%]">
-                    <div className="flex items-center gap-2">
+                <th className="px-3 py-2.5 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap w-[15%]">
+                    <div className="flex items-center gap-1.5">
                         Documento / PO
                         <div className="flex gap-1">
                             <button 
@@ -1505,7 +1519,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                                 title={filterPriority === 'All' ? "Filtrar por Prioridade" : "Limpar filtro de Prioridade"}
                             >
                                 <Flag 
-                                    size={14} 
+                                    size={13} 
                                     className={filterPriority === 'Any' || (filterPriority !== 'All' && filterPriority !== '0') ? 'fill-blue-500 text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'} 
                                     strokeWidth={2.5}
                                 />
@@ -1513,7 +1527,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                             {/* Header M Filter */}
                             <button
                                 onClick={() => setFilterManual(!filterManual)}
-                                className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[9px] font-bold transition-all hover:scale-110 active:scale-95 ${filterManual ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-300 dark:bg-slate-700 text-white dark:text-slate-300 opacity-50 hover:opacity-100'}`}
+                                className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[8px] font-bold transition-all hover:scale-110 active:scale-95 ${filterManual ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-300 dark:bg-slate-700 text-white dark:text-slate-300 opacity-50 hover:opacity-100'}`}
                                 title="Filtrar por Confeção Manual"
                             >
                                 M
@@ -1521,14 +1535,14 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                         </div>
                     </div>
                 </th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap w-[35%]">Cliente (Comercial) / Ref + Cor</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap w-[10%]">Medida / Família</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap w-[15%]">Qtd. Pedida / Entrega</th>
-                <th className="px-2 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center w-[5%]">
+                <th className="px-3 py-2.5 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap w-[35%]">Cliente (Comercial) / Ref + Cor</th>
+                <th className="px-3 py-2.5 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap w-[10%]">Medida / Família</th>
+                <th className="px-3 py-2.5 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap w-[15%]">Qtd. Pedida / Entrega</th>
+                <th className="px-2 py-2.5 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider text-center w-[5%]">
                     <button 
                         type="button"
                         onClick={() => setFilterHasObservations(!filterHasObservations)}
-                        className={`flex items-center justify-center gap-1 mx-auto px-1.5 py-1 rounded-lg transition-all cursor-pointer ${
+                        className={`flex items-center justify-center gap-1 mx-auto px-1.5 py-0.5 rounded transition-all cursor-pointer ${
                           filterHasObservations 
                             ? 'bg-blue-600 text-white font-black shadow-xs ring-2 ring-blue-400/40' 
                             : 'hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800'
@@ -1539,10 +1553,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                         <Eye size={10} className={filterHasObservations ? "text-white" : "text-blue-500"} />
                     </button>
                 </th>
-                <th className="px-2 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center w-[10%]">Classificação</th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center w-[10%]">Estado</th>
-                <th className="px-2 py-4 w-[60px] text-center sticky right-0 bg-slate-100 dark:bg-slate-900 z-10">
-                  <div className="flex items-center justify-center gap-1.5 animate-fade-in">
+                <th className="px-2 py-2.5 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider text-center w-[10%]">Classificação</th>
+                <th className="px-3 py-2.5 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider text-center w-[10%]">Estado</th>
+                <th className="px-2 py-2.5 w-[60px] text-center sticky right-0 bg-slate-100 dark:bg-slate-900 z-10 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                  <div className="flex items-center justify-center gap-1 animate-fade-in">
                     {user?.role === 'admin' && onArchiveOrder && (
                       <span className="hidden xl:inline text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase transition-colors">Ações</span>
                     )}
@@ -1591,19 +1605,19 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                       }`}
                     >
                       {user?.permissions?.orders === 'write' && (
-                        <td className="px-4 py-3.5 align-middle text-center" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-3 py-2.5 align-middle text-center" onClick={(e) => e.stopPropagation()}>
                           <input 
                             type="checkbox" 
                             checked={isAllGroupSelected} 
                             ref={el => { if (el) el.indeterminate = isPartialGroupSelected; }}
                             onChange={(e) => handleToggleDocSelect(group, e)}
-                            className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4 bg-white dark:bg-slate-800"
+                            className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer w-3.5 h-3.5 bg-white dark:bg-slate-800"
                             title="Selecionar todas as linhas deste documento"
                           />
                         </td>
                       )}
-                      <td className="px-6 py-3.5 align-top">
-                        <div className="flex items-start gap-2">
+                      <td className="px-3.5 py-2.5 align-top">
+                        <div className="flex items-start gap-1.5">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1617,10 +1631,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                             className="p-1 -ml-1 text-slate-400 hover:text-blue-600 transition-colors shrink-0 mt-0.5 cursor-pointer"
                             title={group.items.length === 1 ? "Ver detalhes da encomenda" : isExpanded ? "Ocultar linhas" : "Ver linhas"}
                           >
-                            <ChevronRight size={15} className={`transition-transform duration-200 ${isExpanded ? 'rotate-90 text-blue-600' : ''}`} />
+                            <ChevronRight size={14} className={`transition-transform duration-200 ${isExpanded ? 'rotate-90 text-blue-600' : ''}`} />
                           </button>
 
-                          <div className="flex flex-col gap-1 shrink-0 pt-0.5 items-center">
+                          <div className="flex flex-col gap-0.5 shrink-0 pt-0.5 items-center">
                             {/* Priority Flag */}
                             <div className="relative">
                               <button 
@@ -1628,7 +1642,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                                 className={`transition-all ${user?.permissions?.orders === 'write' ? 'hover:scale-110 active:scale-95 cursor-pointer' : 'cursor-default'}`}
                                 title={user?.permissions?.orders === 'write' ? "Alterar Prioridade" : "Prioridade"}
                               >
-                                <Flag size={15} className={getPriorityColor(group.priority || 0)} strokeWidth={2} />
+                                <Flag size={14} className={getPriorityColor(group.priority || 0)} strokeWidth={2} />
                               </button>
                               
                               {/* Priority Menu */}
@@ -1667,35 +1681,35 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                           </div>
                           
                           <div>
-                            <span className="font-bold text-slate-900 dark:text-slate-100 block text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            <span className="font-bold text-slate-900 dark:text-slate-100 block text-xs group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                               {group.docNr ? <HighlightText text={group.docNr} highlight={highlights} /> : '-'}
                             </span>
-                            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap block mt-0.5">
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap block">
                               PO: {group.po ? <HighlightText text={group.po} highlight={highlights} /> : '-'}
                             </span>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-3.5 align-top">
+                      <td className="px-3.5 py-2.5 align-top">
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-sm font-black text-slate-900 dark:text-white leading-tight block truncate max-w-[420px]" title={group.clientName}>
+                          <span className="text-xs font-bold text-slate-900 dark:text-white leading-tight block truncate max-w-[380px]" title={group.clientName}>
                             {group.clientName ? <HighlightText text={group.clientName.toUpperCase()} highlight={highlights} /> : <span className="text-slate-300 italic">Sem Cliente</span>}
                             {group.comercial && (
-                              <span className="ml-2 text-[11px] text-blue-600 dark:text-blue-400 font-bold">
+                              <span className="ml-1.5 text-[10px] text-blue-600 dark:text-blue-400 font-bold">
                                 ({<HighlightText text={group.comercial.toUpperCase()} highlight={highlights} />})
                               </span>
                             )}
                           </span>
-                          <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate mt-0.5">
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate">
                             <HighlightText text={group.referenceSummary} highlight={highlights} />
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-3.5 align-top" onClick={(e) => e.stopPropagation()}>
-                        <span className="text-sm font-black text-slate-800 dark:text-slate-200 block">
+                      <td className="px-3.5 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
                           {group.items.length} {group.items.length === 1 ? 'linha' : 'linhas'}
                         </span>
-                        <div className="flex items-center gap-1.5 mt-0.5">
+                        <div className="flex items-center gap-1 mt-0.5">
                           {group.items.length === 1 ? (
                             <button
                               type="button"
@@ -1704,11 +1718,11 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                                 e.preventDefault();
                                 onViewDetails(group.mainOrder);
                               }}
-                              className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer text-left flex items-center gap-0.5"
+                              className="text-[11px] text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer text-left flex items-center gap-0.5"
                               title="Ver detalhes da encomenda"
                             >
                               <span>Ver Detalhes</span>
-                              <span className="text-[10px]">→</span>
+                              <span className="text-[9px]">→</span>
                             </button>
                           ) : (
                             <>
@@ -1719,12 +1733,12 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                                   e.preventDefault();
                                   toggleExpandDocNr(group.docNr);
                                 }}
-                                className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer text-left"
+                                className="text-[11px] text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer text-left"
                                 title={isExpanded ? "Ocultar linhas" : "Ver todas as linhas"}
                               >
                                 {isExpanded ? '▲ Ocultar linhas' : '▼ Ver linhas'}
                               </button>
-                              <span className="text-slate-300 dark:text-slate-600 text-xs">•</span>
+                              <span className="text-slate-300 dark:text-slate-600 text-[10px]">•</span>
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -1732,7 +1746,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                                   e.preventDefault();
                                   onViewDetails(group.mainOrder);
                                 }}
-                                className="text-xs text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 font-semibold hover:underline cursor-pointer text-left"
+                                className="text-[10px] text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 font-semibold hover:underline cursor-pointer text-left"
                                 title="Ver detalhes da encomenda"
                               >
                                 Detalhes →
@@ -1741,36 +1755,61 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-3.5 align-top">
-                        <span className="text-sm font-black text-slate-900 dark:text-slate-100 block">
+                      <td className="px-3.5 py-2.5 align-top">
+                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">
                           {group.totalQtyRequested.toLocaleString('pt-PT')} <span className="text-[9px] text-slate-400 dark:text-slate-500 font-normal">UN</span>
                         </span>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium block">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium block">
                           Em aberto: {group.totalQtyOpen.toLocaleString('pt-PT')}
                         </span>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5 mt-0.5">
-                          <Calendar size={11} className="text-slate-400" /> {formatDate(group.requestedDate)}
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1 mt-0.5">
+                          <Calendar size={10} className="text-slate-400" /> {formatDate(group.requestedDate)}
                         </span>
                       </td>
-                      <td className="px-2 py-3.5 align-middle text-center">
+                      <td className="px-2 py-2.5 align-middle text-center">
                         {group.hasObservations && (
                           <div title="Tem observações no documento">
-                            <Eye size={16} className="text-slate-400 dark:text-slate-500 mx-auto group-hover:text-blue-500 dark:group-hover:text-blue-400" />
+                            <Eye size={14} className="text-slate-400 dark:text-slate-500 mx-auto group-hover:text-blue-500 dark:group-hover:text-blue-400" />
                           </div>
                         )}
                       </td>
-                      <td className="px-2 py-3.5 align-middle text-center" onClick={(e) => e.stopPropagation()}>
-                        <StopReasonSelector 
-                          currentReason={group.mainOrder.sectorStopReasons?.['planeamento']} 
-                          onSelect={(reason) => handleOpenClassificationModal(group, reason)}
-                          disabled={user?.permissions?.orders !== 'write'}
-                          hierarchy={stopReasonsHierarchy}
-                        />
+                      <td className="px-2 py-2.5 align-middle text-center" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col items-center justify-center gap-1">
+                          {group.mainOrder.sectorStopReasons?.['planeamento'] ? (
+                            <span 
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/60 max-w-[160px] truncate"
+                              title={group.mainOrder.sectorStopReasons['planeamento']}
+                            >
+                              <Tag size={9} className="shrink-0 text-amber-500" />
+                              <span className="truncate">{group.mainOrder.sectorStopReasons['planeamento']}</span>
+                            </span>
+                          ) : (
+                            <span className="text-[9px] text-slate-400 dark:text-slate-500 italic">
+                              Sem classificação
+                            </span>
+                          )}
+
+                          {user?.permissions?.orders === 'write' && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                handleOpenEditModal(group);
+                              }}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 border border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer shadow-2xs"
+                              title="Editar classificação, data prevista e observações"
+                            >
+                              <Pencil size={9} />
+                              <span>Editar</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-6 py-3.5 align-middle text-center">
+                      <td className="px-3 py-2.5 align-middle text-center">
                         {getStatusBadge(group.mainOrder)}
                       </td>
-                      <td className="px-2 py-3.5 align-middle text-center w-[60px]" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-2 py-2.5 align-middle text-center w-[60px]" onClick={(e) => e.stopPropagation()}>
                         {user?.role === 'admin' && onArchiveOrder ? (
                           <button
                             onClick={(e) => {
@@ -1778,10 +1817,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                               e.preventDefault();
                               setOrderToArchive(group.mainOrder);
                             }}
-                            className={`p-1.5 rounded-lg transition-all hover:scale-110 active:scale-95 ${group.isArchived ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' : 'text-slate-300 dark:text-slate-600 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
+                            className={`p-1 rounded-lg transition-all hover:scale-110 active:scale-95 ${group.isArchived ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' : 'text-slate-300 dark:text-slate-600 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
                             title={group.isArchived ? `Desarquivar (arquivado por ${group.archivedBy})` : 'Arquivar encomenda'}
                           >
-                            {group.isArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+                            {group.isArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
                           </button>
                         ) : (
                           <div className="w-[16px] h-[16px]"></div>
@@ -1793,31 +1832,31 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                     {isExpanded && (
                       <tr className="bg-slate-50/70 dark:bg-slate-900/60 border-b border-blue-200 dark:border-blue-900/40">
                         <td colSpan={user?.permissions?.orders === 'write' ? 10 : 9} className="p-0">
-                          <div className="p-3.5 pl-9 bg-gradient-to-r from-blue-50/50 via-slate-50/50 to-transparent dark:from-slate-900/60 dark:via-slate-900/40 dark:to-transparent border-l-4 border-l-blue-500 space-y-2">
+                          <div className="p-2.5 pl-6 bg-gradient-to-r from-blue-50/50 via-slate-50/50 to-transparent dark:from-slate-900/60 dark:via-slate-900/40 dark:to-transparent border-l-4 border-l-blue-500 space-y-1.5">
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                                <Layers size={13} className="text-blue-500" />
+                              <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                <Layers size={11} className="text-blue-500" />
                                 Itens da Encomenda {group.docNr} ({group.items.length} {group.items.length === 1 ? 'item' : 'itens'})
                               </span>
-                              <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500">
                                 Clique numa linha para ver detalhes completos e setores
                               </span>
                             </div>
 
-                            <table className="w-full text-left text-xs bg-white dark:bg-slate-950 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xs">
-                              <thead className="bg-slate-100/90 dark:bg-slate-900/90 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                            <table className="w-full text-left text-[11px] bg-white dark:bg-slate-950 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xs">
+                              <thead className="bg-slate-100/90 dark:bg-slate-900/90 text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
                                 <tr>
-                                  <th className="px-3 py-2 w-[45px] text-center">Item</th>
-                                  <th className="px-4 py-2">Referência & Descrição</th>
-                                  <th className="px-3 py-2">Cor</th>
-                                  <th className="px-3 py-2">Medida</th>
-                                  <th className="px-3 py-2">Família</th>
-                                  <th className="px-3 py-2 text-right">Qtd. Pedida</th>
-                                  <th className="px-3 py-2 text-right">Em Aberto</th>
-                                  <th className="px-3 py-2 text-center">Entrega</th>
-                                  <th className="px-2 py-2 text-center w-[40px]">Obs.</th>
-                                  <th className="px-3 py-2 text-center">Estado</th>
-                                  <th className="px-3 py-2 text-center w-[100px]">Ação</th>
+                                  <th className="px-2.5 py-1.5 w-[45px] text-center">Item</th>
+                                  <th className="px-3 py-1.5">Referência & Descrição</th>
+                                  <th className="px-2.5 py-1.5">Cor</th>
+                                  <th className="px-2.5 py-1.5">Medida</th>
+                                  <th className="px-2.5 py-1.5">Família</th>
+                                  <th className="px-2.5 py-1.5 text-right">Qtd. Pedida</th>
+                                  <th className="px-2.5 py-1.5 text-right">Em Aberto</th>
+                                  <th className="px-2.5 py-1.5 text-center">Entrega</th>
+                                  <th className="px-2 py-1.5 text-center w-[40px]">Obs.</th>
+                                  <th className="px-2.5 py-1.5 text-center">Estado</th>
+                                  <th className="px-2.5 py-1.5 text-center w-[90px]">Ação</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
@@ -1830,39 +1869,39 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                                     }}
                                     className="hover:bg-blue-50/70 dark:hover:bg-slate-900 cursor-pointer transition-colors"
                                   >
-                                    <td className="px-3 py-2 text-center font-bold text-slate-400 text-[11px]">
+                                    <td className="px-2.5 py-1.5 text-center font-bold text-slate-400 text-[10px]">
                                       #{item.itemNr || idx + 1}
                                     </td>
-                                    <td className="px-4 py-2 font-bold text-slate-900 dark:text-slate-100">
+                                    <td className="px-3 py-1.5 font-bold text-slate-900 dark:text-slate-100">
                                       {item.reference ? <HighlightText text={item.reference} highlight={highlights} /> : '-'}
                                     </td>
-                                    <td className="px-3 py-2 text-slate-600 dark:text-slate-400">
+                                    <td className="px-2.5 py-1.5 text-slate-600 dark:text-slate-400">
                                       {item.colorDesc ? <HighlightText text={item.colorDesc} highlight={highlights} /> : '-'}
                                     </td>
-                                    <td className="px-3 py-2 font-medium text-slate-700 dark:text-slate-300">
+                                    <td className="px-2.5 py-1.5 font-medium text-slate-700 dark:text-slate-300">
                                       {item.sizeDesc || item.size || '-'}
                                     </td>
-                                    <td className="px-3 py-2 text-slate-500 dark:text-slate-400 uppercase text-[11px]">
+                                    <td className="px-2.5 py-1.5 text-slate-500 dark:text-slate-400 uppercase text-[10px]">
                                       {item.family || '-'}
                                     </td>
-                                    <td className="px-3 py-2 text-right font-black text-slate-900 dark:text-slate-100">
+                                    <td className="px-2.5 py-1.5 text-right font-black text-slate-900 dark:text-slate-100">
                                       {item.qtyRequested?.toLocaleString('pt-PT')} <span className="text-[9px] text-slate-400 font-normal">UN</span>
                                     </td>
-                                    <td className="px-3 py-2 text-right font-medium text-slate-600 dark:text-slate-400">
+                                    <td className="px-2.5 py-1.5 text-right font-medium text-slate-600 dark:text-slate-400">
                                       {item.qtyOpen !== undefined ? item.qtyOpen.toLocaleString('pt-PT') : '-'}
                                     </td>
-                                    <td className="px-3 py-2 text-center font-medium text-slate-600 dark:text-slate-400">
+                                    <td className="px-2.5 py-1.5 text-center font-medium text-slate-600 dark:text-slate-400 text-[10px]">
                                       {formatDate(item.requestedDate)}
                                     </td>
-                                    <td className="px-2 py-2 text-center">
+                                    <td className="px-2 py-1.5 text-center">
                                       {hasObservations(item) && (
-                                        <Eye size={13} className="text-blue-500 mx-auto" title="Tem observações" />
+                                        <Eye size={12} className="text-blue-500 mx-auto" title="Tem observações" />
                                       )}
                                     </td>
-                                    <td className="px-3 py-2 text-center">
+                                    <td className="px-2.5 py-1.5 text-center">
                                       {getStatusBadge(item)}
                                     </td>
-                                    <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                    <td className="px-2.5 py-1.5 text-center" onClick={(e) => e.stopPropagation()}>
                                       <button
                                         type="button"
                                         onClick={(e) => {
@@ -1870,7 +1909,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                                           e.preventDefault();
                                           onViewDetails(item);
                                         }}
-                                        className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 text-[10px] font-bold transition-colors shadow-2xs cursor-pointer"
+                                        className="px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 text-[9px] font-bold transition-colors shadow-2xs cursor-pointer"
                                       >
                                         Ver Detalhes
                                       </button>
@@ -2017,8 +2056,23 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                     )}
                   </div>
 
-                  {/* Estado Badge + Arquivar */}
-                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  {/* Estado Badge + Editar + Arquivar */}
+                  <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {user?.permissions?.orders === 'write' && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          handleOpenEditModal(group);
+                        }}
+                        title="Editar alterações no cartão de validação"
+                        className="px-1.5 py-0.5 rounded text-[9px] font-black text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 flex items-center gap-0.5 active:scale-95 cursor-pointer"
+                      >
+                        <Pencil size={9} />
+                        <span>Editar</span>
+                      </button>
+                    )}
                     <div className="scale-90 origin-right">
                       {getStatusBadge(group.mainOrder)}
                     </div>
@@ -2037,6 +2091,19 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                     )}
                   </div>
                 </div>
+
+                {/* Tag de Classificação no Cartão Mobile (Apenas leitura) */}
+                {group.mainOrder.sectorStopReasons?.['planeamento'] && (
+                  <div className="mt-1 flex items-center gap-1">
+                    <span 
+                      className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/60 truncate max-w-[220px]"
+                      title={group.mainOrder.sectorStopReasons['planeamento']}
+                    >
+                      <Tag size={9} className="shrink-0 text-amber-500" />
+                      <span className="truncate">{group.mainOrder.sectorStopReasons['planeamento']}</span>
+                    </span>
+                  </div>
+                )}
 
                 {/* Linha 2: Cliente + Comercial + Totais */}
                 <div className="mt-1 flex items-baseline justify-between gap-2">
@@ -2381,10 +2448,13 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
           items={pendingChange.items}
           clientName={pendingChange.clientName}
           sectorName={pendingChange.sectorName}
+          sectorId={pendingChange.sectorId}
           currentReason={pendingChange.currentReason}
           newReason={pendingChange.newReason}
           currentDate={pendingChange.currentDate}
           newDate={pendingChange.newDate}
+          initialObservation={pendingChange.initialObservation}
+          stopReasonsHierarchy={stopReasonsHierarchy}
           onConfirm={handleConfirmChange}
         />
       )}

@@ -1,9 +1,10 @@
 
 import React from 'react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
   PieChart, Pie, Cell, Legend
 } from 'recharts';
+import { SafeResponsiveContainer as ResponsiveContainer } from './SafeResponsiveContainer';
 import { TrendingUp, AlertCircle, Calendar, CheckCircle2, BarChart3 } from 'lucide-react';
 import { Order, DashboardKPIs } from '../types';
 import { calculateKPIs, getWeekRange } from '../services/dataService';

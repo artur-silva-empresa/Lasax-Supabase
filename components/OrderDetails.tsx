@@ -117,6 +117,9 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
     applyToAll: boolean;
     predictedDate?: Date | null;
     isDateModified?: boolean;
+    classification?: string;
+    isClassificationModified?: boolean;
+    clearAll?: boolean;
   }) => {
     if (!pendingChange || !editingSector) return;
 
@@ -124,28 +127,44 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
     const pool = allOrders || [order];
     const itemsToUpdate = pool.filter(o => targetSet.has(o.id));
 
-    const effectiveDate = result.isDateModified
-      ? result.predictedDate
-      : (pendingChange.newDate !== undefined ? pendingChange.newDate : undefined);
+    const effectiveDate = result.clearAll
+      ? null
+      : (result.isDateModified
+          ? result.predictedDate
+          : (pendingChange.newDate !== undefined ? pendingChange.newDate : undefined));
 
-    const isDateActuallyChanged = effectiveDate !== undefined;
+    const effectiveReason = result.clearAll
+      ? ''
+      : (result.isClassificationModified ? result.classification : pendingChange.newReason);
+
+    const isDateActuallyChanged = result.clearAll || effectiveDate !== undefined;
 
     const updatedList: Order[] = itemsToUpdate.map(target => {
       let updatedObservations = { ...(target.sectorObservations || {}) };
-      if (result.observation) {
+      if (result.clearAll) {
+        delete updatedObservations[editingSector.id];
+      } else if (result.observation) {
         updatedObservations[editingSector.id] = result.observation;
       }
 
       let updatedStopReasons = { ...(target.sectorStopReasons || {}) };
-      if (pendingChange.newReason !== undefined) {
-        updatedStopReasons[editingSector.id] = pendingChange.newReason;
+      if (effectiveReason !== undefined) {
+        if (effectiveReason) {
+          updatedStopReasons[editingSector.id] = effectiveReason;
+        } else {
+          delete updatedStopReasons[editingSector.id];
+        }
       }
 
       let updatedPredictedDates = { ...(target.sectorPredictedDates || {}) };
       let updatedPending = { ...(target.sectorPredictedDatesPending || {}) };
 
       if (isDateActuallyChanged) {
-        updatedPredictedDates[editingSector.id] = effectiveDate ?? null;
+        if (effectiveDate === null) {
+          delete updatedPredictedDates[editingSector.id];
+        } else {
+          updatedPredictedDates[editingSector.id] = effectiveDate;
+        }
         delete updatedPending[editingSector.id];
       }
 
@@ -477,6 +496,7 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
             items={pendingChange.items}
             clientName={pendingChange.clientName}
             sectorName={pendingChange.sectorName}
+            sectorId={editingSector?.id}
             currentReason={pendingChange.currentReason}
             newReason={pendingChange.newReason}
             currentDate={pendingChange.currentDate}

@@ -537,6 +537,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                           </li>
                           <li className="px-2">
                             <button
+                              onClick={() => setActiveView('config-notifications')}
+                              className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                                activeView === 'config-notifications'
+                                  ? 'text-blue-400 bg-slate-700 font-bold'
+                                  : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                              }`}
+                            >
+                              <Bell size={16} />
+                              <span>Notificações</span>
+                            </button>
+                          </li>
+                          <li className="px-2">
+                            <button
                               onClick={() => setActiveView('config-users')}
                               className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
                                 activeView === 'config-users'
@@ -600,6 +613,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
                           >
                             <Settings size={16} />
                             <span>Geral</span>
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            onClick={() => setActiveView('config-notifications')}
+                            className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+                              activeView === 'config-notifications'
+                                ? 'text-blue-400 bg-slate-800/50 font-bold'
+                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'
+                            }`}
+                          >
+                            <Bell size={16} />
+                            <span>Notificações</span>
                           </button>
                         </li>
                         <li>

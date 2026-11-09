@@ -1,6 +1,6 @@
 
 // ⚠️ Incrementar a versão a cada deploy para forçar refresh do cache em todos os clientes
-const CACHE_VERSION = 'v15';
+const CACHE_VERSION = 'v16';
 const CACHE_NAME = `prod-lasa-${CACHE_VERSION}`;
 
 // Assets que são pré-cacheados na instalação (shell da aplicação)
@@ -52,9 +52,20 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Ignorar pedidos a outros domínios (não há nenhum em modo offline)
-  // Se houver chamadas externas inesperadas, deixar passar sem cache
+  // Ignorar pedidos a outros domínios
   if (url.origin !== self.location.origin) return;
+
+  // Ignorar pedidos de desenvolvimento do Vite e APIs
+  if (
+    url.pathname.includes('/@vite/') ||
+    url.pathname.includes('/node_modules/') ||
+    url.pathname.includes('/@fs/') ||
+    url.pathname.startsWith('/api/') ||
+    url.search.includes('?v=') ||
+    url.search.includes('&v=')
+  ) {
+    return;
+  }
 
   // Para o ficheiro WASM — sempre Cache First (nunca muda)
   if (url.pathname.endsWith('.wasm')) {

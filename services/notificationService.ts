@@ -1,5 +1,7 @@
-import { Order, User } from '../types';
+import { Order, User, type NotificationPreferences } from '../types';
 import { SECTORS } from '../constants';
+
+export type { NotificationPreferences };
 
 export interface NotificationPayload {
   title: string;
@@ -7,6 +9,15 @@ export interface NotificationPayload {
   tag?: string;
   data?: Record<string, any>;
 }
+
+export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  dateChanges: true,
+  priorityChanges: true,
+  stoppageReasons: true,
+  statusChanges: true,
+  urgentOnly: false,
+  soundEnabled: true
+};
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -29,6 +40,53 @@ class NotificationService {
 
   constructor() {
     this.initServiceWorker();
+  }
+
+  public getPreferences(): NotificationPreferences {
+    if (typeof window === 'undefined') return DEFAULT_NOTIFICATION_PREFERENCES;
+    try {
+      const stored = localStorage.getItem('prod_lasa_notification_prefs');
+      if (stored) {
+        return { ...DEFAULT_NOTIFICATION_PREFERENCES, ...JSON.parse(stored) };
+      }
+    } catch (e) {
+      console.warn('[NotificationService] Erro ao ler preferências:', e);
+    }
+    return DEFAULT_NOTIFICATION_PREFERENCES;
+  }
+
+  public savePreferences(prefs: NotificationPreferences): void {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem('prod_lasa_notification_prefs', JSON.stringify(prefs));
+      // Sincronizar com o backend
+      fetch('/api/notifications/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: this.currentSubscription?.endpoint,
+          preferences: prefs
+        })
+      }).catch(err => {
+        console.warn('[NotificationService] Falha ao sincronizar preferências no backend:', err);
+      });
+    } catch (e) {
+      console.warn('[NotificationService] Erro ao guardar preferências:', e);
+    }
+  }
+
+  public isEventAllowed(eventType: 'DATE' | 'PRIORITY' | 'STOPPAGE' | 'STATUS', isUrgent?: boolean): boolean {
+    const prefs = this.getPreferences();
+    if (prefs.urgentOnly && !isUrgent) {
+      return false;
+    }
+    switch (eventType) {
+      case 'DATE': return prefs.dateChanges;
+      case 'PRIORITY': return prefs.priorityChanges;
+      case 'STOPPAGE': return prefs.stoppageReasons;
+      case 'STATUS': return prefs.statusChanges;
+      default: return true;
+    }
   }
 
   private async initServiceWorker(): Promise<ServiceWorkerRegistration | null> {
@@ -123,7 +181,8 @@ class NotificationService {
           subscription: subscription.toJSON(),
           userId: user?.id || 'gestor',
           userName: user?.name || user?.username || 'Gestor',
-          userRole: user?.role || 'manager'
+          userRole: user?.role || 'manager',
+          preferences: this.getPreferences()
         })
       });
 
@@ -239,6 +298,16 @@ class NotificationService {
   }) {
     const isUrgent = (params.priority !== undefined && params.priority > 0) || params.changeType === 'PRIORITY_CHANGED';
     if (!isUrgent) return;
+
+    // Verificar preferências do utilizador
+    let eventCategory: 'DATE' | 'PRIORITY' | 'STOPPAGE' | 'STATUS' = 'PRIORITY';
+    if (params.changeType === 'PREDICTION_CHANGED') eventCategory = 'DATE';
+    else if (params.changeType === 'STOP_REASON') eventCategory = 'STOPPAGE';
+    else if (params.changeType === 'STATUS_CHANGED') eventCategory = 'STATUS';
+
+    if (!this.isEventAllowed(eventCategory, isUrgent)) {
+      return;
+    }
 
     try {
       // 1. Disparo de Push Notification ao servidor para entrega a gestores em background

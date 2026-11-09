@@ -32,6 +32,15 @@ export interface StoppageReason {
   reason: string;
 }
 
+export interface NotificationPreferences {
+  dateChanges: boolean;       // Alteração de data / previsões
+  priorityChanges: boolean;   // Alteração de prioridade / urgência
+  stoppageReasons: boolean;   // Motivos de paragem / classificação
+  statusChanges: boolean;     // Conclusão / faturação
+  urgentOnly: boolean;        // Apenas para encomendas urgentes
+  soundEnabled: boolean;      // Som de notificação
+}
+
 export interface User {
   id: string;
   username: string;
@@ -40,6 +49,7 @@ export interface User {
   role: UserRole;
   name: string;
   permissions: UserPermissions;
+  notificationPreferences?: NotificationPreferences;
 }
 
 export interface Sector {

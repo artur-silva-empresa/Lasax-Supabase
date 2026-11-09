@@ -125,6 +125,18 @@ export const saveUserToDB = async (user: User) => {
         permissions: user.permissions
     });
     if (error) console.error("Error saving user", error);
+
+    if (user.notificationPreferences) {
+        try {
+            await supabase.from('app_state').upsert({
+                key: `user_prefs_${user.id}`,
+                value: user.notificationPreferences
+            });
+            localStorage.setItem(`prod_lasa_user_prefs_${user.id}`, JSON.stringify(user.notificationPreferences));
+        } catch (e) {
+            console.error("Error saving user notification preferences", e);
+        }
+    }
 };
 
 export const deleteUserFromDB = async (userId: string) => {
@@ -152,15 +164,25 @@ export const loadUsersFromDB = async (): Promise<User[]> => {
         }
     }
     
-    const parsedUsers = (users || []).map((u: any) => ({
-        id: u.id,
-        username: u.username,
-        password: u.password_hash,
-        passwordHash: u.password_hash,
-        role: u.role,
-        name: u.name,
-        permissions: u.permissions
-    }));
+    const parsedUsers: User[] = (users || []).map((u: any) => {
+        let prefs = u.notification_preferences || u.notificationPreferences;
+        if (!prefs) {
+            try {
+                const stored = localStorage.getItem(`prod_lasa_user_prefs_${u.id}`);
+                if (stored) prefs = JSON.parse(stored);
+            } catch (_) {}
+        }
+        return {
+            id: u.id,
+            username: u.username,
+            password: u.password_hash,
+            passwordHash: u.password_hash,
+            role: u.role,
+            name: u.name,
+            permissions: u.permissions,
+            notificationPreferences: prefs
+        };
+    });
 
     // Cache users locally for offline access
     try {

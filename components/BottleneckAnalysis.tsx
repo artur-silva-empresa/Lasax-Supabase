@@ -3,7 +3,8 @@ import {
   AlertTriangle, Clock, TrendingUp, CheckCircle2, ChevronDown,
   Target, Activity, Package, Calendar
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
+import { SafeResponsiveContainer as ResponsiveContainer } from './SafeResponsiveContainer';
 import { Order, ProductionCapacity } from '../types';
 import { SECTORS } from '../constants';
 import { calcOrderCapacityInfo, getSectorProducedQty, OrderCapacityInfo } from '../utils/capacityUtils';

@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { FolderInput, FolderOutput, Save, FolderOpen, AlertCircle, CheckCircle, Moon, Sun, Trash2, Users, ShieldCheck, UserPlus, Key, Eye, EyeOff, User as UserIcon, Settings as SettingsIcon, Package, Clock, Layers, ChevronRight, X, AlertTriangle, Keyboard, Plus, RotateCcw, Database, Activity, RefreshCw, Bell } from 'lucide-react';
+import { FolderInput, FolderOutput, Save, FolderOpen, AlertCircle, CheckCircle, Moon, Sun, Trash2, Users, ShieldCheck, UserPlus, Key, Eye, EyeOff, User as UserIcon, Settings as SettingsIcon, Package, Clock, Layers, ChevronRight, X, AlertTriangle, Keyboard, Plus, RotateCcw, Database, Activity, RefreshCw, Bell, Calendar, Sliders, Volume2, Check, Send } from 'lucide-react';
 import { saveDirectoryHandle, getDirectoryHandle, verifyPermission, hashPassword } from '../services/dataService';
-import { notificationService } from '../services/notificationService';
+import { notificationService, NotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES } from '../services/notificationService';
 import { User, PermissionLevel, UserPermissions, Order } from '../types';
 import { SECTORS } from '../constants';
 import StopReasons from './StopReasons';
@@ -20,6 +20,7 @@ import {
 } from '../src/services/supabaseKeepAlive';
 
 interface SettingsProps {
+  currentUser?: User | null;
   currentTheme?: 'light' | 'dark';
   onToggleTheme?: () => void;
   onResetData?: () => void;
@@ -29,13 +30,14 @@ interface SettingsProps {
   stopReasonsHierarchy?: any[];
   onUpdateStopReasonsHierarchy?: (newHierarchy: any[]) => void;
   orders?: Order[];
-  activeTab?: 'general' | 'users' | 'stop-reasons' | 'export-columns';
-  onTabChange?: (tab: 'general' | 'users' | 'stop-reasons' | 'export-columns') => void;
+  activeTab?: 'general' | 'notifications' | 'users' | 'stop-reasons' | 'export-columns';
+  onTabChange?: (tab: 'general' | 'notifications' | 'users' | 'stop-reasons' | 'export-columns') => void;
   shortcuts?: Record<string, string>;
   onUpdateShortcuts?: (shortcuts: Record<string, string>) => void;
 }
 
 const Settings: React.FC<SettingsProps> = ({ 
+  currentUser,
   currentTheme, 
   onToggleTheme, 
   onResetData, 
@@ -50,10 +52,10 @@ const Settings: React.FC<SettingsProps> = ({
   shortcuts = {},
   onUpdateShortcuts
 }) => {
-  const [internalActiveTab, setInternalActiveTab] = React.useState<'general' | 'users' | 'stop-reasons' | 'export-columns'>(activeTab);
+  const [internalActiveTab, setInternalActiveTab] = React.useState<'general' | 'notifications' | 'users' | 'stop-reasons' | 'export-columns'>(activeTab);
   const currentTab = onTabChange ? activeTab : internalActiveTab;
 
-  const handleTabChange = (tab: 'general' | 'users' | 'stop-reasons' | 'export-columns') => {
+  const handleTabChange = (tab: 'general' | 'notifications' | 'users' | 'stop-reasons' | 'export-columns') => {
     if (onTabChange) {
       onTabChange(tab);
     } else {
@@ -109,6 +111,129 @@ const Settings: React.FC<SettingsProps> = ({
     } finally {
       setIsSubscribing(false);
     }
+  };
+
+  // Preferências de Notificação Push (Notification Preferences)
+  const [notifPreferences, setNotifPreferences] = React.useState<NotificationPreferences>(() => {
+    if (currentUser?.notificationPreferences) {
+      return { ...DEFAULT_NOTIFICATION_PREFERENCES, ...currentUser.notificationPreferences };
+    }
+    return notificationService.getPreferences();
+  });
+
+  React.useEffect(() => {
+    if (currentUser?.notificationPreferences) {
+      setNotifPreferences(prev => ({
+        ...prev,
+        ...currentUser.notificationPreferences
+      }));
+    }
+  }, [currentUser]);
+
+  // Persistir preferências no localStorage e na base de dados do utilizador
+  const persistPreferences = async (updated: NotificationPreferences) => {
+    // 1. Guardar no localStorage e sincronizar subscrição com o servidor push
+    notificationService.savePreferences(updated);
+
+    // 2. Guardar na base de dados do utilizador se utilizador e onSaveUser estiverem disponíveis
+    if (currentUser && onSaveUser) {
+      try {
+        await onSaveUser({
+          ...currentUser,
+          notificationPreferences: updated
+        });
+      } catch (err) {
+        console.error('[Settings] Erro ao sincronizar preferências na base de dados do utilizador:', err);
+      }
+    }
+  };
+
+  const handleTogglePreference = (key: keyof NotificationPreferences) => {
+    setNotifPreferences(prev => {
+      const updated = { ...prev, [key]: !prev[key] };
+      persistPreferences(updated);
+      const labels: Record<keyof NotificationPreferences, string> = {
+        dateChanges: 'Alteração de Datas & Previsões',
+        priorityChanges: 'Prioridade & Urgências',
+        stoppageReasons: 'Motivos de Paragem & Classificação',
+        statusChanges: 'Conclusão de Encomendas',
+        urgentOnly: 'Apenas Encomendas Urgentes',
+        soundEnabled: 'Sons de Alerta'
+      };
+      setStatusMsg(`Preferência "${labels[key]}" ${updated[key] ? 'ativada' : 'desativada'} (guardada no dispositivo e na base de dados).`);
+      setTimeout(() => setStatusMsg(''), 3500);
+      return updated;
+    });
+  };
+
+  const handleResetPreferences = () => {
+    setNotifPreferences(DEFAULT_NOTIFICATION_PREFERENCES);
+    persistPreferences(DEFAULT_NOTIFICATION_PREFERENCES);
+    setStatusMsg('Preferências repostas para os valores predefinidos (guardado no dispositivo e base de dados).');
+    setTimeout(() => setStatusMsg(''), 3500);
+  };
+
+  const handleEnableAllPreferences = () => {
+    const allEnabled: NotificationPreferences = {
+      dateChanges: true,
+      priorityChanges: true,
+      stoppageReasons: true,
+      statusChanges: true,
+      urgentOnly: false,
+      soundEnabled: true
+    };
+    setNotifPreferences(allEnabled);
+    persistPreferences(allEnabled);
+    setStatusMsg('Todos os alertas de notificação foram ativados e guardados na base de dados.');
+    setTimeout(() => setStatusMsg(''), 3500);
+  };
+
+  const handleTestDateChangeNotification = async () => {
+    setStatusMsg('A enviar alerta de teste de Alteração de Data...');
+    await notificationService.notifyUrgentOrderChange({
+      orderDocNr: '525-2026000373',
+      clientName: 'Lasa Internacional',
+      changeType: 'PREDICTION_CHANGED',
+      description: 'Nova data prevista no Setor Tecelagem: 18/11/2026 (+5 dias de atraso).',
+      priority: 1,
+      changedBy: 'Planeamento'
+    });
+    setTimeout(() => {
+      setStatusMsg('Alerta de Alteração de Data enviado! Verifique as notificações.');
+      setTimeout(() => setStatusMsg(''), 4500);
+    }, 500);
+  };
+
+  const handleTestStoppageNotification = async () => {
+    setStatusMsg('A enviar alerta de teste de Motivo de Paragem...');
+    await notificationService.notifyUrgentOrderChange({
+      orderDocNr: '525-2026000373',
+      clientName: 'Lasa Internacional',
+      changeType: 'STOP_REASON',
+      description: 'Paragem no Setor Tecelagem: "1 - aprovação de cor / estampado / urdissagem".',
+      priority: 1,
+      changedBy: 'Tecelagem'
+    });
+    setTimeout(() => {
+      setStatusMsg('Alerta de Paragem enviado! Verifique as notificações.');
+      setTimeout(() => setStatusMsg(''), 4500);
+    }, 500);
+  };
+
+  const handleTestPriorityNotification = async () => {
+    setStatusMsg('A enviar alerta de teste de Prioridade/Urgência...');
+    await notificationService.notifyUrgentOrderChange({
+      orderDocNr: '525-2026000373',
+      clientName: 'Lasa Internacional',
+      changeType: 'PRIORITY_CHANGED',
+      description: 'Marcada como URGENTE — Prioridade Alta (Vermelho).',
+      priority: 1,
+      changedBy: 'Gestor de Produção'
+    });
+    setTimeout(() => {
+      setStatusMsg('Alerta de Prioridade enviado! Verifique as notificações.');
+      setTimeout(() => setStatusMsg(''), 4500);
+    }, 500);
   };
 
   const handleTestUrgentPushNotification = async () => {
@@ -375,10 +500,400 @@ const Settings: React.FC<SettingsProps> = ({
 
   const tabLabels: Record<string, string> = {
     'general': 'Geral',
+    'notifications': 'Preferências de Notificação',
     'users': 'Utilizadores',
     'stop-reasons': 'Motivos de Paragem',
     'export-columns': 'Tabelas Editáveis',
   };
+
+  const renderNotificationPreferencesSection = () => (
+    <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+      {/* Top Banner: Push API Status & Main Toggle */}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-5 pb-5 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-xl">
+            <Bell size={24} />
+          </div>
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                Notificações Push & Alertas em Tempo Real
+              </h3>
+              {isPushSubscribed ? (
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-0.5 rounded-full font-black uppercase tracking-wider flex items-center gap-1 border border-emerald-200 dark:border-emerald-800">
+                  <CheckCircle size={10} /> Push API Ativa
+                </span>
+              ) : notifPermission === 'granted' ? (
+                <span className="text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
+                  Permissão Concedida
+                </span>
+              ) : (
+                <span className="text-[10px] bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
+                  Não Subscrito
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xl">
+              Utiliza a <strong>Push API</strong> e <strong>Service Workers</strong> para que os gestores recebam alertas no telemóvel sempre que eventos críticos ocorram na produção, mesmo com a aplicação em segundo plano ou fechada.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+          {!isPushSubscribed ? (
+            <button
+              onClick={handleRequestPushPermission}
+              disabled={isSubscribing}
+              className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <Bell size={16} /> {isSubscribing ? 'A Ativar...' : 'Ativar Push API'}
+            </button>
+          ) : (
+            <button
+              onClick={handleTogglePushSubscription}
+              disabled={isSubscribing}
+              className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700"
+            >
+              Desativar Alertas
+            </button>
+          )}
+
+          <button
+            onClick={handleTestUrgentPushNotification}
+            className="bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-95"
+            title="Testar disparo de push urgente"
+          >
+            <AlertTriangle size={15} /> Testar Alerta Geral
+          </button>
+        </div>
+      </div>
+
+      {/* Secção de Preferências de Notificação (Notification Preferences) */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-xl">
+              <Sliders size={18} />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                  Notification Preferences (Preferências de Notificação)
+                </h4>
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                  {[notifPreferences.dateChanges, notifPreferences.priorityChanges, notifPreferences.stoppageReasons, notifPreferences.statusChanges].filter(Boolean).length} de 4 alertas ativos
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Ative ou desative os alertas push para cada tipo de evento fabril. As preferências são salvas no <strong>localStorage</strong> e persistidas na <strong>base de dados</strong> {currentUser ? `do utilizador (${currentUser.name || currentUser.username})` : 'do utilizador'}.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleEnableAllPreferences}
+              className="px-2.5 py-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition-colors border border-blue-200 dark:border-blue-800/60"
+              title="Ativar todas as opções"
+            >
+              Ativar Todos
+            </button>
+            <button
+              type="button"
+              onClick={handleResetPreferences}
+              className="px-2.5 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              title="Repor valores predefinidos"
+            >
+              Repor
+            </button>
+          </div>
+        </div>
+
+        {/* Persistence Indicator Badge */}
+        <div className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/40 px-3 py-2 rounded-xl border border-slate-200/70 dark:border-slate-800">
+          <Check size={14} className="text-emerald-500 shrink-0" />
+          <span>
+            Sincronização ativa: <strong>localStorage</strong> local e <strong>Base de Dados</strong> {currentUser ? `(Utilizador: ${currentUser.name || currentUser.username})` : ''} atualizados automaticamente ao alternar qualquer preferência.
+          </span>
+        </div>
+
+        {/* Grid dos Tipos de Eventos Principais */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          
+          {/* 1. Alteração de Prioridade & Urgência */}
+          <div className={`p-4 rounded-xl border transition-all ${
+            notifPreferences.priorityChanges 
+              ? 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/60 ring-1 ring-rose-500/10' 
+              : 'bg-slate-50/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-75'
+          }`}>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-400">
+                  <AlertTriangle size={16} />
+                </div>
+                <div>
+                  <h5 className="font-bold text-xs text-slate-800 dark:text-slate-100">
+                    Prioridade & Urgência
+                  </h5>
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${
+                    notifPreferences.priorityChanges ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'
+                  }`}>
+                    {notifPreferences.priorityChanges ? 'Alertas Ativos' : 'Desativado'}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={notifPreferences.priorityChanges}
+                onClick={() => handleTogglePreference('priorityChanges')}
+                className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  notifPreferences.priorityChanges ? 'bg-rose-600' : 'bg-slate-300 dark:bg-slate-700'
+                }`}
+                title="Ativar/Desativar alertas push de prioridade"
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                    notifPreferences.priorityChanges ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-3 leading-relaxed">
+              Alertas em tempo real quando uma encomenda for definida como Alta Prioridade (urgente) ou tiver a sua urgência alterada.
+            </p>
+
+            <button
+              type="button"
+              onClick={handleTestPriorityNotification}
+              disabled={!notifPreferences.priorityChanges}
+              className="w-full py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              title="Disparar notificação de teste de prioridade"
+            >
+              <Send size={11} /> Testar Alerta de Prioridade
+            </button>
+          </div>
+
+          {/* 2. Alteração de Datas & Previsões */}
+          <div className={`p-4 rounded-xl border transition-all ${
+            notifPreferences.dateChanges 
+              ? 'bg-blue-50/40 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/60 ring-1 ring-blue-500/10' 
+              : 'bg-slate-50/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-75'
+          }`}>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400">
+                  <Calendar size={16} />
+                </div>
+                <div>
+                  <h5 className="font-bold text-xs text-slate-800 dark:text-slate-100">
+                    Alteração de Datas
+                  </h5>
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${
+                    notifPreferences.dateChanges ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'
+                  }`}>
+                    {notifPreferences.dateChanges ? 'Alertas Ativos' : 'Desativado'}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={notifPreferences.dateChanges}
+                onClick={() => handleTogglePreference('dateChanges')}
+                className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  notifPreferences.dateChanges ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
+                }`}
+                title="Ativar/Desativar alertas push de datas"
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                    notifPreferences.dateChanges ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-3 leading-relaxed">
+              Alertas quando a data prevista de entrega ou de qualquer setor fabril (Tecelagem, Tinturaria, Confecção) for reprogramada ou atrasada.
+            </p>
+
+            <button
+              type="button"
+              onClick={handleTestDateChangeNotification}
+              disabled={!notifPreferences.dateChanges}
+              className="w-full py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              title="Disparar notificação de teste de alteração de data"
+            >
+              <Send size={11} /> Testar Alerta de Data
+            </button>
+          </div>
+
+          {/* 3. Motivos de Paragem & Classificação */}
+          <div className={`p-4 rounded-xl border transition-all ${
+            notifPreferences.stoppageReasons 
+              ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/60 ring-1 ring-amber-500/10' 
+              : 'bg-slate-50/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-75'
+          }`}>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/60 text-amber-600 dark:text-amber-400">
+                  <AlertCircle size={16} />
+                </div>
+                <div>
+                  <h5 className="font-bold text-xs text-slate-800 dark:text-slate-100">
+                    Motivos de Paragem
+                  </h5>
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${
+                    notifPreferences.stoppageReasons ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'
+                  }`}>
+                    {notifPreferences.stoppageReasons ? 'Alertas Ativos' : 'Desativado'}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={notifPreferences.stoppageReasons}
+                onClick={() => handleTogglePreference('stoppageReasons')}
+                className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  notifPreferences.stoppageReasons ? 'bg-amber-600' : 'bg-slate-300 dark:bg-slate-700'
+                }`}
+                title="Ativar/Desativar alertas push de paragem"
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                    notifPreferences.stoppageReasons ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-3 leading-relaxed">
+              Alertas quando qualquer setor fabril registar ou alterar uma classificação ou motivo de paragem (avarias, falta de fio, aprovações).
+            </p>
+
+            <button
+              type="button"
+              onClick={handleTestStoppageNotification}
+              disabled={!notifPreferences.stoppageReasons}
+              className="w-full py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              title="Disparar notificação de teste de paragem"
+            >
+              <Send size={11} /> Testar Alerta de Paragem
+            </button>
+          </div>
+
+        </div>
+
+        {/* Opções Complementares: Conclusão, Filtro de Urgentes e Sons */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+          
+          {/* Conclusão de Encomendas */}
+          <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-200/80 dark:border-slate-800">
+            <div className="flex items-center gap-2.5 min-w-0 pr-2">
+              <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 shrink-0">
+                <CheckCircle size={14} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                  Conclusão de Encomenda
+                </p>
+                <p className="text-[10px] text-slate-500 truncate">
+                  Alertar quando faturada e concluída
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={notifPreferences.statusChanges}
+              onClick={() => handleTogglePreference('statusChanges')}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                notifPreferences.statusChanges ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                  notifPreferences.statusChanges ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Filtro: Apenas Encomendas Urgentes */}
+          <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-200/80 dark:border-slate-800">
+            <div className="flex items-center gap-2.5 min-w-0 pr-2">
+              <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 shrink-0">
+                <Bell size={14} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                  Apenas Urgentes
+                </p>
+                <p className="text-[10px] text-slate-500 truncate">
+                  Filtrar apenas Prioridade Alta/Média
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={notifPreferences.urgentOnly}
+              onClick={() => handleTogglePreference('urgentOnly')}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                notifPreferences.urgentOnly ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                  notifPreferences.urgentOnly ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Sons & Vibração */}
+          <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-200/80 dark:border-slate-800">
+            <div className="flex items-center gap-2.5 min-w-0 pr-2">
+              <div className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
+                <Volume2 size={14} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                  Sons & Vibração
+                </p>
+                <p className="text-[10px] text-slate-500 truncate">
+                  Alerta sonoro no dispositivo móvel
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={notifPreferences.soundEnabled}
+              onClick={() => handleTogglePreference('soundEnabled')}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                notifPreferences.soundEnabled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                  notifPreferences.soundEnabled ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="h-full overflow-y-auto p-4 md:p-8 animate-in fade-in duration-500">
@@ -390,8 +905,31 @@ const Settings: React.FC<SettingsProps> = ({
               <span className="text-slate-400 dark:text-slate-500 font-medium">/</span>
               <span className="text-slate-500 dark:text-slate-400 font-medium text-xl">{tabLabels[currentTab]}</span>
             </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Gestão do sistema, utilizadores e preferências.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Gestão do sistema, utilizadores e preferências de alerta.</p>
           </div>
+        </div>
+
+        {/* Barra de Navegação entre Separadores de Configuração */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+          {(['general', 'notifications', 'users', 'stop-reasons', 'export-columns'] as const).map(tab => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => handleTabChange(tab)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                currentTab === tab
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25 ring-2 ring-blue-600/30'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+              }`}
+            >
+              {tab === 'general' && <SettingsIcon size={14} />}
+              {tab === 'notifications' && <Bell size={14} />}
+              {tab === 'users' && <Users size={14} />}
+              {tab === 'stop-reasons' && <AlertTriangle size={14} />}
+              {tab === 'export-columns' && <Layers size={14} />}
+              <span>{tabLabels[tab]}</span>
+            </button>
+          ))}
         </div>
 
         {statusMsg && (
@@ -440,97 +978,8 @@ const Settings: React.FC<SettingsProps> = ({
         {/* Instalar Aplicação como PWA no Telemóvel */}
         <PWAInstallButton variant="card" />
 
-        {/* Notificações Push (Push API & Service Worker para Gestores) */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-start justify-between gap-5">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-xl">
-                <Bell size={24} />
-              </div>
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                    Notificações Push & Alertas em Tempo Real
-                  </h3>
-                  {isPushSubscribed ? (
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-0.5 rounded-full font-black uppercase tracking-wider flex items-center gap-1 border border-emerald-200 dark:border-emerald-800">
-                      <CheckCircle size={10} /> Push API Ativa
-                    </span>
-                  ) : notifPermission === 'granted' ? (
-                    <span className="text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
-                      Permissão Concedida
-                    </span>
-                  ) : (
-                    <span className="text-[10px] bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
-                      Não Subscrito
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xl">
-                  Utiliza a <strong>Push API</strong> e <strong>Service Workers</strong> para que os gestores recebam alertas no telemóvel sempre que uma <strong>encomenda urgente</strong> for alterada, mesmo com a aplicação em segundo plano ou fechada.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
-              {!isPushSubscribed ? (
-                <button
-                  onClick={handleRequestPushPermission}
-                  disabled={isSubscribing}
-                  className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <Bell size={16} /> {isSubscribing ? 'A Ativar...' : 'Ativar Push API'}
-                </button>
-              ) : (
-                <button
-                  onClick={handleTogglePushSubscription}
-                  disabled={isSubscribing}
-                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700"
-                >
-                  Desativar Alertas
-                </button>
-              )}
-
-              <button
-                onClick={handleTestUrgentPushNotification}
-                className="bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-95"
-                title="Testar disparo de push urgente"
-              >
-                <AlertTriangle size={15} /> Testar Alerta Urgente
-              </button>
-            </div>
-          </div>
-
-          {/* Lista de eventos monitorizados para encomendas urgentes */}
-          <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-            <div className="bg-slate-50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-              <span className="font-bold text-slate-700 dark:text-slate-200 block mb-0.5">
-                🚨 Nova Urgência / Prioridade
-              </span>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                Alerta imediato quando uma encomenda é marcada como Alta Prioridade.
-              </span>
-            </div>
-
-            <div className="bg-slate-50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-              <span className="font-bold text-slate-700 dark:text-slate-200 block mb-0.5">
-                📅 Alteração de Datas em Urgentes
-              </span>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                Notificação push quando um setor altera ou atrasa previsões numa encomenda urgente.
-              </span>
-            </div>
-
-            <div className="bg-slate-50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-              <span className="font-bold text-slate-700 dark:text-slate-200 block mb-0.5">
-                ⚠️ Paragens & Conclusão
-              </span>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                Aviso instantâneo ao registar motivos de paragem ou ao faturar uma encomenda urgente.
-              </span>
-            </div>
-          </div>
-        </div>
+        {/* Secção de Preferências de Notificação (Notification Preferences) */}
+        {renderNotificationPreferencesSection()}
 
         {/* Export Folder */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -993,6 +1442,13 @@ const Settings: React.FC<SettingsProps> = ({
           </p>
         </div>
         </>
+        )}
+
+        {/* ===== ABA NOTIFICAÇÕES (DEDICADA) ===== */}
+        {currentTab === 'notifications' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {renderNotificationPreferencesSection()}
+          </div>
         )}
 
         {/* ===== ABA UTILIZADORES ===== */}

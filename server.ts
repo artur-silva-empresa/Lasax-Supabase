@@ -200,11 +200,20 @@ async function startServer() {
   }
 
   // Armazenamento em memória das subscrições Push dos gestores e utilizadores
+  interface NotificationPreferences {
+    dateChanges?: boolean;
+    priorityChanges?: boolean;
+    stoppageReasons?: boolean;
+    statusChanges?: boolean;
+    urgentOnly?: boolean;
+  }
+
   interface StoredPushSub {
     subscription: webpush.PushSubscription;
     userId?: string;
     userName?: string;
     userRole?: string;
+    preferences?: NotificationPreferences;
     subscribedAt: string;
   }
   const pushSubscriptions = new Map<string, StoredPushSub>();
@@ -218,7 +227,7 @@ async function startServer() {
 
   // Registar ou atualizar subscrição Push de um gestor/dispositivo móvel
   app.post('/api/notifications/push-subscription', apiLimiter, (req, res) => {
-    const { subscription, userId, userName, userRole } = req.body || {};
+    const { subscription, userId, userName, userRole, preferences } = req.body || {};
     if (!subscription || !subscription.endpoint) {
       return res.status(400).json({ error: 'Inscrição Push inválida ou endpoint em falta.' });
     }
@@ -228,6 +237,7 @@ async function startServer() {
       userId: userId || 'anonymous',
       userName: userName || 'Gestor',
       userRole: userRole || 'manager',
+      preferences: preferences || { dateChanges: true, priorityChanges: true, stoppageReasons: true, statusChanges: true, urgentOnly: false },
       subscribedAt: new Date().toISOString()
     });
     console.log(`[Push API] Subscrição registada para ${userName || 'Gestor'} (${key.slice(0, 32)}...). Total ativos: ${pushSubscriptions.size}`);
@@ -236,6 +246,25 @@ async function startServer() {
       registeredCount: pushSubscriptions.size,
       message: 'Subscrição Push registada com sucesso.'
     });
+  });
+
+  // Atualizar preferências de notificação do utilizador / dispositivo
+  app.post('/api/notifications/preferences', apiLimiter, (req, res) => {
+    const { endpoint, preferences } = req.body || {};
+    let updatedCount = 0;
+    if (endpoint && pushSubscriptions.has(endpoint)) {
+      const sub = pushSubscriptions.get(endpoint)!;
+      sub.preferences = { ...sub.preferences, ...preferences };
+      updatedCount++;
+    } else {
+      // Se não houver endpoint específico, atualiza todas as subscrições ativas deste cliente
+      for (const item of pushSubscriptions.values()) {
+        item.preferences = { ...item.preferences, ...preferences };
+        updatedCount++;
+      }
+    }
+    console.log(`[Push API] Preferências de notificação atualizadas para ${updatedCount} subscrições.`);
+    res.json({ success: true, updatedCount });
   });
 
   // Cancelar subscrição Push
@@ -280,11 +309,35 @@ async function startServer() {
       }
     });
 
-    const results: { success: number; failed: number } = { success: 0, failed: 0 };
+    const results: { success: number; failed: number; filtered: number } = { success: 0, failed: 0, filtered: 0 };
     const expiredKeys: string[] = [];
 
-    // Enviar notificação push via Web Push API para todos os gestores inscritos
+    // Enviar notificação push via Web Push API para gestores inscritos respeitando preferências
     for (const [key, item] of pushSubscriptions.entries()) {
+      const prefs = item.preferences;
+      if (prefs) {
+        if (prefs.urgentOnly && (!priority || priority < 1)) {
+          results.filtered++;
+          continue;
+        }
+        if (changeType === 'PREDICTION_CHANGED' && prefs.dateChanges === false) {
+          results.filtered++;
+          continue;
+        }
+        if (changeType === 'PRIORITY_CHANGED' && prefs.priorityChanges === false) {
+          results.filtered++;
+          continue;
+        }
+        if (changeType === 'STOP_REASON' && prefs.stoppageReasons === false) {
+          results.filtered++;
+          continue;
+        }
+        if (changeType === 'STATUS_CHANGED' && prefs.statusChanges === false) {
+          results.filtered++;
+          continue;
+        }
+      }
+
       try {
         await webpush.sendNotification(item.subscription, pushPayload, {
           urgency: 'high',
@@ -294,7 +347,6 @@ async function startServer() {
       } catch (err: any) {
         results.failed++;
         console.warn(`[Push API] Erro ao entregar push a ${key.slice(0, 30)}...:`, err?.statusCode || err?.message);
-        // Se o serviço (Google FCM / Apple APNs) retornar 404 Not Found ou 410 Gone, a subscrição expirou
         if (err?.statusCode === 404 || err?.statusCode === 410) {
           expiredKeys.push(key);
         }

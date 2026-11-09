@@ -567,25 +567,50 @@ const App: React.FC = () => {
       .filter(o => targetSet ? targetSet.has(o.id) : o.docNr === docNr)
       .map(o => {
         const nextSectorObservations = { ...(o.sectorObservations || {}) };
-        if (observation && observation.trim() !== '') {
-          nextSectorObservations[sectorId] = observation.trim();
+        if (observation !== undefined) {
+          if (observation.trim() !== '') {
+            nextSectorObservations[sectorId] = observation.trim();
+          } else {
+            delete nextSectorObservations[sectorId];
+          }
+        }
+
+        const nextStopReasons = { ...(o.sectorStopReasons || {}) };
+        if (stopReason && stopReason.trim() !== '') {
+          nextStopReasons[sectorId] = stopReason.trim();
+        } else {
+          delete nextStopReasons[sectorId];
         }
 
         const nextSectorPredictedDates = { ...(o.sectorPredictedDates || {}) };
         const nextPending = { ...(o.sectorPredictedDatesPending || {}) };
 
         if (predictedDate !== undefined) {
-          nextSectorPredictedDates[sectorId] = predictedDate;
+          if (predictedDate === null) {
+            delete nextSectorPredictedDates[sectorId];
+          } else {
+            nextSectorPredictedDates[sectorId] = predictedDate;
+          }
           delete nextPending[sectorId];
+        }
+
+        let nextRequestedDate = o.requestedDate;
+        if (sectorId === 'planeamento' && predictedDate !== undefined) {
+          if (predictedDate === null) {
+            const rawDate = o._raw?.['Data Pedida'] || o._raw?.['requestedDate'];
+            nextRequestedDate = rawDate ? new Date(rawDate) : o.requestedDate;
+          } else {
+            nextRequestedDate = predictedDate;
+          }
         }
 
         return {
           ...o,
-          sectorStopReasons: { ...(o.sectorStopReasons || {}), [sectorId]: stopReason },
+          sectorStopReasons: nextStopReasons,
           sectorObservations: nextSectorObservations,
           sectorPredictedDates: nextSectorPredictedDates,
           sectorPredictedDatesPending: nextPending,
-          ...(sectorId === 'planeamento' && predictedDate !== undefined ? { requestedDate: predictedDate } : {})
+          requestedDate: nextRequestedDate
         };
       });
 
@@ -622,7 +647,10 @@ const App: React.FC = () => {
     await saveUserToDB(user);
     const updatedUsers = await loadUsersFromDB();
     setUsers(updatedUsers);
-    setNotification({ message: 'Utilizador guardado com sucesso.', type: 'success' });
+    if (currentUser && currentUser.id === user.id) {
+      setCurrentUser(user);
+    }
+    setNotification({ message: 'Utilizador e preferências guardadas com sucesso.', type: 'success' });
   };
 
   const handleDeleteUser = async (userId: string) => {
@@ -890,6 +918,7 @@ const App: React.FC = () => {
         return <OrderTimeline orders={globalFilteredOrders} onViewDetails={handleViewDetails} globalSearchTerm={globalSearchTerm} />;
       case 'config':
       case 'config-general':
+      case 'config-notifications':
       case 'config-users':
       case 'config-stop-reasons':
       case 'config-export-columns':
@@ -902,6 +931,7 @@ const App: React.FC = () => {
         }
         return (
           <Settings
+            currentUser={currentUser}
             currentTheme={theme}
             onToggleTheme={toggleTheme}
             onResetData={handleResetData}
