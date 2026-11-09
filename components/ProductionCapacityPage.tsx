@@ -354,17 +354,17 @@ const ProductionCapacityPage: React.FC<ProductionCapacityPageProps> = ({ capacit
           ) : (
             <>
               {/* Desktop Table */}
-              <div className="compact-desktop-only overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="compact-desktop-only overflow-x-hidden">
+                <table className="w-full text-xs table-fixed">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                      <th className="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Secção</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Etiqueta</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Filtros</th>
-                      <th className="text-right px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Pcs/Hora</th>
-                      <th className="text-right px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Cap. Diária</th>
-                      <th className="text-right px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">H/Dia</th>
-                      <th className="px-4 py-3"></th>
+                      <th className="text-left px-3 py-2 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider w-[18%]">Secção</th>
+                      <th className="text-left px-3 py-2 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider w-[22%]">Etiqueta</th>
+                      <th className="text-left px-3 py-2 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider w-[28%]">Filtros</th>
+                      <th className="text-right px-3 py-2 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider w-[10%]">Pcs/Hora</th>
+                      <th className="text-right px-3 py-2 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider w-[11%]">Cap. Diária</th>
+                      <th className="text-right px-3 py-2 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider w-[6%]">H/Dia</th>
+                      <th className="px-2 py-2 w-[50px]"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -382,48 +382,48 @@ const ProductionCapacityPage: React.FC<ProductionCapacityPageProps> = ({ capacit
 
                       return (
                         <tr key={cap.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              {SectorIcon && <SectorIcon size={14} className="text-blue-500 shrink-0" />}
-                              <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">{sector?.name}</span>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {SectorIcon && <SectorIcon size={13} className="text-blue-500 shrink-0" />}
+                              <span className="font-semibold text-slate-700 dark:text-slate-300 text-[11px] truncate">{sector?.name}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3">
-                            <span className="font-medium text-slate-800 dark:text-white">{cap.label}</span>
+                          <td className="px-3 py-2">
+                            <span className="font-semibold text-slate-800 dark:text-white text-[11px] block truncate">{cap.label}</span>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-2">
                             {filters.length === 0 ? (
-                              <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full font-bold">Padrão Geral</span>
+                              <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded font-medium">Padrão Geral</span>
                             ) : (
                               <div className="flex flex-wrap gap-1">
                                 {filters.map((f, i) => (
-                                  <span key={i} className="text-[10px] bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">{f}</span>
+                                  <span key={i} className="text-[9px] bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-1.5 py-0.2 rounded font-medium">{f}</span>
                                 ))}
                               </div>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right">
-                            <span className="font-black text-slate-800 dark:text-white">{cap.piecesPerHour.toLocaleString('pt-PT')}</span>
+                          <td className="px-3 py-2 text-right font-mono tabular-nums">
+                            <span className="font-semibold text-slate-800 dark:text-white text-xs">{cap.piecesPerHour.toLocaleString('pt-PT')}</span>
                           </td>
-                          <td className="px-4 py-3 text-right">
-                            <span className="font-bold text-emerald-600 dark:text-emerald-400">{dailyCap.toLocaleString('pt-PT')}</span>
+                          <td className="px-3 py-2 text-right font-mono tabular-nums">
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-xs">{dailyCap.toLocaleString('pt-PT')}</span>
                           </td>
-                          <td className="px-4 py-3 text-right text-slate-500 dark:text-slate-400 text-xs font-medium">{cap.hoursPerDay}h</td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 text-xs font-mono">{cap.hoursPerDay}h</td>
+                          <td className="px-2 py-2">
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
                               <button
                                 onClick={() => handleEdit(cap)}
-                                className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400 transition-colors"
+                                className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded text-blue-600 dark:text-blue-400 transition-colors"
                                 title="Editar"
                               >
-                                <Edit2 size={14} />
+                                <Edit2 size={13} />
                               </button>
                               <button
                                 onClick={() => handleDelete(cap.id)}
-                                className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/20 rounded-lg text-rose-500 dark:text-rose-400 transition-colors"
+                                className="p-1 hover:bg-rose-100 dark:hover:bg-rose-900/20 rounded text-rose-500 dark:text-rose-400 transition-colors"
                                 title="Eliminar"
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={13} />
                               </button>
                             </div>
                           </td>

@@ -314,20 +314,39 @@ const BottleneckAnalysis: React.FC<BottleneckAnalysisProps> = ({ orders, capacit
 
             {/* Queue Table Desktop */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-              <div className="compact-desktop-only overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="compact-desktop-only overflow-x-hidden">
+                <table className="w-full text-xs table-fixed">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                      {['#', 'Documento', 'Cliente', 'Artigo / Ref.', 'Qtd.Pedida', 'Produzido', 'Em Falta', 'Cap.pcs/h', 'Dias Est.', 'Conclusão Est.', 'Data Cliente', 'Estado'].map(h => (
-                        <th key={h} className="text-left px-3 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                      {[
+                        { label: '#', width: '3%' },
+                        { label: 'Documento', width: '11%' },
+                        { label: 'Cliente', width: '15%' },
+                        { label: 'Artigo / Ref.', width: '15%' },
+                        { label: 'Qtd.Ped', width: '8%', align: 'text-right' },
+                        { label: 'Prod.', width: '8%', align: 'text-right' },
+                        { label: 'Falta', width: '8%', align: 'text-right' },
+                        { label: 'Pcs/h', width: '7%', align: 'text-right' },
+                        { label: 'Dias', width: '6%', align: 'text-right' },
+                        { label: 'Conclusão', width: '9%' },
+                        { label: 'Data Cli.', width: '9%' },
+                        { label: 'Estado', width: '11%' },
+                      ].map(col => (
+                        <th 
+                          key={col.label} 
+                          style={{ width: col.width }}
+                          className={`${col.align || 'text-left'} px-2 py-1.5 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider truncate`}
+                        >
+                          {col.label}
+                        </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {currentSectorAnalysis?.infos.length === 0 ? (
                       <tr>
-                        <td colSpan={12} className="px-4 py-10 text-center text-slate-400 text-sm">
-                          <CheckCircle2 size={20} className="mx-auto mb-2 text-emerald-500" />
+                        <td colSpan={12} className="px-4 py-8 text-center text-slate-400 text-xs">
+                          <CheckCircle2 size={18} className="mx-auto mb-1 text-emerald-500" />
                           Sector sem encomendas pendentes
                         </td>
                       </tr>
@@ -406,13 +425,17 @@ const BottleneckAnalysis: React.FC<BottleneckAnalysisProps> = ({ orders, capacit
                   </p>
                 </div>
                 {/* Desktop Table View */}
-                <div className="compact-desktop-only overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className="compact-desktop-only overflow-x-hidden">
+                  <table className="w-full text-xs table-fixed">
                     <thead>
                       <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                        {['Documento', 'Cliente', 'Artigo / Cor', 'Qtd.Pedida', 'Data Cliente', 'Sectores em Risco', 'Atraso Máx.'].map(h => (
-                          <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">{h}</th>
-                        ))}
+                        <th className="text-left px-2.5 py-1.5 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider w-[12%]">Documento</th>
+                        <th className="text-left px-2.5 py-1.5 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider w-[18%]">Cliente</th>
+                        <th className="text-left px-2.5 py-1.5 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider w-[22%]">Artigo / Cor</th>
+                        <th className="text-right px-2.5 py-1.5 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider w-[10%]">Qtd.Pedida</th>
+                        <th className="text-center px-2.5 py-1.5 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider w-[10%]">Data Cliente</th>
+                        <th className="text-left px-2.5 py-1.5 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider w-[16%]">Sectores em Risco</th>
+                        <th className="text-center px-2.5 py-1.5 text-[8.5px] font-bold text-slate-500 uppercase tracking-wider w-[12%]">Atraso Máx.</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -420,40 +443,38 @@ const BottleneckAnalysis: React.FC<BottleneckAnalysisProps> = ({ orders, capacit
                         const maxDelay = Math.max(...sectors.map(s => s.daysLate));
                         return (
                           <tr key={order.id} className="hover:bg-rose-50/30 dark:hover:bg-rose-900/10 transition-colors">
-                            <td className="px-4 py-3">
-                              <div className="font-black text-slate-800 dark:text-white text-xs">{order.docNr}</div>
-                              <div className="text-[10px] text-slate-400">Item {order.itemNr}</div>
+                            <td className="px-2.5 py-1.5">
+                              <div className="font-semibold text-slate-900 dark:text-white text-[11px] truncate">{order.docNr}</div>
+                              <div className="text-[9.5px] text-slate-400">Item {order.itemNr}</div>
                             </td>
-                            <td className="px-4 py-3">
-                              <div className="font-semibold text-slate-800 dark:text-white text-xs">{order.clientName}</div>
-                              <div className="text-[10px] text-slate-400">{order.po || '—'}</div>
+                            <td className="px-2.5 py-1.5">
+                              <div className="font-semibold text-slate-800 dark:text-white text-[11px] truncate">{order.clientName}</div>
+                              <div className="text-[9.5px] text-slate-400 truncate">{order.po || '—'}</div>
                             </td>
-                            <td className="px-4 py-3">
-                              <div className="text-xs text-slate-700 dark:text-slate-300 font-medium">{order.reference}</div>
-                              <div className="text-[10px] text-slate-400">{order.colorDesc} · {order.size}</div>
+                            <td className="px-2.5 py-1.5">
+                              <div className="text-[11px] text-slate-700 dark:text-slate-300 font-medium truncate">{order.reference}</div>
+                              <div className="text-[9.5px] text-slate-400 truncate">{order.colorDesc} · {order.size}</div>
                             </td>
-                            <td className="px-4 py-3 font-bold text-slate-700 dark:text-slate-300">
+                            <td className="px-2.5 py-1.5 text-right font-mono tabular-nums font-semibold text-slate-800 dark:text-white text-xs">
                               {(order.qtyRequested || 0).toLocaleString('pt-PT')}
                             </td>
-                            <td className="px-4 py-3">
-                              {order.requestedDate ? (
-                                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{formatDate(order.requestedDate)}</span>
-                              ) : '—'}
+                            <td className="px-2.5 py-1.5 text-center font-mono tabular-nums text-[9.5px] text-slate-600 dark:text-slate-400">
+                              {order.requestedDate ? formatDate(order.requestedDate) : '—'}
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="px-2.5 py-1.5">
                               <div className="flex flex-wrap gap-1">
                                 {sectors.map(s => (
-                                  <div key={s.sectorName} className="flex items-center gap-1 text-[10px] bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 px-2 py-0.5 rounded-full font-bold">
-                                    <Clock size={9} />
-                                    {s.sectorName} (+{s.daysLate}d)
+                                  <div key={s.sectorName} className="flex items-center gap-0.5 text-[8.5px] bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200/80 dark:border-rose-800/60 px-1.5 py-0.2 rounded font-medium">
+                                    <Clock size={8} />
+                                    <span>{s.sectorName} (+{s.daysLate}d)</span>
                                   </div>
                                 ))}
                               </div>
                             </td>
-                            <td className="px-4 py-3">
-                              <span className={`inline-flex items-center gap-1 text-xs font-black px-2 py-1 rounded-lg ${maxDelay > 14 ? 'bg-rose-600 text-white' : maxDelay > 7 ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'}`}>
-                                <AlertTriangle size={11} />
-                                +{maxDelay} dias
+                            <td className="px-2.5 py-1.5 text-center">
+                              <span className={`inline-flex items-center gap-0.5 text-[8.5px] font-semibold px-1.5 py-0.5 rounded ${maxDelay > 14 ? 'bg-rose-600 text-white' : maxDelay > 7 ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'}`}>
+                                <AlertTriangle size={8} />
+                                +{maxDelay}d
                               </span>
                             </td>
                           </tr>
@@ -514,67 +535,67 @@ const QueueRow: React.FC<{ info: OrderCapacityInfo; rank: number }> = ({ info, r
 
   return (
     <tr className={`transition-colors ${isAtRisk ? 'bg-rose-50/40 dark:bg-rose-900/10 hover:bg-rose-50 dark:hover:bg-rose-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'}`}>
-      <td className="px-3 py-3 text-slate-400 dark:text-slate-500 text-xs font-bold">{rank}</td>
-      <td className="px-3 py-3">
-        <div className="font-black text-xs text-slate-800 dark:text-white">{order.docNr}</div>
-        <div className="text-[10px] text-slate-400">Item {order.itemNr}</div>
+      <td className="px-2 py-1.5 text-slate-400 dark:text-slate-500 text-[10px] font-bold">{rank}</td>
+      <td className="px-2 py-1.5">
+        <div className="font-semibold text-[11px] text-slate-800 dark:text-white truncate">{order.docNr}</div>
+        <div className="text-[9px] text-slate-400">Item {order.itemNr}</div>
       </td>
-      <td className="px-3 py-3">
-        <div className="font-semibold text-xs text-slate-700 dark:text-slate-300 max-w-[120px] truncate">{order.clientName}</div>
+      <td className="px-2 py-1.5">
+        <div className="font-semibold text-[11px] text-slate-700 dark:text-slate-300 truncate">{order.clientName}</div>
       </td>
-      <td className="px-3 py-3">
-        <div className="text-xs text-slate-700 dark:text-slate-300">{order.reference}</div>
-        <div className="text-[10px] text-slate-400">{order.colorDesc}</div>
+      <td className="px-2 py-1.5">
+        <div className="text-[11px] text-slate-700 dark:text-slate-300 truncate">{order.reference}</div>
+        <div className="text-[9px] text-slate-400 truncate">{order.colorDesc}</div>
       </td>
-      <td className="px-3 py-3 text-right font-bold text-xs text-slate-700 dark:text-slate-300">{(order.qtyRequested || 0).toLocaleString('pt-PT')}</td>
-      <td className="px-3 py-3 text-right">
-        <span className={`text-xs font-bold ${producedQty >= (order.qtyRequested || 0) ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
+      <td className="px-2 py-1.5 text-right font-mono tabular-nums font-semibold text-[11px] text-slate-700 dark:text-slate-300">{(order.qtyRequested || 0).toLocaleString('pt-PT')}</td>
+      <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+        <span className={`text-[11px] font-semibold ${producedQty >= (order.qtyRequested || 0) ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
           {producedQty.toLocaleString('pt-PT')}
         </span>
       </td>
-      <td className="px-3 py-3 text-right">
-        <span className={`text-xs font-black ${remainingQty > 0 ? 'text-slate-800 dark:text-white' : 'text-emerald-600 dark:text-emerald-400'}`}>
+      <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+        <span className={`text-[11px] font-semibold ${remainingQty > 0 ? 'text-slate-800 dark:text-white' : 'text-emerald-600 dark:text-emerald-400'}`}>
           {remainingQty.toLocaleString('pt-PT')}
         </span>
       </td>
-      <td className="px-3 py-3 text-right">
+      <td className="px-2 py-1.5 text-right font-mono tabular-nums">
         {capacity ? (
-          <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{capacity.piecesPerHour.toLocaleString('pt-PT')}</span>
+          <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">{capacity.piecesPerHour.toLocaleString('pt-PT')}</span>
         ) : (
-          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">S/def.</span>
+          <span className="text-[9px] text-amber-600 dark:text-amber-400 font-medium">S/def.</span>
         )}
       </td>
-      <td className="px-3 py-3 text-right">
+      <td className="px-2 py-1.5 text-right font-mono tabular-nums">
         {estimatedDays > 0 ? (
-          <span className={`text-xs font-black ${estimatedDays > 10 ? 'text-rose-600 dark:text-rose-400' : estimatedDays > 5 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+          <span className={`text-[11px] font-semibold ${estimatedDays > 10 ? 'text-rose-600 dark:text-rose-400' : estimatedDays > 5 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
             {estimatedDays}d
           </span>
         ) : remainingQty === 0 ? (
-          <CheckCircle2 size={14} className="text-emerald-500 ml-auto" />
+          <CheckCircle2 size={13} className="text-emerald-500 ml-auto" />
         ) : '—'}
       </td>
-      <td className="px-3 py-3 text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">
+      <td className="px-2 py-1.5 text-[9.5px] font-mono tabular-nums text-slate-600 dark:text-slate-400 whitespace-nowrap">
         {estimatedCompletionDate && remainingQty > 0 ? formatDate(estimatedCompletionDate) : '—'}
       </td>
-      <td className="px-3 py-3 text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">
+      <td className="px-2 py-1.5 text-[9.5px] font-mono tabular-nums text-slate-600 dark:text-slate-400 whitespace-nowrap">
         {order.requestedDate ? formatDate(order.requestedDate) : '—'}
       </td>
-      <td className="px-3 py-3">
+      <td className="px-2 py-1.5">
         {remainingQty === 0 ? (
-          <span className="text-[10px] font-black bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
-            <CheckCircle2 size={9} /> Concluído
+          <span className="text-[8.5px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/60 px-1.5 py-0.5 rounded flex items-center gap-0.5 w-fit">
+            <CheckCircle2 size={8} /> Concluído
           </span>
         ) : isAtRisk ? (
-          <span className="text-[10px] font-black bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
-            <AlertTriangle size={9} /> +{daysLate}d risco
+          <span className="text-[8.5px] font-semibold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200/80 dark:border-rose-800/60 px-1.5 py-0.5 rounded flex items-center gap-0.5 w-fit">
+            <AlertTriangle size={8} /> +{daysLate}d
           </span>
         ) : !capacity ? (
-          <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full w-fit">
+          <span className="text-[8.5px] font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/80 dark:border-amber-900/60 px-1.5 py-0.5 rounded w-fit">
             Sem cap.
           </span>
         ) : (
-          <span className="text-[10px] font-black bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
-            <CheckCircle2 size={9} /> OK
+          <span className="text-[8.5px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/60 px-1.5 py-0.5 rounded flex items-center gap-0.5 w-fit">
+            <CheckCircle2 size={8} /> OK
           </span>
         )}
       </td>

@@ -71,20 +71,20 @@ const ResizableHeader = ({
 }: { 
   colId: string, 
   title: React.ReactNode, 
-  width?: number, 
+  width?: number | string, 
   onResize: (id: string, e: React.MouseEvent | React.TouchEvent) => void,
   className?: string 
 }) => {
   return (
     <th 
-      className={`relative px-2.5 py-2 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider group ${className}`}
-      style={width ? { width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` } : {}}
+      className={`relative px-2 py-1.5 text-[8.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider group ${className}`}
+      style={width ? (typeof width === 'number' ? { width: `${width}px` } : { width }) : {}}
     >
       <div className="truncate w-full">{title}</div>
       <div 
         onMouseDown={(e) => onResize(colId, e)}
         onTouchStart={(e) => onResize(colId, e)}
-        className="absolute right-0 top-0 h-full w-4 cursor-col-resize hover:bg-blue-400/50 active:bg-blue-500 z-10"
+        className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-blue-400/50 active:bg-blue-500 z-10"
         style={{ transform: 'translateX(50%)' }}
       />
     </th>
@@ -1151,40 +1151,40 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
 
       {/* Table */}
       <div className="flex-1 overflow-y-auto w-full relative" onScroll={handleListScroll}>
-        <div className="compact-desktop-only overflow-x-auto h-full min-h-[300px]">
-          <table className="min-w-full w-max text-left border-collapse table-fixed">
+        <div className="compact-desktop-only overflow-x-hidden h-full min-h-[300px]">
+          <table className="w-full text-left border-collapse table-fixed">
             <thead className="bg-slate-100 dark:bg-slate-900 sticky top-0 z-20 shadow-sm">
             <tr>
-              <ResizableHeader colId="doc" title="Documento / PO" width={columnWidths['doc'] || 140} onResize={handleColResize} className="whitespace-nowrap" />
-              <ResizableHeader colId="client" title="Cliente (Comercial) / Ref" width={columnWidths['client'] || 230} onResize={handleColResize} className="whitespace-nowrap" />
-              <ResizableHeader colId="lines" title="Linhas" width={columnWidths['lines'] || 115} onResize={handleColResize} className="whitespace-nowrap" />
-              <ResizableHeader colId="qty" title="Qtd. Ped / Prod" width={columnWidths['qty'] || 120} onResize={handleColResize} className="text-center" />
-              <ResizableHeader colId="cap" title="Cap. / Dias Est." width={columnWidths['cap'] || 115} onResize={handleColResize} className="text-center" />
-              <ResizableHeader colId="exitDate" title="Data Saída" width={columnWidths['exitDate'] || 95} onResize={handleColResize} className="text-center" />
-              <ResizableHeader colId="predDate" title="Data Prevista" width={columnWidths['predDate'] || 115} onResize={handleColResize} className="text-center" />
-              <ResizableHeader colId="class" title="Classificação" width={columnWidths['class'] || 160} onResize={handleColResize} className="text-center" />
+              <ResizableHeader colId="doc" title="Documento / PO" width={columnWidths['doc'] ? `${columnWidths['doc']}px` : '12%'} onResize={handleColResize} className="whitespace-nowrap" />
+              <ResizableHeader colId="client" title="Cliente (Comercial) / Ref" width={columnWidths['client'] ? `${columnWidths['client']}px` : '24%'} onResize={handleColResize} className="whitespace-nowrap" />
+              <ResizableHeader colId="lines" title="Linhas" width={columnWidths['lines'] ? `${columnWidths['lines']}px` : '8%'} onResize={handleColResize} className="whitespace-nowrap" />
+              <ResizableHeader colId="qty" title="Qtd. Ped / Prod" width={columnWidths['qty'] ? `${columnWidths['qty']}px` : '11%'} onResize={handleColResize} className="text-center" />
+              <ResizableHeader colId="cap" title="Cap. / Dias Est." width={columnWidths['cap'] ? `${columnWidths['cap']}px` : '9%'} onResize={handleColResize} className="text-center" />
+              <ResizableHeader colId="exitDate" title="Data Saída" width={columnWidths['exitDate'] ? `${columnWidths['exitDate']}px` : '8%'} onResize={handleColResize} className="text-center" />
+              <ResizableHeader colId="predDate" title="Data Prevista" width={columnWidths['predDate'] ? `${columnWidths['predDate']}px` : '9%'} onResize={handleColResize} className="text-center" />
+              <ResizableHeader colId="class" title="Classificação" width={columnWidths['class'] ? `${columnWidths['class']}px` : '10%'} onResize={handleColResize} className="text-center" />
               <ResizableHeader 
                 colId="obs" 
                 title={
                   <button
                     type="button"
                     onClick={() => setFilterHasObservations(!filterHasObservations)}
-                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded transition-all cursor-pointer font-black text-[9px] tracking-wider uppercase ${
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition-all cursor-pointer font-bold text-[8.5px] tracking-wider uppercase ${
                       filterHasObservations
                         ? 'bg-blue-600 text-white shadow-xs'
                         : 'hover:text-blue-600 dark:hover:text-blue-400'
                     }`}
                     title={filterHasObservations ? "A filtrar com observações (clique para limpar)" : "Filtrar apenas com observações"}
                   >
-                    <Eye size={11} className={filterHasObservations ? "text-white" : "text-blue-500"} />
-                    <span>Observações</span>
+                    <Eye size={10} className={filterHasObservations ? "text-white" : "text-blue-500"} />
+                    <span>Obs.</span>
                     {filterHasObservations && <span className="w-1.5 h-1.5 rounded-full bg-white ml-0.5 animate-pulse" />}
                   </button>
                 } 
-                width={columnWidths['obs'] || 130} 
+                width={columnWidths['obs'] ? `${columnWidths['obs']}px` : '5%'} 
                 onResize={handleColResize} 
               />
-              <th className="px-2 py-2 w-[70px] text-center sticky right-0 bg-slate-100 dark:bg-slate-900 z-10 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+              <th className="px-1.5 py-1.5 w-[44px] text-center sticky right-0 bg-slate-100 dark:bg-slate-900 z-10 text-[8.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 <div className="flex items-center justify-center gap-1">
                   <span>Ações</span>
                   <button
@@ -1227,8 +1227,8 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                     }`}
                   >
                     {/* Documento / PO */}
-                    <td className="px-2.5 py-2 align-top">
-                      <div className="flex items-start gap-1.5">
+                    <td className="px-2 py-1.5 align-top">
+                      <div className="flex items-start gap-1">
                         <button
                           type="button"
                           onClick={(e) => {
@@ -1239,17 +1239,17 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                               toggleExpandDocNr(group.docNr);
                             }
                           }}
-                          className="p-1 -ml-1 text-slate-400 hover:text-blue-600 transition-colors shrink-0 mt-0.5 cursor-pointer"
+                          className="p-0.5 -ml-0.5 text-slate-400 hover:text-blue-600 transition-colors shrink-0 mt-0.5 cursor-pointer"
                           title={group.items.length === 1 ? "Ver detalhes" : isExpanded ? "Ocultar linhas" : "Ver linhas"}
                         >
-                          <ChevronRight size={14} className={`transition-transform duration-200 ${isExpanded ? 'rotate-90 text-blue-600' : ''}`} />
+                          <ChevronRight size={13} className={`transition-transform duration-200 ${isExpanded ? 'rotate-90 text-blue-600' : ''}`} />
                         </button>
 
                         <div className="flex flex-col gap-0.5 shrink-0 pt-0.5 items-center">
-                          <Flag size={13} className={getPriorityColor(group.priority || 0)} strokeWidth={2} />
+                          <Flag size={12} className={getPriorityColor(group.priority || 0)} strokeWidth={2} />
                           {group.isManual && (
                             <span 
-                              className="w-3.5 h-3.5 rounded text-[8px] font-bold flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                              className="w-3.5 h-3.5 rounded text-[7.5px] font-bold flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
                               title="Confeção Manual"
                             >
                               M
@@ -1258,10 +1258,10 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                         </div>
 
                         <div className="min-w-0">
-                          <span className="font-bold text-xs text-slate-800 dark:text-slate-200 block truncate group-hover:text-blue-600 transition-colors">
+                          <span className="font-semibold text-[11px] text-slate-900 dark:text-slate-100 block truncate group-hover:text-blue-600 transition-colors">
                             {group.docNr ? <HighlightText text={group.docNr} highlight={highlights} /> : '-'}
                           </span>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap block">
+                          <span className="text-[9.5px] text-slate-500 dark:text-slate-400 font-normal whitespace-nowrap block">
                             PO: {group.po ? <HighlightText text={group.po} highlight={highlights} /> : '-'}
                           </span>
                         </div>
@@ -1269,25 +1269,25 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                     </td>
 
                     {/* Cliente (Comercial) / Ref */}
-                    <td className="px-2.5 py-2 align-top">
+                    <td className="px-2 py-1.5 align-top">
                       <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white leading-tight block truncate max-w-[260px]" title={group.clientName}>
+                        <span className="text-[11px] font-semibold text-slate-900 dark:text-white leading-tight block truncate" title={group.clientName}>
                           {group.clientName ? <HighlightText text={group.clientName.toUpperCase()} highlight={highlights} /> : <span className="text-slate-300 italic">Sem Cliente</span>}
                           {group.comercial && (
-                            <span className="ml-1.5 text-[10px] text-blue-600 dark:text-blue-400 font-bold">
+                            <span className="ml-1 text-[9.5px] text-blue-600 dark:text-blue-400 font-medium">
                               ({<HighlightText text={group.comercial.toUpperCase()} highlight={highlights} />})
                             </span>
                           )}
                         </span>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate">
+                        <div className="text-[9.5px] text-slate-500 dark:text-slate-400 font-normal truncate">
                           <HighlightText text={group.referenceSummary} highlight={highlights} />
                         </div>
                       </div>
                     </td>
 
                     {/* Linhas */}
-                    <td className="px-2.5 py-2 align-top" onClick={(e) => e.stopPropagation()}>
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                    <td className="px-2 py-1.5 align-top" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-[10.5px] font-semibold text-slate-800 dark:text-slate-200 block">
                         {group.items.length} {group.items.length === 1 ? 'linha' : 'linhas'}
                       </span>
                       <div className="flex items-center gap-1 mt-0.5">
@@ -1299,7 +1299,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                               e.preventDefault();
                               onViewDetails(group.mainOrder);
                             }}
-                            className="text-[11px] text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer text-left flex items-center gap-0.5"
+                            className="text-[10px] text-blue-600 dark:text-blue-400 font-medium hover:underline cursor-pointer text-left flex items-center gap-0.5"
                             title="Ver detalhes da encomenda"
                           >
                             <span>Ver Detalhes</span>
@@ -1314,12 +1314,12 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                                 e.preventDefault();
                                 toggleExpandDocNr(group.docNr);
                               }}
-                              className="text-[11px] text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer text-left"
+                              className="text-[10px] text-blue-600 dark:text-blue-400 font-medium hover:underline cursor-pointer text-left"
                               title={isExpanded ? "Ocultar linhas" : "Ver todas as linhas"}
                             >
                               {isExpanded ? '▲ Ocultar linhas' : '▼ Ver linhas'}
                             </button>
-                            <span className="text-slate-300 dark:text-slate-600 text-[10px]">•</span>
+                            <span className="text-slate-300 dark:text-slate-600 text-[9px]">•</span>
                             <button
                               type="button"
                               onClick={(e) => {
@@ -1327,7 +1327,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                                 e.preventDefault();
                                 onViewDetails(group.mainOrder);
                               }}
-                              className="text-[10px] text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 font-semibold hover:underline cursor-pointer text-left"
+                              className="text-[9.5px] text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 font-medium hover:underline cursor-pointer text-left"
                               title="Ver detalhes da encomenda"
                             >
                               Detalhes →
@@ -1338,51 +1338,51 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                     </td>
 
                     {/* Qtd. Ped / Prod */}
-                    <td className="px-2.5 py-2 align-top text-center">
-                      <span className="text-[11px] text-slate-600 dark:text-slate-400">
-                        {group.totalQtyRequested.toLocaleString('pt-PT')} / <span className="font-black text-slate-900 dark:text-white">{group.totalProducedQty.toLocaleString('pt-PT')}</span>
+                    <td className="px-2 py-1.5 align-top text-center font-mono tabular-nums">
+                      <span className="text-[10.5px] text-slate-600 dark:text-slate-400">
+                        {group.totalQtyRequested.toLocaleString('pt-PT')} / <span className="font-semibold text-slate-900 dark:text-white">{group.totalProducedQty.toLocaleString('pt-PT')}</span>
                       </span>
                     </td>
 
                     {/* Cap. / Dias Est. */}
-                    <td className="px-2.5 py-2 align-top text-center">
+                    <td className="px-2 py-1.5 align-top text-center">
                       {capInfo ? (
                         capInfo.remainingQty === 0 ? (
-                          <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400">✓ Concluído</span>
+                          <span className="text-[8.5px] font-semibold text-emerald-600 dark:text-emerald-400">✓ Concluído</span>
                         ) : capInfo.capacity ? (
                           <div className="flex flex-col items-center gap-0.5">
-                            <span className={`text-[9px] font-black ${capInfo.estimatedDays > 10 ? 'text-rose-600 dark:text-rose-400' : capInfo.estimatedDays > 5 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                            <span className={`text-[8.5px] font-semibold ${capInfo.estimatedDays > 10 ? 'text-rose-600 dark:text-rose-400' : capInfo.estimatedDays > 5 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                               {capInfo.estimatedDays}d est.
                             </span>
                             {capInfo.isAtRisk && (
-                              <span className="flex items-center gap-0.5 text-[8px] font-black text-rose-600 dark:text-rose-400">
-                                <AlertTriangle size={8} /> +{capInfo.daysLate}d
+                              <span className="flex items-center gap-0.5 text-[7.5px] font-bold text-rose-600 dark:text-rose-400">
+                                <AlertTriangle size={7} /> +{capInfo.daysLate}d
                               </span>
                             )}
                           </div>
                         ) : (
-                          <span className="text-[9px] text-amber-500 dark:text-amber-400 font-medium">Sem cap.</span>
+                          <span className="text-[8.5px] text-amber-500 dark:text-amber-400 font-normal">Sem cap.</span>
                         )
                       ) : (
-                        <span className="text-[9px] text-slate-300 dark:text-slate-600">—</span>
+                        <span className="text-[8.5px] text-slate-300 dark:text-slate-600">—</span>
                       )}
                     </td>
 
                     {/* Data Saída */}
-                    <td className="px-2.5 py-2 align-top text-center text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                    <td className="px-2 py-1.5 align-top text-center text-[9.5px] font-mono tabular-nums text-slate-600 dark:text-slate-400">
                       {formatDate(group.exitDate)}
                     </td>
 
                     {/* Data Prevista */}
-                    <td className="px-2.5 py-2 align-top text-center" onClick={e => e.stopPropagation()}>
-                      <div className="flex flex-col items-center gap-0.5">
-                        <span className={`text-[10px] font-bold ${group.hasPendingPredictedDate ? 'text-orange-500 animate-pulse' : (group.predictedDate ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400')}`}>
+                    <td className="px-2 py-1.5 align-top text-center" onClick={e => e.stopPropagation()}>
+                      <div className="flex flex-col items-center gap-0.5 font-mono tabular-nums">
+                        <span className={`text-[9.5px] font-semibold ${group.hasPendingPredictedDate ? 'text-orange-500 animate-pulse' : (group.predictedDate ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400')}`}>
                           {group.predictedDate ? formatDate(group.predictedDate) : '-'}
                         </span>
                         {group.hasPendingPredictedDate && (
                           <div className="flex items-center gap-1">
-                            <span className="text-[8px] font-black text-orange-500 uppercase flex items-center gap-0.5">
-                              <AlertCircle size={8} /> Pendente
+                            <span className="text-[7.5px] font-bold text-orange-500 uppercase flex items-center gap-0.5">
+                              <AlertCircle size={7} /> Pendente
                             </span>
                             {canEdit && (
                               <button
@@ -1390,7 +1390,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                                 className="bg-emerald-500 hover:bg-emerald-600 text-white p-0.5 rounded-full shadow-xs transition-all active:scale-90"
                                 title="Validar Data"
                               >
-                                <Check size={8} strokeWidth={4} />
+                                <Check size={7} strokeWidth={4} />
                               </button>
                             )}
                           </div>
@@ -1399,18 +1399,18 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                     </td>
 
                     {/* Classificação */}
-                    <td className="px-2.5 py-2 align-top text-center" onClick={e => e.stopPropagation()}>
-                      <div className="flex flex-col items-center justify-center gap-1">
+                    <td className="px-2 py-1.5 align-top text-center" onClick={e => e.stopPropagation()}>
+                      <div className="flex flex-col items-center justify-center gap-0.5">
                         {group.sectorStopReason ? (
                           <span 
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/60 max-w-[150px] truncate"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/80 dark:border-amber-900/60 max-w-full truncate"
                             title={group.sectorStopReason}
                           >
-                            <Tag size={9} className="shrink-0 text-amber-500" />
+                            <Tag size={8} className="shrink-0 text-amber-500" />
                             <span className="truncate">{group.sectorStopReason}</span>
                           </span>
                         ) : (
-                          <span className="text-[9px] text-slate-400 dark:text-slate-500 italic">
+                          <span className="text-[8.5px] text-slate-400 dark:text-slate-500 italic">
                             Sem classificação
                           </span>
                         )}
@@ -1422,10 +1422,10 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                               e.stopPropagation();
                               handleOpenEditDocModal(group);
                             }}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 border border-slate-200 dark:border-slate-800 transition-all cursor-pointer"
+                            className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[8.5px] font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 border border-slate-200 dark:border-slate-800 transition-all cursor-pointer"
                             title="Editar classificação, data prevista e observações"
                           >
-                            <Pencil size={9} />
+                            <Pencil size={8} />
                             <span>Editar</span>
                           </button>
                         )}
@@ -1433,23 +1433,23 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                     </td>
 
                     {/* Observações */}
-                    <td className="px-2.5 py-2 align-top text-center" onClick={e => e.stopPropagation()}>
+                    <td className="px-2 py-1.5 align-top text-center" onClick={e => e.stopPropagation()}>
                       {group.sectorObservation ? (
-                        <p className="text-[10px] text-slate-600 dark:text-slate-300 whitespace-pre-wrap line-clamp-2 text-left" title={group.sectorObservation}>
+                        <p className="text-[9.5px] text-slate-600 dark:text-slate-300 whitespace-pre-wrap line-clamp-2 text-left" title={group.sectorObservation}>
                           {group.sectorObservation}
                         </p>
                       ) : group.hasObservations ? (
                         <div title="Tem observações no documento">
-                          <Eye size={13} className="text-blue-500 mx-auto" />
+                          <Eye size={12} className="text-blue-500 mx-auto" />
                         </div>
                       ) : (
-                        <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
+                        <span className="text-[9.5px] text-slate-300 dark:text-slate-600">—</span>
                       )}
                     </td>
 
                     {/* Ações */}
-                    <td className="px-2 py-2 align-middle text-center" onClick={e => e.stopPropagation()}>
-                      <div className="flex items-center justify-center gap-1">
+                    <td className="px-1.5 py-1.5 align-middle text-center" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-center gap-0.5">
                         {canEdit && (
                           <button 
                             onClick={(e) => {
@@ -1459,7 +1459,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                             className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 rounded transition-colors"
                             title="Editar alterações"
                           >
-                            <Edit2 size={13} />
+                            <Edit2 size={12} />
                           </button>
                         )}
                         <button
@@ -1470,7 +1470,7 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                           className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 rounded transition-colors"
                           title="Ver detalhes"
                         >
-                          <ChevronRight size={14} />
+                          <ChevronRight size={13} />
                         </button>
                       </div>
                     </td>
@@ -1480,30 +1480,30 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                   {isExpanded && (
                     <tr className="bg-slate-50/70 dark:bg-slate-900/60 border-b border-blue-200 dark:border-blue-900/40">
                       <td colSpan={10} className="p-0">
-                        <div className="p-2.5 pl-6 bg-gradient-to-r from-blue-50/50 via-slate-50/50 to-transparent dark:from-slate-900/60 dark:via-slate-900/40 dark:to-transparent border-l-4 border-l-blue-500 space-y-1.5">
+                        <div className="p-2 pl-4 bg-gradient-to-r from-blue-50/40 via-slate-50/30 to-transparent dark:from-slate-900/50 dark:via-slate-900/30 dark:to-transparent border-l-4 border-l-blue-500 space-y-1">
                           <div className="flex items-center justify-between">
-                            <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                              <Layers size={11} className="text-blue-500" />
+                            <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                              <Layers size={10} className="text-blue-500" />
                               Itens no Setor {sector.name} ({group.items.length} {group.items.length === 1 ? 'item' : 'itens'})
                             </span>
-                            <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                            <span className="text-[9.5px] text-slate-400 dark:text-slate-500">
                               Clique numa linha para ver detalhes completos
                             </span>
                           </div>
 
-                          <table className="w-full text-left text-[11px] bg-white dark:bg-slate-950 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xs">
-                            <thead className="bg-slate-100/90 dark:bg-slate-900/90 text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                          <table className="w-full text-left text-[10px] bg-white dark:bg-slate-950 rounded border border-slate-200 dark:border-slate-800 shadow-2xs table-fixed">
+                            <thead className="bg-slate-100/90 dark:bg-slate-900/90 text-[8.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
                               <tr>
-                                <th className="px-2 py-1.5 w-[45px] text-center">Item</th>
-                                <th className="px-3 py-1.5">Referência & Cor</th>
-                                <th className="px-2.5 py-1.5">Medida / Família</th>
-                                <th className="px-2.5 py-1.5 text-center">Qtd. Ped / Prod</th>
-                                <th className="px-2.5 py-1.5 text-center">Cap. / Dias</th>
-                                <th className="px-2.5 py-1.5 text-center">Data Saída</th>
-                                <th className="px-2.5 py-1.5 text-center">Data Prevista</th>
-                                <th className="px-2.5 py-1.5 text-center">Classificação</th>
-                                <th className="px-2 py-1.5 text-center w-[40px]">Obs.</th>
-                                <th className="px-2.5 py-1.5 text-center w-[80px]">Ação</th>
+                                <th className="px-2 py-1 w-[40px] text-center">Item</th>
+                                <th className="px-2.5 py-1 w-[22%]">Referência & Cor</th>
+                                <th className="px-2 py-1 w-[16%]">Medida / Família</th>
+                                <th className="px-2 py-1 text-center w-[12%]">Qtd. Ped / Prod</th>
+                                <th className="px-2 py-1 text-center w-[9%]">Cap. / Dias</th>
+                                <th className="px-2 py-1 text-center w-[8%]">Data Saída</th>
+                                <th className="px-2 py-1 text-center w-[9%]">Data Prevista</th>
+                                <th className="px-2 py-1 text-center w-[12%]">Classificação</th>
+                                <th className="px-1.5 py-1 text-center w-[4%]">Obs.</th>
+                                <th className="px-2 py-1 text-center w-[8%]">Ação</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
@@ -1523,46 +1523,46 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                                     }}
                                     className="hover:bg-blue-50/70 dark:hover:bg-slate-900 cursor-pointer transition-colors"
                                   >
-                                    <td className="px-2 py-1.5 text-center font-bold text-slate-400 text-[10px]">
+                                    <td className="px-2 py-1 text-center font-bold text-slate-400 text-[9.5px]">
                                       #{item.itemNr || idx + 1}
                                     </td>
-                                    <td className="px-3 py-1.5 font-bold text-slate-900 dark:text-slate-100">
-                                      <div className="flex flex-col">
+                                    <td className="px-2.5 py-1 font-semibold text-slate-900 dark:text-slate-100">
+                                      <div className="flex flex-col min-w-0">
                                         <span className="truncate">{item.reference ? <HighlightText text={item.reference} highlight={highlights} /> : '-'}</span>
-                                        <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400 truncate">{item.colorDesc || ''}</span>
+                                        <span className="text-[9px] font-normal text-slate-500 dark:text-slate-400 truncate">{item.colorDesc || ''}</span>
                                       </div>
                                     </td>
-                                    <td className="px-2.5 py-1.5 text-slate-600 dark:text-slate-300">
-                                      <div className="flex flex-col">
+                                    <td className="px-2 py-1 text-slate-600 dark:text-slate-300">
+                                      <div className="flex flex-col min-w-0">
                                         <span className="truncate font-medium">{item.sizeDesc || item.size || '-'}</span>
-                                        <span className="text-[10px] text-slate-400 uppercase truncate">{item.family || ''}</span>
+                                        <span className="text-[9px] text-slate-400 uppercase truncate">{item.family || ''}</span>
                                       </div>
                                     </td>
-                                    <td className="px-2.5 py-1.5 text-center">
-                                      <span className="text-[11px] text-slate-600 dark:text-slate-400">
-                                        {item.qtyRequested?.toLocaleString('pt-PT')} / <span className="font-black text-slate-900 dark:text-white">{itemProdQty.toLocaleString('pt-PT')}</span>
+                                    <td className="px-2 py-1 text-center font-mono tabular-nums">
+                                      <span className="text-[10px] text-slate-600 dark:text-slate-400">
+                                        {item.qtyRequested?.toLocaleString('pt-PT')} / <span className="font-semibold text-slate-900 dark:text-white">{itemProdQty.toLocaleString('pt-PT')}</span>
                                       </span>
                                     </td>
-                                    <td className="px-2.5 py-1.5 text-center">
+                                    <td className="px-2 py-1 text-center">
                                       {itemCapInfo ? (
                                         itemCapInfo.remainingQty === 0 ? (
-                                          <span className="text-[9px] font-black text-emerald-600">✓ Concluído</span>
+                                          <span className="text-[8.5px] font-semibold text-emerald-600">✓ Concluído</span>
                                         ) : (
-                                          <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400">
+                                          <span className="text-[8.5px] font-semibold text-blue-600 dark:text-blue-400">
                                             {itemCapInfo.estimatedDays}d est.
                                           </span>
                                         )
                                       ) : (
-                                        <span className="text-[9px] text-slate-300 dark:text-slate-600">—</span>
+                                        <span className="text-[8.5px] text-slate-300 dark:text-slate-600">—</span>
                                       )}
                                     </td>
-                                    <td className="px-2.5 py-1.5 text-center text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                                    <td className="px-2 py-1 text-center text-[9.5px] font-mono tabular-nums text-slate-600 dark:text-slate-400">
                                       {formatDate(itemExitDate)}
                                     </td>
-                                    <td className="px-2.5 py-1.5 text-center text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                                    <td className="px-2 py-1 text-center text-[9.5px] font-mono tabular-nums font-semibold text-blue-600 dark:text-blue-400">
                                       {itemPredDate ? formatDate(itemPredDate) : '-'}
                                     </td>
-                                    <td className="px-2.5 py-1.5 text-center" onClick={(e) => e.stopPropagation()}>
+                                    <td className="px-2 py-1 text-center" onClick={(e) => e.stopPropagation()}>
                                       <StopReasonSelector
                                         currentReason={item.sectorStopReasons?.[sector.id]}
                                         onSelect={(reason) => handleOpenSectorClassification(item, reason)}
@@ -1570,23 +1570,40 @@ const SectorOrderTable: React.FC<SectorOrderTableProps> = ({
                                         disabled={!canEdit}
                                       />
                                     </td>
-                                    <td className="px-2 py-1.5 text-center">
+                                    <td className="px-1.5 py-1 text-center">
                                       {itemHasObs && (
-                                        <Eye size={12} className="text-blue-500 mx-auto" title={item.sectorObservations?.[sector.id] || "Tem observações"} />
+                                        <Eye size={11} className="text-blue-500 mx-auto" title={item.sectorObservations?.[sector.id] || "Tem observações"} />
                                       )}
                                     </td>
-                                    <td className="px-2.5 py-1.5 text-center" onClick={(e) => e.stopPropagation()}>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          e.preventDefault();
-                                          onViewDetails(item);
-                                        }}
-                                        className="px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 text-[10px] font-bold transition-colors cursor-pointer"
-                                      >
-                                        Detalhes
-                                      </button>
+                                    <td className="px-2 py-1 text-center" onClick={(e) => e.stopPropagation()}>
+                                      <div className="flex items-center justify-center gap-1">
+                                        {canEdit && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleOpenEditDocModal(group);
+                                            }}
+                                            className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[8.5px] font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800"
+                                            title="Editar"
+                                          >
+                                            <Pencil size={8} />
+                                            <span>Editar</span>
+                                          </button>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            onViewDetails(item);
+                                          }}
+                                          className="px-1.5 py-0.5 rounded bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 text-[9px] font-semibold transition-colors cursor-pointer"
+                                          title="Ver detalhes do item"
+                                        >
+                                          Detalhes
+                                        </button>
+                                      </div>
                                     </td>
                                   </tr>
                                 );
