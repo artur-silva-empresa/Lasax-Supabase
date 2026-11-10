@@ -4,6 +4,7 @@ import initSqlJs from 'sql.js';
 import { supabase, supabaseAuthAdmin } from '../src/services/supabase';
 import { Order, OrderState, SectorState, DashboardKPIs, User, UserRole, PermissionLevel } from '../types';
 import { parseExcelDate, formatDate } from '../utils/formatters';
+export { formatDate };
 import { SECTORS } from '../constants';
 
 // --- PERSISTÊNCIA (IndexedDB) ---
@@ -631,6 +632,16 @@ export const getSectorState = (order: Order, sectorId: string): SectorState => {
   return SectorState.NOT_STARTED;
 };
 
+// Helper para número da semana ISO (1-53)
+export const getISOWeek = (d: Date | null | undefined): number | null => {
+  if (!d || isNaN(d.getTime())) return null;
+  const date = new Date(d.getTime());
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+};
+
 // Helper para obter o início e fim da semana
 export const getWeekRange = (date: Date) => {
     const current = new Date(date);
@@ -799,6 +810,7 @@ export const parseExcelFile = async (file: File): Promise<{ orders: Order[], hea
                     comercial:     String(getApp(row, 'comercial')     ?? '').trim(),
                     issueDate:     parseExcelDate(getApp(row, 'issueDate')),
                     requestedDate: parseExcelDate(getApp(row, 'requestedDate')),
+                    deliveryWeek:  parseNumber(getApp(row, 'deliveryWeek')) || (parseExcelDate(getApp(row, 'requestedDate')) ? getISOWeek(parseExcelDate(getApp(row, 'requestedDate'))) : null),
                     itemNr,
                     po:            String(getApp(row, 'po')            ?? '').trim(),
                     articleCode:   String(getApp(row, 'articleCode')   ?? '').trim(),
@@ -864,6 +876,7 @@ export const parseExcelFile = async (file: File): Promise<{ orders: Order[], hea
                     comercial:     String(row['L']  ?? '').trim(),  // Comercial
                     issueDate:     parseExcelDate(row['D']),         // Data Emissão
                     requestedDate: parseExcelDate(row['E']),         // Data Pedida
+                    deliveryWeek:  parseExcelDate(row['E']) ? getISOWeek(parseExcelDate(row['E'])) : null,
                     itemNr,                                           // F  Item
                     po:            String(row['G']  ?? '').trim(),  // PO
                     articleCode:   String(row['H']  ?? '').trim(),  // Cod.Artigo
@@ -995,6 +1008,9 @@ export const parseSQLiteFile = async (file: File): Promise<{ orders: Order[], he
             if (obj.size === undefined)      obj.size      = '';
             if (obj.docSeries === undefined) obj.docSeries = '';
             if (obj.clientCode === undefined) obj.clientCode = '';
+            if (obj.deliveryWeek === undefined || obj.deliveryWeek === null) {
+                obj.deliveryWeek = obj.requestedDate ? getISOWeek(obj.requestedDate) : null;
+            }
 
             return obj as Order;
         });
@@ -1021,7 +1037,7 @@ export const exportOrdersToSQLite = async (orders: Order[], headers: Record<stri
       id TEXT PRIMARY KEY,
       docSeries TEXT,
       clientCode TEXT, docNr TEXT, clientName TEXT, issueDate INTEGER,
-      requestedDate INTEGER, itemNr INTEGER, po TEXT,
+      requestedDate INTEGER, deliveryWeek INTEGER, itemNr INTEGER, po TEXT,
       articleCode TEXT, reference TEXT, colorCode TEXT, colorDesc TEXT,
       comercial TEXT, family TEXT, sizeDesc TEXT, ean TEXT,
       qtyRequested REAL, dataTec INTEGER,
@@ -1042,7 +1058,7 @@ export const exportOrdersToSQLite = async (orders: Order[], headers: Record<stri
   db.run("BEGIN TRANSACTION");
   const stmt = db.prepare(`
     INSERT INTO orders VALUES (
-      ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+      ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
     )
   `);
 
@@ -1053,6 +1069,7 @@ export const exportOrdersToSQLite = async (orders: Order[], headers: Record<stri
         o.docSeries || '',
         o.clientCode, o.docNr, o.clientName,
         ts(o.issueDate), ts(o.requestedDate),
+        getISOWeek(o.requestedDate) ?? o.deliveryWeek ?? null,
         o.itemNr, o.po,
         o.articleCode, o.reference, o.colorCode, o.colorDesc,
         o.comercial, o.family, o.sizeDesc, o.ean,
@@ -1149,6 +1166,7 @@ export const exportOrdersToExcel = (orders: Order[], headers: Record<string, str
         'clientName':                   o.clientName,           // C  Cliente
         'issueDate':                    ts(o.issueDate),        // D  Data Emissão
         'requestedDate':                ts(o.requestedDate),    // E  Data Pedida
+        'deliveryWeek':                 getISOWeek(o.requestedDate) ?? o.deliveryWeek ?? '',
         'itemNr':                       o.itemNr,               // F  Item
         'po':                           o.po,                   // G  PO
         'articleCode':                  o.articleCode,          // H  Cod.Artigo
@@ -1252,6 +1270,7 @@ export const ALL_EXPORT_COLUMNS: ExportColumnDef[] = [
   // Datas
   { key: 'issueDate',     label: 'Data Emissão',         group: 'Datas' },
   { key: 'requestedDate', label: 'Data Entrega Pedida',  group: 'Datas' },
+  { key: 'deliveryWeek',  label: 'Semana de Entrega',    group: 'Datas' },
   { key: 'dataEnt',       label: 'Data Entrada',         group: 'Datas' },
   { key: 'dataTec',       label: 'Data Tecelagem',       group: 'Datas' },
   { key: 'felpoCruDate',  label: 'Data Felpo Cru',       group: 'Datas' },
@@ -1322,6 +1341,7 @@ const getColumnValue = (order: Order, key: string): any => {
     'dataDebuxo','dataAmostras','dataBordados','archivedAt'];
 
   if (key === 'estado') return getOrderState(order);
+  if (key === 'deliveryWeek') return getISOWeek(order.requestedDate) ?? (order.deliveryWeek ?? '');
   if (key === 'priority') return order.priority === 1 ? 'Alta' : order.priority === 2 ? 'Média' : order.priority === 3 ? 'Baixa' : '';
   if (key === 'isManual') return order.isManual ? 'Sim' : 'Não';
   if (key === 'isArchived') return order.isArchived ? 'Sim' : 'Não';

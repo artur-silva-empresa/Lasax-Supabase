@@ -25,7 +25,10 @@ import {
   Download,
   CheckCircle2,
   Clock,
-  Pencil
+  Pencil,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown
 } from 'lucide-react';
 import { Order, OrderState, SectorState, User } from '../types';
 import { getOrderState, getSectorState, exportOrdersToSQLite, getDirectoryHandle, getWeekRange, exportOrdersToExcel, loadExportColumnsConfig, exportCustomColumns, DEFAULT_SELECTED_COLUMNS } from '../services/dataService';
@@ -82,6 +85,29 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
   const [filterDate, setFilterDate] = React.useState<Date | null>(null);
   // Modo de filtro de semana: 'exact' (só a semana escolhida) ou 'cumulative' (todas as anteriores e até à semana escolhida)
   const [filterWeekMode, setFilterWeekMode] = React.useState<'exact' | 'cumulative'>('exact');
+
+  // Estado de Ordenação por Cabeçalho (Date, Priority, Client)
+  const [sortField, setSortField] = React.useState<'date' | 'priority' | 'client' | null>(null);
+  const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>('asc');
+
+  const handleSort = React.useCallback((field: 'date' | 'priority' | 'client') => {
+    setSortField(prevField => {
+      if (prevField === field) {
+        if (sortDirection === 'asc') {
+          setSortDirection('desc');
+          return field;
+        } else {
+          // 3º clique: desativa a ordenação personalizada e repõe ordem padrão
+          setSortDirection('asc');
+          return null;
+        }
+      } else {
+        setSortDirection(field === 'priority' ? 'desc' : 'asc');
+        return field;
+      }
+    });
+    setCurrentPage(1);
+  }, [sortDirection]);
 
   // Estado para controlar qual menu de prioridade está aberto
   const [openPriorityMenuId, setOpenPriorityMenuId] = React.useState<string | null>(null);
@@ -840,12 +866,50 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
     return Array.from(map.values());
   }, [finalFilteredOrders]);
 
+  // Ordenação dos grupos de Documentos por Cabeçalho (Date, Priority, Client)
+  const sortedDocumentGroups = React.useMemo(() => {
+    if (!sortField) return documentGroups;
+
+    const getPriorityRank = (p?: number) => {
+      if (p === 1) return 3; // Alta (Red)
+      if (p === 2) return 2; // Média (Orange)
+      if (p === 3) return 1; // Baixa (Yellow)
+      return 0; // Nenhuma
+    };
+
+    const sorted = [...documentGroups];
+    sorted.sort((a, b) => {
+      if (sortField === 'date') {
+        const timeA = a.requestedDate ? new Date(a.requestedDate).getTime() : (sortDirection === 'asc' ? Infinity : -Infinity);
+        const timeB = b.requestedDate ? new Date(b.requestedDate).getTime() : (sortDirection === 'asc' ? Infinity : -Infinity);
+        return sortDirection === 'asc' ? timeA - timeB : timeB - timeA;
+      }
+
+      if (sortField === 'client') {
+        const clientA = a.clientName || '';
+        const clientB = b.clientName || '';
+        const cmp = clientA.localeCompare(clientB, 'pt', { sensitivity: 'base', numeric: true });
+        return sortDirection === 'asc' ? cmp : -cmp;
+      }
+
+      if (sortField === 'priority') {
+        const rankA = getPriorityRank(a.priority);
+        const rankB = getPriorityRank(b.priority);
+        return sortDirection === 'desc' ? rankB - rankA : rankA - rankB;
+      }
+
+      return 0;
+    });
+
+    return sorted;
+  }, [documentGroups, sortField, sortDirection]);
+
   // Pagination Logic baseada nos grupos de Documentos
-  const totalPages = Math.max(1, Math.ceil(documentGroups.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(sortedDocumentGroups.length / ITEMS_PER_PAGE));
   const paginatedGroups = React.useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return documentGroups.slice(start, start + ITEMS_PER_PAGE);
-  }, [documentGroups, currentPage]);
+    return sortedDocumentGroups.slice(start, start + ITEMS_PER_PAGE);
+  }, [sortedDocumentGroups, currentPage]);
 
   // Estado dos docNrs que estão expandidos (por padrão, colapsados)
   const [expandedDocNrs, setExpandedDocNrs] = React.useState<Set<string>>(new Set());
@@ -1117,6 +1181,20 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 {filterArchived === 'all' && (
                     <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9px] font-bold px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 animate-in fade-in">
                         A mostrar tudo
+                    </span>
+                )}
+                {sortField && (
+                    <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[9px] font-bold px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800 animate-in fade-in flex items-center gap-1">
+                        <span>
+                          Ordenação: {sortField === 'client' ? `Cliente (${sortDirection === 'asc' ? 'A ➔ Z' : 'Z ➔ A'})` : sortField === 'date' ? `Data (${sortDirection === 'asc' ? 'Mais Antiga' : 'Mais Recente'})` : `Prioridade (${sortDirection === 'desc' ? 'Alta ➔ Baixa' : 'Baixa ➔ Alta'})`}
+                        </span>
+                        <button
+                          onClick={() => { setSortField(null); setSortDirection('asc'); }}
+                          className="ml-0.5 hover:text-blue-900 dark:hover:text-white cursor-pointer"
+                          title="Limpar ordenação"
+                        >
+                          <X size={9} />
+                        </button>
                     </span>
                 )}
               </div>
@@ -1513,14 +1591,41 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                 <th className={`px-2 py-1.5 text-[8.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap ${user?.permissions?.orders === 'write' ? 'w-[13%]' : 'w-[14%]'}`}>
                     <div className="flex items-center gap-1">
                         <span>Doc / PO</span>
-                        <div className="flex gap-0.5">
+                        <div className="flex items-center gap-0.5">
+                            {/* Header Priority Sort Button */}
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSort('priority');
+                                }}
+                                className={`px-1 py-0.5 rounded flex items-center gap-0.5 text-[7.5px] font-black transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                                    sortField === 'priority'
+                                        ? 'bg-amber-500 text-white shadow-2xs ring-1 ring-amber-400/50'
+                                        : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-700'
+                                }`}
+                                title={
+                                    sortField === 'priority'
+                                        ? `Ordenação por Prioridade ativa (${sortDirection === 'desc' ? 'Alta ➔ Baixa' : 'Baixa ➔ Alta'}). Clique para alternar.`
+                                        : 'Clique para ordenar por Prioridade'
+                                }
+                            >
+                                <Flag size={8.5} className={sortField === 'priority' ? 'fill-white text-white' : ''} />
+                                <span>Prio</span>
+                                {sortField === 'priority' ? (
+                                    sortDirection === 'desc' ? <ArrowDown size={7.5} /> : <ArrowUp size={7.5} />
+                                ) : (
+                                    <ArrowUpDown size={7.5} className="opacity-40" />
+                                )}
+                            </button>
+
                             <button 
                                 onClick={toggleHeaderPriorityFilter}
-                                className={`transition-all hover:scale-110 active:scale-95 ${filterPriority !== 'All' ? 'opacity-100' : 'opacity-50 hover:opacity-100'}`}
+                                className={`transition-all hover:scale-110 active:scale-95 ml-0.5 ${filterPriority !== 'All' ? 'opacity-100' : 'opacity-40 hover:opacity-100'}`}
                                 title={filterPriority === 'All' ? "Filtrar por Prioridade" : "Limpar filtro de Prioridade"}
                             >
                                 <Flag 
-                                    size={11} 
+                                    size={10} 
                                     className={filterPriority === 'Any' || (filterPriority !== 'All' && filterPriority !== '0') ? 'fill-blue-500 text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'} 
                                     strokeWidth={2.5}
                                 />
@@ -1528,7 +1633,7 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                             {/* Header M Filter */}
                             <button
                                 onClick={() => setFilterManual(!filterManual)}
-                                className={`w-3 h-3 rounded flex items-center justify-center text-[7.5px] font-bold transition-all hover:scale-110 active:scale-95 ${filterManual ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-300 dark:bg-slate-700 text-white dark:text-slate-300 opacity-50 hover:opacity-100'}`}
+                                className={`w-3 h-3 rounded flex items-center justify-center text-[7.5px] font-bold transition-all hover:scale-110 active:scale-95 ${filterManual ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-300 dark:bg-slate-700 text-white dark:text-slate-300 opacity-40 hover:opacity-100'}`}
                                 title="Filtrar por Confeção Manual"
                             >
                                 M
@@ -1536,9 +1641,49 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                         </div>
                     </div>
                 </th>
-                <th className={`px-2 py-1.5 text-[8.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap ${user?.permissions?.orders === 'write' ? 'w-[32%]' : 'w-[34%]'}`}>Cliente (Comercial) / Ref + Cor</th>
+                <th 
+                    onClick={() => handleSort('client')}
+                    className={`px-2 py-1.5 text-[8.5px] font-bold uppercase tracking-wider whitespace-nowrap cursor-pointer select-none transition-colors group ${
+                        sortField === 'client'
+                            ? 'text-blue-600 dark:text-blue-400 bg-blue-50/70 dark:bg-blue-950/30 font-black'
+                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/50'
+                    } ${user?.permissions?.orders === 'write' ? 'w-[32%]' : 'w-[34%]'}`}
+                    title="Clique para ordenar por Cliente (A-Z / Z-A)"
+                >
+                    <div className="flex items-center gap-1.5">
+                        <span>Cliente (Comercial) / Ref + Cor</span>
+                        {sortField === 'client' ? (
+                            <span className="inline-flex items-center gap-0.5 text-blue-600 dark:text-blue-400 font-black bg-blue-100/80 dark:bg-blue-900/40 px-1 py-0.2 rounded text-[7.5px]">
+                                {sortDirection === 'asc' ? <ArrowUp size={8.5} /> : <ArrowDown size={8.5} />}
+                                <span>{sortDirection === 'asc' ? 'A-Z' : 'Z-A'}</span>
+                            </span>
+                        ) : (
+                            <ArrowUpDown size={8} className="text-slate-400 opacity-30 group-hover:opacity-100 transition-opacity shrink-0" />
+                        )}
+                    </div>
+                </th>
                 <th className={`px-2 py-1.5 text-[8.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap ${user?.permissions?.orders === 'write' ? 'w-[8%]' : 'w-[9%]'}`}>Linhas</th>
-                <th className="px-2 py-1.5 text-[8.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap w-[14%] text-left">Qtd. Pedida / Entrega</th>
+                <th 
+                    onClick={() => handleSort('date')}
+                    className={`px-2 py-1.5 text-[8.5px] font-bold uppercase tracking-wider whitespace-nowrap w-[14%] text-left cursor-pointer select-none transition-colors group ${
+                        sortField === 'date'
+                            ? 'text-blue-600 dark:text-blue-400 bg-blue-50/70 dark:bg-blue-950/30 font-black'
+                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/50'
+                    }`}
+                    title="Clique para ordenar por Data de Entrega (mais antiga / mais recente)"
+                >
+                    <div className="flex items-center gap-1.5">
+                        <span>Qtd. Pedida / Entrega</span>
+                        {sortField === 'date' ? (
+                            <span className="inline-flex items-center gap-0.5 text-blue-600 dark:text-blue-400 font-black bg-blue-100/80 dark:bg-blue-900/40 px-1 py-0.2 rounded text-[7.5px]">
+                                {sortDirection === 'asc' ? <ArrowUp size={8.5} /> : <ArrowDown size={8.5} />}
+                                <span>{sortDirection === 'asc' ? 'Mais Antiga' : 'Mais Recente'}</span>
+                            </span>
+                        ) : (
+                            <ArrowUpDown size={8} className="text-slate-400 opacity-30 group-hover:opacity-100 transition-opacity shrink-0" />
+                        )}
+                    </div>
+                </th>
                 <th className="px-1 py-1.5 text-[8.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center w-[4%]">
                     <button 
                         type="button"
@@ -1861,15 +2006,23 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                                {group.items.map((item, idx) => (
-                                  <tr
-                                    key={item.id}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onViewDetails(item);
-                                    }}
-                                    className="hover:bg-blue-50/70 dark:hover:bg-slate-900 cursor-pointer transition-colors"
-                                  >
+                                {(() => {
+                                  const displayItems = sortField === 'date'
+                                    ? [...group.items].sort((a, b) => {
+                                        const timeA = a.requestedDate ? new Date(a.requestedDate).getTime() : (sortDirection === 'asc' ? Infinity : -Infinity);
+                                        const timeB = b.requestedDate ? new Date(b.requestedDate).getTime() : (sortDirection === 'asc' ? Infinity : -Infinity);
+                                        return sortDirection === 'asc' ? timeA - timeB : timeB - timeA;
+                                      })
+                                    : group.items;
+                                  return displayItems.map((item, idx) => (
+                                    <tr
+                                      key={item.id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onViewDetails(item);
+                                      }}
+                                      className="hover:bg-blue-50/70 dark:hover:bg-slate-900 cursor-pointer transition-colors"
+                                    >
                                     <td className="px-2 py-1 text-center font-bold text-slate-400 text-[9.5px]">
                                       #{item.itemNr || idx + 1}
                                     </td>
@@ -1924,8 +2077,9 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                                       </button>
                                     </td>
                                   </tr>
-                                ))}
-                              </tbody>
+                                ));
+                              })()}
+                            </tbody>
                             </table>
                           </div>
                         </td>

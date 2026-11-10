@@ -67,6 +67,7 @@ export interface Order {
   comercial: string;
   issueDate: Date | null;
   requestedDate: Date | null;
+  deliveryWeek?: number | null;
   itemNr: number;
   po: string;
   articleCode: string;

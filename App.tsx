@@ -891,7 +891,7 @@ const App: React.FC = () => {
             const fallback = getFirstAvailableView(currentUser);
             if (fallback !== 'dashboard') { setActiveView(fallback); return null; }
         }
-        return <Dashboard orders={globalFilteredOrders} onNavigateToOrders={handleNavigateToOrders} />;
+        return <Dashboard orders={globalFilteredOrders} onNavigateToOrders={handleNavigateToOrders} onViewDetails={handleViewDetails} />;
       case 'orders':
         if (!currentUser?.permissions?.orders || currentUser?.permissions?.orders === 'none') {
             const fallback = getFirstAvailableView(currentUser);
@@ -989,7 +989,7 @@ const App: React.FC = () => {
       // BUG 7 CORRIGIDO: o case 'default' omitia a prop onNavigateToOrders,
       // o que causaria erro em runtime se o Dashboard tentasse navegar para as encomendas.
       default:
-        return <Dashboard orders={globalFilteredOrders} onNavigateToOrders={handleNavigateToOrders} />;
+        return <Dashboard orders={globalFilteredOrders} onNavigateToOrders={handleNavigateToOrders} onViewDetails={handleViewDetails} />;
     }
   };
 
