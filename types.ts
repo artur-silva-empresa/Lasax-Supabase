@@ -137,6 +137,12 @@ export interface Order {
     changedAt: Date;
   }[];
 
+  // Classificação Geral & Validação de Alterações (Planeamento)
+  generalClassification?: string;
+  generalPredictedDate?: Date | null;
+  generalObservation?: string;
+  originalRequestedDate?: Date | null;
+
   // Raw data from excel for round-trip capability
   _raw?: Record<string, any>;
 }

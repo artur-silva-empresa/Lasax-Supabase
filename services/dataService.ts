@@ -320,19 +320,33 @@ export const saveOrdersToDB = async (orders: Order[], headers: Record<string, st
         sector_stop_reasons: o.sectorStopReasons || {},
         sector_observations: o.sectorObservations || {},
         sector_predicted_dates: o.sectorPredictedDates || {},
-        sector_predicted_dates_pending: o.sectorPredictedDatesPending || {}
+        sector_predicted_dates_pending: o.sectorPredictedDatesPending || {},
+        general_classification: o.generalClassification || o.sectorStopReasons?.['planeamento'] || null,
+        general_predicted_date: o.generalPredictedDate ? (o.generalPredictedDate instanceof Date ? o.generalPredictedDate.toISOString() : o.generalPredictedDate) : (o.sectorPredictedDates?.['planeamento'] ? (o.sectorPredictedDates['planeamento'] instanceof Date ? o.sectorPredictedDates['planeamento'].toISOString() : o.sectorPredictedDates['planeamento']) : null),
+        general_observation: o.generalObservation || o.sectorObservations?.['planeamento'] || null,
+        original_requested_date: o.originalRequestedDate ? (o.originalRequestedDate instanceof Date ? o.originalRequestedDate.toISOString() : o.originalRequestedDate) : null
     }));
 
     // upsert in batches of 250
     let failedBatch = false;
     for (let i = 0; i < toInsert.length; i += 250) {
-        if (failedBatch) break; // Skip the rest if one fails, to add all to queue or maybe just queue the whole thing?
+        if (failedBatch) break;
         const batch = toInsert.slice(i, i + 250);
-        const { error } = await supabase.from('orders').upsert(batch);
+        let { error } = await supabase.from('orders').upsert(batch);
+        
+        // Fallback gracioso se as novas colunas ainda não tiverem sido migradas no Supabase
+        if (error && error.message?.includes('column')) {
+            const strippedBatch = batch.map(b => {
+                const { general_classification, general_predicted_date, general_observation, original_requested_date, ...rest } = b;
+                return rest;
+            });
+            const fallbackRes = await supabase.from('orders').upsert(strippedBatch);
+            error = fallbackRes.error;
+        }
+
         if (error) {
             console.error("Error saving orders batch", error);
             if (!navigator.onLine || error.message?.includes('fetch') || error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-                // If any batch fails, we queue all of toInsert to be safe so they get updated eventually
                 await enqueueSyncOperation('orders_bulk', toInsert);
                 failedBatch = true;
             }
@@ -342,7 +356,7 @@ export const saveOrdersToDB = async (orders: Order[], headers: Record<string, st
 
 export const saveOrderToDB = async (order: Order) => {
     const o = order;
-    const toInsert = {
+    const toInsert: any = {
         id: o.id,
         doc_series: o.docSeries || '',
         doc_nr: o.docNr,
@@ -389,10 +403,22 @@ export const saveOrderToDB = async (order: Order) => {
         sector_stop_reasons: o.sectorStopReasons || {},
         sector_observations: o.sectorObservations || {},
         sector_predicted_dates: o.sectorPredictedDates || {},
-        sector_predicted_dates_pending: o.sectorPredictedDatesPending || {}
+        sector_predicted_dates_pending: o.sectorPredictedDatesPending || {},
+        general_classification: o.generalClassification || o.sectorStopReasons?.['planeamento'] || null,
+        general_predicted_date: o.generalPredictedDate ? (o.generalPredictedDate instanceof Date ? o.generalPredictedDate.toISOString() : o.generalPredictedDate) : (o.sectorPredictedDates?.['planeamento'] ? (o.sectorPredictedDates['planeamento'] instanceof Date ? o.sectorPredictedDates['planeamento'].toISOString() : o.sectorPredictedDates['planeamento']) : null),
+        general_observation: o.generalObservation || o.sectorObservations?.['planeamento'] || null,
+        original_requested_date: o.originalRequestedDate ? (o.originalRequestedDate instanceof Date ? o.originalRequestedDate.toISOString() : o.originalRequestedDate) : null
     };
 
-    const { error } = await supabase.from('orders').upsert(toInsert);
+    let { error } = await supabase.from('orders').upsert(toInsert);
+    
+    // Fallback gracioso se as novas colunas ainda não existirem no Supabase
+    if (error && error.message?.includes('column')) {
+        const { general_classification, general_predicted_date, general_observation, original_requested_date, ...rest } = toInsert;
+        const fallbackRes = await supabase.from('orders').upsert(rest);
+        error = fallbackRes.error;
+    }
+
     if (error) {
         console.error("Error saving single order", error);
         if (!navigator.onLine || error.message?.includes('fetch') || error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
@@ -445,7 +471,6 @@ export const hydrateOrder = (o: any): Order => ({
     clientName: o.client_name,
     comercial: o.comercial,
     issueDate: o.issue_date ? new Date(o.issue_date) : null,
-    requestedDate: o.requested_date ? new Date(o.requested_date) : null,
     itemNr: o.item_nr,
     po: o.po,
     articleCode: o.article_code,
@@ -490,6 +515,13 @@ export const hydrateOrder = (o: any): Order => ({
         return result;
     })(),
     sectorPredictedDatesPending: o.sector_predicted_dates_pending || {},
+    generalClassification: o.general_classification || o.sector_stop_reasons?.['planeamento'] || undefined,
+    generalPredictedDate: o.general_predicted_date ? new Date(o.general_predicted_date) : (o.sector_predicted_dates?.['planeamento'] ? new Date(o.sector_predicted_dates['planeamento']) : null),
+    generalObservation: o.general_observation || o.sector_observations?.['planeamento'] || undefined,
+    originalRequestedDate: o.original_requested_date ? new Date(o.original_requested_date) : (o.requested_date ? new Date(o.requested_date) : null),
+    // A nova data de previsão geral sobrepõe-se à data de entrega prevista
+    requestedDate: (o.general_predicted_date ? new Date(o.general_predicted_date) : (o.requested_date ? new Date(o.requested_date) : null)),
+    deliveryWeek: (o.general_predicted_date ? getISOWeek(new Date(o.general_predicted_date)) : (o.requested_date ? getISOWeek(new Date(o.requested_date)) : null)),
 });
 
 export const clearOrdersFromDB = async () => {
@@ -802,6 +834,13 @@ export const parseExcelFile = async (file: File): Promise<{ orders: Order[], hea
             if (isAppExport) {
                 // --- FORMATO APP: leitura por nome de campo ---
                 const itemNr = parseNumber(getApp(row, 'itemNr'));
+                const rawReqDate = parseExcelDate(getApp(row, 'requestedDate'));
+                const origReqDate = parseExcelDate(getApp(row, 'originalRequestedDate')) || rawReqDate;
+                const genPredDate = parseExcelDate(getApp(row, 'generalPredictedDate')) || (parseJsonField(getApp(row, 'sectorPredictedDates'), {})?.['planeamento'] ? parseExcelDate(parseJsonField(getApp(row, 'sectorPredictedDates'), {})['planeamento']) : null);
+                const effectiveReqDate = genPredDate || rawReqDate;
+                const genClass = String(getApp(row, 'generalClassification') ?? '').trim() || (parseJsonField(getApp(row, 'sectorStopReasons'), {})?.['planeamento'] || undefined);
+                const genObs = String(getApp(row, 'generalObservation') ?? '').trim() || (parseJsonField(getApp(row, 'sectorObservations'), {})?.['planeamento'] || undefined);
+
                 order = {
                     _raw: row,
                     id:            String(getApp(row, 'id') || '').trim() || `${docNr}-${itemNr}`,
@@ -811,8 +850,8 @@ export const parseExcelFile = async (file: File): Promise<{ orders: Order[], hea
                     clientName:    String(getApp(row, 'clientName')    ?? '').trim(),
                     comercial:     String(getApp(row, 'comercial')     ?? '').trim(),
                     issueDate:     parseExcelDate(getApp(row, 'issueDate')),
-                    requestedDate: parseExcelDate(getApp(row, 'requestedDate')),
-                    deliveryWeek:  parseNumber(getApp(row, 'deliveryWeek')) || (parseExcelDate(getApp(row, 'requestedDate')) ? getISOWeek(parseExcelDate(getApp(row, 'requestedDate'))) : null),
+                    requestedDate: effectiveReqDate,
+                    deliveryWeek:  parseNumber(getApp(row, 'deliveryWeek')) || (effectiveReqDate ? getISOWeek(effectiveReqDate) : null),
                     itemNr,
                     po:            String(getApp(row, 'po')            ?? '').trim(),
                     articleCode:   String(getApp(row, 'articleCode')   ?? '').trim(),
@@ -862,6 +901,10 @@ export const parseExcelFile = async (file: File): Promise<{ orders: Order[], hea
                     isArchived:  parseBool(getApp(row, 'isArchived')),
                     archivedAt:  parseExcelDate(getApp(row, 'archivedAt')),
                     archivedBy:  String(getApp(row, 'archivedBy') ?? '').trim() || undefined,
+                    generalClassification: genClass,
+                    generalPredictedDate: genPredDate,
+                    generalObservation: genObs,
+                    originalRequestedDate: origReqDate,
                 };
             } else {
                 // --- FORMATO ERP: acesso DIRECTO por letra de coluna ---
@@ -919,6 +962,10 @@ export const parseExcelFile = async (file: File): Promise<{ orders: Order[], hea
                     isArchived:             false,
                     archivedAt:             null,
                     archivedBy:             undefined,
+                    generalClassification:  undefined,
+                    generalPredictedDate:   null,
+                    generalObservation:     undefined,
+                    originalRequestedDate:  parseExcelDate(row['E']),
                 };
             }
 
@@ -973,6 +1020,7 @@ export const parseSQLiteFile = async (file: File): Promise<{ orders: Order[], he
                 'issueDate', 'requestedDate', 'dataTec', 'felpoCruDate', 'tinturariaDate',
                 'confDate', 'armExpDate', 'dataEnt', 'dataEspecial', 'dataPrinter',
                 'dataDebuxo', 'dataAmostras', 'dataBordados', 'archivedAt',
+                'generalPredictedDate', 'originalRequestedDate',
             ];
             DATE_FIELDS.forEach(field => {
                 if (obj[field]) obj[field] = new Date(obj[field]);
@@ -1010,7 +1058,18 @@ export const parseSQLiteFile = async (file: File): Promise<{ orders: Order[], he
             if (obj.size === undefined)      obj.size      = '';
             if (obj.docSeries === undefined) obj.docSeries = '';
             if (obj.clientCode === undefined) obj.clientCode = '';
-            if (obj.deliveryWeek === undefined || obj.deliveryWeek === null) {
+            if (!obj.generalClassification && obj.sectorStopReasons?.['planeamento']) {
+                obj.generalClassification = obj.sectorStopReasons['planeamento'];
+            }
+            if (!obj.generalObservation && obj.sectorObservations?.['planeamento']) {
+                obj.generalObservation = obj.sectorObservations['planeamento'];
+            }
+            if (obj.generalPredictedDate) {
+                obj.originalRequestedDate = obj.originalRequestedDate || obj.requestedDate;
+                // A nova data sobrepõe-se à data de entrega prevista
+                obj.requestedDate = obj.generalPredictedDate;
+                obj.deliveryWeek = getISOWeek(obj.requestedDate);
+            } else if (obj.deliveryWeek === undefined || obj.deliveryWeek === null) {
                 obj.deliveryWeek = obj.requestedDate ? getISOWeek(obj.requestedDate) : null;
             }
 
@@ -1053,14 +1112,15 @@ export const exportOrdersToSQLite = async (orders: Order[], headers: Record<stri
       priority INTEGER, isManual INTEGER,
       sectorObservations TEXT, sectorPredictedDates TEXT, sectorStopReasons TEXT,
       isArchived INTEGER, archivedAt INTEGER, archivedBy TEXT,
-      size TEXT
+      size TEXT,
+      generalClassification TEXT, generalPredictedDate INTEGER, generalObservation TEXT, originalRequestedDate INTEGER
     )
   `);
 
   db.run("BEGIN TRANSACTION");
   const stmt = db.prepare(`
     INSERT INTO orders VALUES (
-      ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+      ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
     )
   `);
 
@@ -1092,6 +1152,10 @@ export const exportOrdersToSQLite = async (orders: Order[], headers: Record<stri
         ts(o.archivedAt),
         o.archivedBy || null,
         o.size || '',
+        o.generalClassification || o.sectorStopReasons?.['planeamento'] || null,
+        ts(o.generalPredictedDate || o.sectorPredictedDates?.['planeamento']),
+        o.generalObservation || o.sectorObservations?.['planeamento'] || null,
+        ts(o.originalRequestedDate || o.requestedDate),
       ]);
   });
 
@@ -1211,6 +1275,10 @@ export const exportOrdersToExcel = (orders: Order[], headers: Record<string, str
         'isArchived':                   o.isArchived ? 1 : 0,                   // AQ
         'archivedAt':                   ts(o.archivedAt),                       // AR
         'archivedBy':                   o.archivedBy || '',                     // AS
+        'generalClassification':        o.generalClassification || o.sectorStopReasons?.['planeamento'] || '',
+        'generalPredictedDate':         ts(o.generalPredictedDate || o.sectorPredictedDates?.['planeamento']),
+        'generalObservation':           o.generalObservation || o.sectorObservations?.['planeamento'] || '',
+        'originalRequestedDate':        ts(o.originalRequestedDate || o.requestedDate),
     });
 
     const sheetData = orders.map(buildRow);
@@ -1219,8 +1287,8 @@ export const exportOrdersToExcel = (orders: Order[], headers: Record<string, str
     const ws = XLSX.utils.json_to_sheet(sheetData);
     // Largura automática: datas=12, JSON=30, resto=18
     const colWidths = Object.keys(sheetData[0]).map(k => {
-        if (k.startsWith('sector') || k === 'reference' || k === 'clientName') return { wch: 30 };
-        if (k.includes('Date') || k.includes('date') || k.includes('Date') || k === 'issueDate' || k === 'requestedDate' || k === 'dataEnt' || k === 'archivedAt') return { wch: 14 };
+        if (k.startsWith('sector') || k === 'reference' || k === 'clientName' || k === 'generalObservation') return { wch: 30 };
+        if (k.includes('Date') || k.includes('date') || k.includes('Date') || k === 'issueDate' || k === 'requestedDate' || k === 'dataEnt' || k === 'archivedAt' || k === 'generalPredictedDate' || k === 'originalRequestedDate') return { wch: 14 };
         return { wch: 18 };
     });
     ws['!cols'] = colWidths;
@@ -1279,6 +1347,11 @@ export const ALL_EXPORT_COLUMNS: ExportColumnDef[] = [
   { key: 'tinturariaDate',label: 'Data Tinturaria',      group: 'Datas' },
   { key: 'confDate',      label: 'Data Confecção',       group: 'Datas' },
   { key: 'armExpDate',    label: 'Data Prev. Armazém',   group: 'Datas' },
+  // Classificação Geral / Planeamento
+  { key: 'generalClassification', label: 'Classificação Geral',  group: 'Classificação / Planeamento' },
+  { key: 'generalPredictedDate',  label: 'Data Prevista Geral',  group: 'Classificação / Planeamento' },
+  { key: 'generalObservation',    label: 'Observação Geral',     group: 'Classificação / Planeamento' },
+  { key: 'originalRequestedDate', label: 'Data Pedida Original', group: 'Classificação / Planeamento' },
   // Datas Especiais
   { key: 'dataEspecial',  label: 'Data Especial',        group: 'Datas Especiais' },
   { key: 'dataPrinter',   label: 'Data Printer',         group: 'Datas Especiais' },
@@ -1340,13 +1413,15 @@ export const loadExportColumnsConfig = async (): Promise<string[] | null> => {
 const getColumnValue = (order: Order, key: string): any => {
   const dateFields = ['issueDate','requestedDate','dataEnt','dataTec','felpoCruDate',
     'tinturariaDate','confDate','armExpDate','dataEspecial','dataPrinter',
-    'dataDebuxo','dataAmostras','dataBordados','archivedAt'];
+    'dataDebuxo','dataAmostras','dataBordados','archivedAt','generalPredictedDate','originalRequestedDate'];
 
   if (key === 'estado') return getOrderState(order);
   if (key === 'deliveryWeek') return getISOWeek(order.requestedDate) ?? (order.deliveryWeek ?? '');
   if (key === 'priority') return order.priority === 1 ? 'Alta' : order.priority === 2 ? 'Média' : order.priority === 3 ? 'Baixa' : '';
   if (key === 'isManual') return order.isManual ? 'Sim' : 'Não';
   if (key === 'isArchived') return order.isArchived ? 'Sim' : 'Não';
+  if (key === 'generalClassification') return order.generalClassification || order.sectorStopReasons?.['planeamento'] || '';
+  if (key === 'generalObservation') return order.generalObservation || order.sectorObservations?.['planeamento'] || '';
 
   if (key.startsWith('obs_')) {
     const sectorId = key.replace('obs_', '');

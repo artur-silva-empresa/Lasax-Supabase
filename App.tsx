@@ -10,7 +10,7 @@ import Settings from './components/Settings';
 import StopReasons from './components/StopReasons';
 import Login from './components/Login';
 import { Order, User } from './types';
-import { generateMockOrders, loadOrdersFromDB, saveOrdersToDB, saveOrderToDB, clearOrdersFromDB, loadStopReasonsFromDB, saveStopReasonsToDB, loadUsersFromDB, initializeDefaultUsers, saveUserToDB, deleteUserFromDB, loadCapacitiesFromDB, saveCapacitiesToDB, hydrateOrder, processSyncQueue } from './services/dataService';
+import { generateMockOrders, loadOrdersFromDB, saveOrdersToDB, saveOrderToDB, clearOrdersFromDB, loadStopReasonsFromDB, saveStopReasonsToDB, loadUsersFromDB, initializeDefaultUsers, saveUserToDB, deleteUserFromDB, loadCapacitiesFromDB, saveCapacitiesToDB, hydrateOrder, processSyncQueue, getISOWeek } from './services/dataService';
 import { notificationService } from './services/notificationService';
 import { supabase } from './src/services/supabase';
 import { WifiOff, CheckCircle2, X, Download, Loader2 } from 'lucide-react';
@@ -595,12 +595,34 @@ const App: React.FC = () => {
         }
 
         let nextRequestedDate = o.requestedDate;
-        if (sectorId === 'planeamento' && predictedDate !== undefined) {
-          if (predictedDate === null) {
-            const rawDate = o._raw?.['Data Pedida'] || o._raw?.['requestedDate'];
-            nextRequestedDate = rawDate ? new Date(rawDate) : o.requestedDate;
-          } else {
-            nextRequestedDate = predictedDate;
+        let nextDeliveryWeek = o.deliveryWeek;
+        let nextGeneralClassification = o.generalClassification;
+        let nextGeneralPredictedDate = o.generalPredictedDate;
+        let nextGeneralObservation = o.generalObservation;
+        const nextOriginalRequestedDate = o.originalRequestedDate || o._raw?.['Data Pedida'] || o._raw?.['requestedDate'] || o.requestedDate;
+
+        if (sectorId === 'planeamento') {
+          // Classificação Geral
+          if (stopReason !== undefined) {
+            nextGeneralClassification = stopReason.trim() ? stopReason.trim() : undefined;
+          }
+          // Observação Geral
+          if (observation !== undefined) {
+            nextGeneralObservation = observation.trim() ? observation.trim() : undefined;
+          }
+          // Data Prevista Geral & Sobreposição à Data de Entrega Prevista
+          if (predictedDate !== undefined) {
+            if (predictedDate === null) {
+              nextGeneralPredictedDate = null;
+              // Repor data original de entrega pedida
+              nextRequestedDate = nextOriginalRequestedDate;
+              nextDeliveryWeek = nextRequestedDate ? getISOWeek(nextRequestedDate) : null;
+            } else {
+              nextGeneralPredictedDate = predictedDate;
+              // A nova data sobrepõe-se à data de entrega prevista
+              nextRequestedDate = predictedDate;
+              nextDeliveryWeek = getISOWeek(predictedDate);
+            }
           }
         }
 
@@ -610,7 +632,12 @@ const App: React.FC = () => {
           sectorObservations: nextSectorObservations,
           sectorPredictedDates: nextSectorPredictedDates,
           sectorPredictedDatesPending: nextPending,
-          requestedDate: nextRequestedDate
+          requestedDate: nextRequestedDate,
+          deliveryWeek: nextDeliveryWeek,
+          generalClassification: nextGeneralClassification,
+          generalPredictedDate: nextGeneralPredictedDate,
+          generalObservation: nextGeneralObservation,
+          originalRequestedDate: nextOriginalRequestedDate
         };
       });
 

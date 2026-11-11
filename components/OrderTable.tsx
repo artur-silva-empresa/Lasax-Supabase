@@ -131,9 +131,9 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
   } | null>(null);
 
   const handleOpenEditModal = (group: DocumentGroup) => {
-    const current = group.mainOrder.sectorStopReasons?.['planeamento'] || '';
-    const initialDate = group.mainOrder.sectorPredictedDates?.['planeamento'] || group.requestedDate || null;
-    const initialObs = group.mainOrder.sectorObservations?.['planeamento'] || '';
+    const current = group.generalClassification || group.mainOrder.generalClassification || group.mainOrder.sectorStopReasons?.['planeamento'] || '';
+    const initialDate = group.generalPredictedDate || group.mainOrder.generalPredictedDate || group.mainOrder.sectorPredictedDates?.['planeamento'] || group.requestedDate || null;
+    const initialObs = group.generalObservation || group.mainOrder.generalObservation || group.mainOrder.sectorObservations?.['planeamento'] || '';
     setPendingChange({
       docNr: group.docNr,
       items: group.items,
@@ -790,6 +790,10 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
     archivedBy?: string;
     hasObservations: boolean;
     requestedDate: Date | null;
+    generalClassification?: string;
+    generalPredictedDate?: Date | null;
+    generalObservation?: string;
+    originalRequestedDate?: Date | null;
     status: OrderState;
     totalQtyRequested: number;
     totalQtyOpen: number;
@@ -807,6 +811,11 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
       const existing = map.get(key);
       const orderState = getOrderState(order);
       const hasObs = hasObservations(order);
+      const genClass = order.generalClassification || order.sectorStopReasons?.['planeamento'];
+      const genPredDate = order.generalPredictedDate || order.sectorPredictedDates?.['planeamento'] || null;
+      const genObs = order.generalObservation || order.sectorObservations?.['planeamento'];
+      const origReqDate = order.originalRequestedDate || order.requestedDate;
+      const effectiveReqDate = genPredDate || order.requestedDate;
 
       if (!existing) {
         map.set(key, {
@@ -820,7 +829,11 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
           isArchived: !!order.isArchived,
           archivedBy: order.archivedBy,
           hasObservations: hasObs,
-          requestedDate: order.requestedDate,
+          requestedDate: effectiveReqDate,
+          generalClassification: genClass,
+          generalPredictedDate: genPredDate,
+          generalObservation: genObs,
+          originalRequestedDate: origReqDate,
           status: orderState,
           totalQtyRequested: order.qtyRequested || 0,
           totalQtyOpen: order.qtyOpen !== undefined ? order.qtyOpen : (order.qtyRequested || 0),
@@ -845,7 +858,14 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
         if (!existing.po && order.po) existing.po = order.po;
         if (!existing.clientName && order.clientName) existing.clientName = order.clientName;
         if (!existing.comercial && order.comercial) existing.comercial = order.comercial;
-        if (!existing.requestedDate && order.requestedDate) existing.requestedDate = order.requestedDate;
+        if (!existing.generalClassification && genClass) existing.generalClassification = genClass;
+        if (!existing.generalPredictedDate && genPredDate) {
+          existing.generalPredictedDate = genPredDate;
+          existing.requestedDate = genPredDate;
+        }
+        if (!existing.generalObservation && genObs) existing.generalObservation = genObs;
+        if (!existing.originalRequestedDate && origReqDate) existing.originalRequestedDate = origReqDate;
+        if (!existing.requestedDate && effectiveReqDate) existing.requestedDate = effectiveReqDate;
       }
     }
 
@@ -1910,6 +1930,14 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                         </span>
                         <span className="text-[9.5px] text-slate-500 dark:text-slate-400 font-normal flex items-center gap-1 mt-0.5">
                           <Calendar size={9} className="text-slate-400" /> {formatDate(group.requestedDate)}
+                          {(group.generalPredictedDate || group.mainOrder.generalPredictedDate) && (
+                            <span 
+                              className="px-1 py-0.2 rounded text-[7.5px] font-bold bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                              title={`Data sobreposta pelo Planeamento (Data Original: ${formatDate(group.originalRequestedDate || group.mainOrder.originalRequestedDate)})`}
+                            >
+                              Prev. Geral
+                            </span>
+                          )}
                         </span>
                       </td>
                       <td className="px-1 py-1.5 align-middle text-center">
@@ -1921,13 +1949,13 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                       </td>
                       <td className="px-2 py-1.5 align-middle text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex flex-col items-center justify-center gap-0.5">
-                          {group.mainOrder.sectorStopReasons?.['planeamento'] ? (
+                          {(group.generalClassification || group.mainOrder.generalClassification || group.mainOrder.sectorStopReasons?.['planeamento']) ? (
                             <span 
                               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/80 dark:border-amber-900/60 max-w-full truncate"
-                              title={group.mainOrder.sectorStopReasons['planeamento']}
+                              title={group.generalClassification || group.mainOrder.generalClassification || group.mainOrder.sectorStopReasons?.['planeamento']}
                             >
                               <Tag size={8} className="shrink-0 text-amber-500" />
-                              <span className="truncate">{group.mainOrder.sectorStopReasons['planeamento']}</span>
+                              <span className="truncate">{group.generalClassification || group.mainOrder.generalClassification || group.mainOrder.sectorStopReasons?.['planeamento']}</span>
                             </span>
                           ) : (
                             <span className="text-[8.5px] text-slate-400 dark:text-slate-500 italic">
@@ -2255,18 +2283,37 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                   </div>
                 </div>
 
-                {/* Tag de Classificação no Cartão Mobile (Apenas leitura) */}
-                {group.mainOrder.sectorStopReasons?.['planeamento'] && (
-                  <div className="mt-1 flex items-center gap-1">
+                {/* Tag de Classificação no Cartão Mobile */}
+                <div className="mt-1 flex items-center justify-between gap-1">
+                  {(group.generalClassification || group.mainOrder.generalClassification || group.mainOrder.sectorStopReasons?.['planeamento']) ? (
                     <span 
                       className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/60 truncate max-w-[220px]"
-                      title={group.mainOrder.sectorStopReasons['planeamento']}
+                      title={group.generalClassification || group.mainOrder.generalClassification || group.mainOrder.sectorStopReasons?.['planeamento']}
                     >
                       <Tag size={9} className="shrink-0 text-amber-500" />
-                      <span className="truncate">{group.mainOrder.sectorStopReasons['planeamento']}</span>
+                      <span className="truncate">{group.generalClassification || group.mainOrder.generalClassification || group.mainOrder.sectorStopReasons?.['planeamento']}</span>
                     </span>
-                  </div>
-                )}
+                  ) : (
+                    <span className="text-[8.5px] text-slate-400 dark:text-slate-500 italic">
+                      Sem classificação
+                    </span>
+                  )}
+                  {user?.permissions?.orders === 'write' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleOpenEditModal(group);
+                      }}
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 border border-slate-200 dark:border-slate-800 transition-all cursor-pointer shadow-2xs shrink-0"
+                      title="Editar classificação, data prevista e observações"
+                    >
+                      <Pencil size={8} />
+                      <span>Editar</span>
+                    </button>
+                  )}
+                </div>
 
                 {/* Linha 2: Cliente + Comercial + Totais */}
                 <div className="mt-1 flex items-baseline justify-between gap-2">
@@ -2289,6 +2336,14 @@ const OrderTable: React.FC<OrderTableProps> = React.memo(({ orders, onViewDetail
                     <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center justify-end gap-1 leading-none mt-0.5">
                       <Calendar size={10} className="text-slate-400" />
                       {formatDate(group.requestedDate)}
+                      {(group.generalPredictedDate || group.mainOrder.generalPredictedDate) && (
+                        <span 
+                          className="px-1 py-0.2 rounded text-[7.5px] font-bold bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                          title={`Data sobreposta pelo Planeamento (Data Original: ${formatDate(group.originalRequestedDate || group.mainOrder.originalRequestedDate)})`}
+                        >
+                          Prev. Geral
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
