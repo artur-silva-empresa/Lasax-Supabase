@@ -15,8 +15,8 @@ import {
   Layers,
   ExternalLink
 } from 'lucide-react';
-import { Order } from '../types';
-import { getISOWeek } from '../services/dataService';
+import { Order, SectorAlertTolerances } from '../types';
+import { getISOWeek, getSectorAlertTolerances } from '../services/dataService';
 import { formatDate } from '../utils/formatters';
 import { SECTORS } from '../constants';
 import { ActiveFilterType } from './OrderTable';
@@ -52,13 +52,27 @@ interface AlertCenterProps {
   orders: Order[];
   onViewDetails?: (order: Order) => void;
   onNavigateToOrders?: (filter: ActiveFilterType) => void;
+  tolerances?: SectorAlertTolerances;
 }
 
 export const AlertCenter: React.FC<AlertCenterProps> = ({
   orders,
   onViewDetails,
   onNavigateToOrders,
+  tolerances: propTolerances,
 }) => {
+  const [internalTolerances, setInternalTolerances] = useState<SectorAlertTolerances>(() => getSectorAlertTolerances());
+
+  React.useEffect(() => {
+    const handleUpdate = (e: any) => {
+      if (e.detail) setInternalTolerances(e.detail);
+      else setInternalTolerances(getSectorAlertTolerances());
+    };
+    window.addEventListener('sector_alert_tolerances_updated', handleUpdate);
+    return () => window.removeEventListener('sector_alert_tolerances_updated', handleUpdate);
+  }, []);
+
+  const activeTolerances = propTolerances || internalTolerances;
   const [activeTab, setActiveTab] = useState<AlertType>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
@@ -93,14 +107,16 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
       const isOpen = order.qtyOpen > 0;
       const typesForOrder: ('late' | 'prediction_change' | 'priority_stop')[] = [];
 
-      // 1. Data de entrega ultrapassada (encomenda ativa com data de entrega inferior a hoje)
+      // 1. Data de entrega ultrapassada (encomenda ativa com data de entrega inferior a hoje + tolerância)
       let daysLate = 0;
+      const genTolerance = activeTolerances.generalDelivery ?? 0;
       if (isOpen && order.requestedDate) {
         const reqDate = new Date(order.requestedDate);
         reqDate.setHours(0, 0, 0, 0);
-        if (reqDate < today) {
+        const diffDays = Math.floor((today.getTime() - reqDate.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays > genTolerance) {
           typesForOrder.push('late');
-          daysLate = Math.max(1, Math.floor((today.getTime() - reqDate.getTime()) / (1000 * 60 * 60 * 24)));
+          daysLate = Math.max(1, diffDays - genTolerance);
         }
       }
 
@@ -221,7 +237,7 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
     };
 
     return { alertItems: items, counts: c };
-  }, [orders]);
+  }, [orders, activeTolerances]);
 
   // Filter based on active tab and search term
   const filteredItems = useMemo(() => {

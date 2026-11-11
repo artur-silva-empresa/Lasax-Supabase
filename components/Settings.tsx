@@ -1,9 +1,9 @@
 
 import React from 'react';
-import { FolderInput, FolderOutput, Save, FolderOpen, AlertCircle, CheckCircle, Moon, Sun, Trash2, Users, ShieldCheck, UserPlus, Key, Eye, EyeOff, User as UserIcon, Settings as SettingsIcon, Package, Clock, Layers, ChevronRight, X, AlertTriangle, Keyboard, Plus, RotateCcw, Database, Activity, RefreshCw, Bell, Calendar, Sliders, Volume2, Check, Send } from 'lucide-react';
-import { saveDirectoryHandle, getDirectoryHandle, verifyPermission, hashPassword } from '../services/dataService';
+import { FolderInput, FolderOutput, Save, FolderOpen, AlertCircle, CheckCircle, Moon, Sun, Trash2, Users, ShieldCheck, UserPlus, Key, Eye, EyeOff, User as UserIcon, Settings as SettingsIcon, Package, Clock, Layers, ChevronRight, X, AlertTriangle, Keyboard, Plus, Minus, RotateCcw, Database, Activity, RefreshCw, Bell, Calendar, Sliders, Volume2, Check, Send, Waves, Droplets, Scissors, Truck, ShieldAlert } from 'lucide-react';
+import { saveDirectoryHandle, getDirectoryHandle, verifyPermission, hashPassword, getSectorAlertTolerances, saveSectorAlertTolerances, DEFAULT_SECTOR_ALERT_TOLERANCES } from '../services/dataService';
 import { notificationService, NotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES } from '../services/notificationService';
-import { User, PermissionLevel, UserPermissions, Order } from '../types';
+import { User, PermissionLevel, UserPermissions, Order, SectorAlertTolerances } from '../types';
 import { SECTORS } from '../constants';
 import StopReasons from './StopReasons';
 import ExportableColumns from './ExportableColumns';
@@ -250,6 +250,57 @@ const Settings: React.FC<SettingsProps> = ({
       setStatusMsg('Alerta de Encomenda Urgente despachado! Verifique a barra de notificações do seu telemóvel/computador.');
       setTimeout(() => setStatusMsg(''), 5000);
     }, 600);
+  };
+
+  // Configurações de Tolerâncias de Alerta por Sector
+  const [sectorTolerances, setSectorTolerances] = React.useState<SectorAlertTolerances>(() => getSectorAlertTolerances());
+
+  const handleToleranceChange = (sectorKey: keyof SectorAlertTolerances, delta: number) => {
+    setSectorTolerances(prev => {
+      const currentVal = prev[sectorKey] ?? 0;
+      const newVal = Math.max(0, Math.min(60, currentVal + delta));
+      return { ...prev, [sectorKey]: newVal };
+    });
+  };
+
+  const handleToleranceInput = (sectorKey: keyof SectorAlertTolerances, rawVal: string) => {
+    const val = parseInt(rawVal, 10);
+    const validVal = isNaN(val) ? 0 : Math.max(0, Math.min(60, val));
+    setSectorTolerances(prev => ({
+      ...prev,
+      [sectorKey]: validVal
+    }));
+  };
+
+  const handleSaveTolerances = () => {
+    saveSectorAlertTolerances(sectorTolerances);
+    setStatusMsg('Limites de tolerância de alerta por sector guardados com sucesso!');
+    setTimeout(() => setStatusMsg(''), 4000);
+  };
+
+  const handleResetTolerances = () => {
+    if (window.confirm('Deseja repor todos os limites de tolerância para 0 dias (alerta imediato)?')) {
+      setSectorTolerances(DEFAULT_SECTOR_ALERT_TOLERANCES);
+      saveSectorAlertTolerances(DEFAULT_SECTOR_ALERT_TOLERANCES);
+      setStatusMsg('Limites de tolerância repostos para os valores padrão (0 dias).');
+      setTimeout(() => setStatusMsg(''), 3500);
+    }
+  };
+
+  const handleApplyPresetTolerances = (days: number) => {
+    const updated: SectorAlertTolerances = {
+      tecelagem: days,
+      felpo_cru: days,
+      tinturaria: days,
+      confeccao: days,
+      embalagem: days,
+      expedicao: days,
+      generalDelivery: days,
+    };
+    setSectorTolerances(updated);
+    saveSectorAlertTolerances(updated);
+    setStatusMsg(`Tolerância de ${days} ${days === 1 ? 'dia' : 'dias'} aplicada a todos os setores.`);
+    setTimeout(() => setStatusMsg(''), 3500);
   };
 
   // Supabase Keep-Alive Cron Job States
@@ -500,10 +551,205 @@ const Settings: React.FC<SettingsProps> = ({
 
   const tabLabels: Record<string, string> = {
     'general': 'Geral',
-    'notifications': 'Preferências de Notificação',
+    'notifications': 'Configurações de Alertas',
     'users': 'Utilizadores',
     'stop-reasons': 'Motivos de Paragem',
     'export-columns': 'Tabelas Editáveis',
+  };
+
+  const renderAlertToleranceSection = () => {
+    const sectorsConfig = [
+      { key: 'tecelagem' as keyof SectorAlertTolerances, name: 'Tecelagem', icon: Waves, color: 'blue', desc: 'Produção em tear e corte de amostras' },
+      { key: 'felpo_cru' as keyof SectorAlertTolerances, name: 'Felpo Cru', icon: Layers, color: 'indigo', desc: 'Conclusão de tecido cru e armazém intermédio' },
+      { key: 'tinturaria' as keyof SectorAlertTolerances, name: 'Tinturaria', icon: Droplets, color: 'purple', desc: 'Tingimento, lavagem e rama/acabamento térmico' },
+      { key: 'confeccao' as keyof SectorAlertTolerances, name: 'Confecção', icon: Scissors, color: 'fuchsia', desc: 'Corte e costura de felpos e roupões' },
+      { key: 'embalagem' as keyof SectorAlertTolerances, name: 'Embalagem / Acabamento', icon: Package, color: 'pink', desc: 'Dobragem, etiquetagem e ensacamento' },
+      { key: 'expedicao' as keyof SectorAlertTolerances, name: 'Stock / Expedição', icon: Truck, color: 'teal', desc: 'Embalagem em caixa e entrega ao transporte' },
+      { key: 'generalDelivery' as keyof SectorAlertTolerances, name: 'Prazo Geral de Entrega', icon: Calendar, color: 'amber', desc: 'Data limite de entrega da encomenda ao cliente' },
+    ];
+
+    const totalToleranceDays: number = (Object.values(sectorTolerances) as (number | undefined)[]).reduce<number>((acc, v) => acc + (v || 0), 0);
+
+    return (
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
+        {/* Section Header */}
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 pb-5 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-start gap-3.5">
+            <div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl border border-blue-200/60 dark:border-blue-900/40">
+              <ShieldAlert size={22} />
+            </div>
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-black text-slate-800 dark:text-slate-100">
+                  Configurações de Alertas: Limites de Tolerância por Sector
+                </h3>
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                  {totalToleranceDays === 0 ? 'Tolerância Zero (Alerta Imediato)' : `Média ${(totalToleranceDays / 7).toFixed(1)} dias tol.`}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl leading-relaxed">
+                Defina quantos <strong>dias de tolerância</strong> são admitidos após a data prevista de cada sector antes de disparar alertas de atraso no sistema, Centro de Alertas e nos cartões de KPIs do Dashboard.
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Presets & Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleSaveTolerances}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
+            >
+              <Save size={13} /> Guardar Tolerâncias
+            </button>
+            <button
+              type="button"
+              onClick={handleResetTolerances}
+              className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-200 dark:border-slate-700"
+              title="Repor todos os setores para 0 dias"
+            >
+              <RotateCcw size={13} /> Repor
+            </button>
+          </div>
+        </div>
+
+        {/* Informative Guidance & Quick Presets Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/70 dark:border-slate-800 text-xs">
+          <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+            <Sliders size={14} className="text-blue-500 shrink-0" />
+            <span className="text-[11px]">
+              <strong>Predefinições Rápidas:</strong> Aplicar o mesmo limite a todos os setores de produção:
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleApplyPresetTolerances(0)}
+              className="px-2 py-1 rounded-lg text-[10px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600 transition-colors"
+            >
+              0 dias (Imediato)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyPresetTolerances(1)}
+              className="px-2 py-1 rounded-lg text-[10px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600 transition-colors"
+            >
+              1 dia (Padrão)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyPresetTolerances(2)}
+              className="px-2 py-1 rounded-lg text-[10px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600 transition-colors"
+            >
+              2 dias (Flexível)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyPresetTolerances(5)}
+              className="px-2 py-1 rounded-lg text-[10px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600 transition-colors"
+            >
+              5 dias (1 Semana)
+            </button>
+          </div>
+        </div>
+
+        {/* Sectors Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {sectorsConfig.map(sec => {
+            const Icon = sec.icon;
+            const currentTol = (sectorTolerances as any)[sec.key] ?? 0;
+            const isZero = currentTol === 0;
+
+            return (
+              <div
+                key={sec.key}
+                className={`p-3 rounded-xl border transition-all ${
+                  isZero
+                    ? 'bg-slate-50/70 dark:bg-slate-800/30 border-slate-200/80 dark:border-slate-800'
+                    : 'bg-blue-50/30 dark:bg-blue-950/20 border-blue-200/80 dark:border-blue-900/50 shadow-2xs'
+                }`}
+              >
+                {/* Sector header */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="p-1.5 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-2xs shrink-0">
+                      <Icon size={14} />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-black text-xs text-slate-800 dark:text-slate-100 truncate">
+                        {sec.name}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                        {sec.desc}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Tolerance Status Badge */}
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 border ${
+                    isZero
+                      ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                      : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                  }`}>
+                    {isZero ? 'Imediato' : `+${currentTol}d`}
+                  </span>
+                </div>
+
+                {/* Stepper Control */}
+                <div className="mt-2.5 pt-2 border-t border-slate-200/70 dark:border-slate-800/80 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                    Tolerância:
+                  </span>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleToleranceChange(sec.key, -1)}
+                      disabled={currentTol <= 0}
+                      className="w-7 h-7 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 shadow-2xs"
+                      title="Diminuir 1 dia de tolerância"
+                    >
+                      <Minus size={11} />
+                    </button>
+
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max="60"
+                        value={currentTol}
+                        onChange={e => handleToleranceInput(sec.key, e.target.value)}
+                        className="w-12 text-center py-1 text-xs font-black bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToleranceChange(sec.key, 1)}
+                      disabled={currentTol >= 60}
+                      className="w-7 h-7 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 shadow-2xs"
+                      title="Aumentar 1 dia de tolerância"
+                    >
+                      <Plus size={11} />
+                    </button>
+                    <span className="text-[10px] text-slate-400 font-bold">dias</span>
+                  </div>
+                </div>
+
+                {/* Explanation tag */}
+                <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
+                  {isZero ? (
+                    <span className="text-amber-600 dark:text-amber-400 font-medium">⚠️ Dispara alerta no próprio dia do incumprimento.</span>
+                  ) : (
+                    <span className="text-blue-600 dark:text-blue-400 font-medium">🛡️ Dispara alerta após {currentTol} {currentTol === 1 ? 'dia' : 'dias'} de atraso.</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   };
 
   const renderNotificationPreferencesSection = () => (
@@ -978,6 +1224,9 @@ const Settings: React.FC<SettingsProps> = ({
         {/* Instalar Aplicação como PWA no Telemóvel */}
         <PWAInstallButton variant="card" />
 
+        {/* Secção de Configurações de Alertas & Tolerâncias por Sector */}
+        {renderAlertToleranceSection()}
+
         {/* Secção de Preferências de Notificação (Notification Preferences) */}
         {renderNotificationPreferencesSection()}
 
@@ -1444,9 +1693,10 @@ const Settings: React.FC<SettingsProps> = ({
         </>
         )}
 
-        {/* ===== ABA NOTIFICAÇÕES (DEDICADA) ===== */}
+        {/* ===== ABA CONFIGURAÇÕES DE ALERTAS & NOTIFICAÇÕES (DEDICADA) ===== */}
         {currentTab === 'notifications' && (
           <div className="space-y-6 animate-in fade-in duration-300">
+            {renderAlertToleranceSection()}
             {renderNotificationPreferencesSection()}
           </div>
         )}

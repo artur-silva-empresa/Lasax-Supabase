@@ -2,7 +2,7 @@
 import * as XLSX from 'xlsx';
 import initSqlJs from 'sql.js';
 import { supabase, supabaseAuthAdmin } from '../src/services/supabase';
-import { Order, OrderState, SectorState, DashboardKPIs, User, UserRole, PermissionLevel } from '../types';
+import { Order, OrderState, SectorState, DashboardKPIs, User, UserRole, PermissionLevel, SectorAlertTolerances } from '../types';
 import { parseExcelDate, formatDate } from '../utils/formatters';
 export { formatDate };
 import { SECTORS } from '../constants';
@@ -1585,5 +1585,43 @@ export const processSyncQueue = async () => {
       // or at least wait until the next online event.
       break;
     }
+  }
+};
+
+// --- CONFIGURAÇÕES DE ALERTAS & TOLERÂNCIAS POR SETOR ---
+
+export const DEFAULT_SECTOR_ALERT_TOLERANCES: SectorAlertTolerances = {
+  tecelagem: 0,
+  felpo_cru: 0,
+  tinturaria: 0,
+  confeccao: 0,
+  embalagem: 0,
+  expedicao: 0,
+  generalDelivery: 0
+};
+
+export const getSectorAlertTolerances = (): SectorAlertTolerances => {
+  try {
+    const raw = localStorage.getItem('lasa_sector_alert_tolerances');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ...DEFAULT_SECTOR_ALERT_TOLERANCES,
+        ...parsed
+      };
+    }
+  } catch (e) {
+    console.error('Erro ao ler tolerâncias de alerta:', e);
+  }
+  return { ...DEFAULT_SECTOR_ALERT_TOLERANCES };
+};
+
+export const saveSectorAlertTolerances = (tolerances: SectorAlertTolerances): void => {
+  try {
+    localStorage.setItem('lasa_sector_alert_tolerances', JSON.stringify(tolerances));
+    // Notificar ouvintes na mesma janela/sessão
+    window.dispatchEvent(new CustomEvent('sector_alert_tolerances_updated', { detail: tolerances }));
+  } catch (e) {
+    console.error('Erro ao guardar tolerâncias de alerta:', e);
   }
 };

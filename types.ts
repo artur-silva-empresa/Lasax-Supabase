@@ -173,3 +173,13 @@ export interface DashboardKPIs {
   totalInProduction: number;
   billedVsOpen: { billed: number; open: number };
 }
+
+export interface SectorAlertTolerances {
+  tecelagem: number;
+  felpo_cru: number;
+  tinturaria: number;
+  confeccao: number;
+  embalagem: number;
+  expedicao: number;
+  generalDelivery: number;
+}

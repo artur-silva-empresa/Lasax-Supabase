@@ -11,6 +11,7 @@ import { calculateKPIs, getWeekRange } from '../services/dataService';
 import { SECTORS } from '../constants';
 import { ActiveFilterType } from './OrderTable';
 import { AlertCenter } from './AlertCenter';
+import { SectorKPIs } from './SectorKPIs';
 
 interface DashboardProps {
   orders: Order[];
@@ -395,6 +396,12 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders, onVie
         <AlertCenter 
           orders={orders} 
           onViewDetails={onViewDetails} 
+          onNavigateToOrders={onNavigateToOrders} 
+        />
+
+        {/* KPIs de Pontualidade e Desempenho por Sector */}
+        <SectorKPIs 
+          orders={orders} 
           onNavigateToOrders={onNavigateToOrders} 
         />
 
