@@ -664,21 +664,23 @@ export const getWeekRange = (date: Date) => {
 };
 
 export const calculateKPIs = (orders: Order[]): DashboardKPIs => {
+  // Ignorar encomendas arquivadas para que não sejam contabilizadas no Dashboard
+  const nonArchivedOrders = orders.filter(o => !o.isArchived);
   const now = new Date();
   const { start: weekStart, end: weekEnd } = getWeekRange(now);
 
   // 1. Encomendas Ativas (Contagem por Documento Único)
-  // Considera ativas as que não estão totalmente concluídas/faturadas (qtyOpen > 0)
-  const activeOrders = orders.filter(o => o.qtyOpen > 0);
+  // Considera ativas as que não estão arquivadas nem totalmente concluídas/faturadas (qtyOpen > 0)
+  const activeOrders = nonArchivedOrders.filter(o => o.qtyOpen > 0);
   const uniqueActiveDocs = new Set(activeOrders.map(o => o.docNr));
 
-  // 2. Atrasadas (Qualquer sector)
-  const late = orders.filter(o => getOrderState(o) === OrderState.LATE);
+  // 2. Atrasadas (Qualquer sector, apenas não arquivadas)
+  const late = nonArchivedOrders.filter(o => getOrderState(o) === OrderState.LATE);
   const uniqueLateDocs = new Set(late.map(o => o.docNr));
 
   // 3. Entregas da Semana (Baseado na Data de Expedição)
-  // Considera orders com data prevista de expedição dentro da semana corrente
-  const ordersThisWeek = orders.filter(o => {
+  // Considera encomendas não arquivadas com data prevista de expedição dentro da semana corrente
+  const ordersThisWeek = nonArchivedOrders.filter(o => {
     const dateToCheck = o.armExpDate; 
     return dateToCheck && dateToCheck >= weekStart && dateToCheck <= weekEnd;
   });
@@ -705,8 +707,8 @@ export const calculateKPIs = (orders: Order[]): DashboardKPIs => {
     fulfillmentRateWeek: fulfillmentRateWeek,
     totalInProduction: activeOrders.length,
     billedVsOpen: { 
-      billed: orders.reduce((acc, o) => acc + o.qtyBilled, 0), 
-      open: orders.reduce((acc, o) => acc + o.qtyOpen, 0) 
+      billed: nonArchivedOrders.reduce((acc, o) => acc + o.qtyBilled, 0), 
+      open: nonArchivedOrders.reduce((acc, o) => acc + o.qtyOpen, 0) 
     }
   };
 };

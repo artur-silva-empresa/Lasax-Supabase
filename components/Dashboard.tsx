@@ -22,14 +22,18 @@ interface DashboardProps {
 const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#64748b'];
 
 const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders, onViewDetails }) => {
-  const kpis = calculateKPIs(orders);
+  // Ignorar explicitamente encomendas arquivadas para que não sejam contabilizadas no Dashboard
+  const activeOrders = React.useMemo(() => {
+    return orders.filter(o => !o.isArchived);
+  }, [orders]);
 
-  // Status Data precisa ser ajustado para refletir contagens totais, 
-  // mas o KPI de ativas agora é por DOC, aqui mantemos por linha para o gráfico de pizza ser preciso na carga
+  const kpis = calculateKPIs(activeOrders);
+
+  // Status Data reflete apenas encomendas não arquivadas
   const statusData = [
     { name: 'Em Produção', value: kpis.totalInProduction - kpis.totalLate }, 
     { name: 'Atrasadas', value: kpis.totalLate },
-    { name: 'Concluídas', value: orders.filter(o => o.qtyOpen === 0).length },
+    { name: 'Concluídas', value: activeOrders.filter(o => o.qtyOpen === 0).length },
   ];
 
   // Gráfico Donut/Pizza: On-Time Delivery vs Delay (Entregas no Prazo vs Atrasos)
@@ -42,9 +46,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders, onVie
     let onTimeQty = 0;
     let delayedQty = 0;
 
-    orders.forEach(order => {
-      if (order.isArchived) return;
-
+    activeOrders.forEach(order => {
       const isOpen = order.qtyOpen > 0;
       if (isOpen) {
         if (order.requestedDate) {
@@ -94,7 +96,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders, onVie
       onTimeQty,
       delayedQty,
     };
-  }, [orders]);
+  }, [activeOrders]);
 
   // Gráfico de Barras: Volume de Produção por Sector (Production Volume by Sector)
   const productionVolumeBySectorData = React.useMemo(() => {
@@ -113,8 +115,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders, onVie
       let totalVolume = 0;
       const docSet = new Set<string>();
 
-      orders.forEach(order => {
-        if (order.isArchived) return;
+      activeOrders.forEach(order => {
         const qReq = order.qtyRequested || 0;
         if (qReq <= 0) return;
 
@@ -140,7 +141,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders, onVie
         color: sec.color,
       };
     });
-  }, [orders]);
+  }, [activeOrders]);
 
   const totalProducedAllSectors = React.useMemo(() => {
     return productionVolumeBySectorData.reduce((acc, curr) => acc + curr.produced, 0);
@@ -167,7 +168,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders, onVie
         SECTORS.map(s => [s.id, { w0: new Set<string>(), w1: new Set<string>(), w2: new Set<string>(), w3: new Set<string>() }])
     );
 
-    orders.forEach(o => {
+    activeOrders.forEach(o => {
         if (o.qtyOpen <= 0) return; // Só verificar encomendas ativas/não fechadas
 
         const getSectorDate = (id: string) => {
@@ -219,7 +220,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders, onVie
             w3: dataBySector[s.id].w3.size,
         }))
     };
-  }, [orders]);
+  }, [activeOrders]);
 
   const sectorCompletionData = React.useMemo(() => {
     const data = {
@@ -231,7 +232,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders, onVie
       expedicao: { req: 0, comp: 0 }
     };
 
-    orders.forEach(order => {
+    activeOrders.forEach(order => {
       const qReq = order.qtyRequested || 0;
       if (qReq <= 0) return;
 
@@ -271,7 +272,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders, onVie
       { name: 'Embalagem', value: getPct(data.embalagem.comp, data.embalagem.req), color: '#ec4899' },
       { name: 'Expedição', value: getPct(data.expedicao.comp, data.expedicao.req), color: '#14b8a6' },
     ];
-  }, [orders]);
+  }, [activeOrders]);
 
   // Gráfico de Barras: Encomendas concluídas por semana durante o último mês
   const completedOrdersWeeklyData = React.useMemo(() => {
@@ -313,7 +314,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders, onVie
       const completedDocSet = new Set<string>();
       let completedPieces = 0;
 
-      orders.forEach(order => {
+      activeOrders.forEach(order => {
         const isCompleted = order.qtyOpen === 0 || 
           (order.stockCxQty >= order.qtyRequested && order.qtyRequested > 0);
 
@@ -339,7 +340,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders, onVie
         isCurrentWeek: w.isCurrentWeek
       };
     });
-  }, [orders]);
+  }, [activeOrders]);
 
   const totalCompletedLastMonth = React.useMemo(() => {
     return completedOrdersWeeklyData.reduce((acc, curr) => acc + curr.concluidas, 0);
@@ -394,14 +395,14 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, onNavigateToOrders, onVie
 
         {/* Centro de Alertas */}
         <AlertCenter 
-          orders={orders} 
+          orders={activeOrders} 
           onViewDetails={onViewDetails} 
           onNavigateToOrders={onNavigateToOrders} 
         />
 
         {/* KPIs de Pontualidade e Desempenho por Sector */}
         <SectorKPIs 
-          orders={orders} 
+          orders={activeOrders} 
           onNavigateToOrders={onNavigateToOrders} 
         />
 
