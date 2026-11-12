@@ -14,13 +14,15 @@ import {
   Tag, 
   Users, 
   FileText, 
-  Layers
+  Layers,
+  Calendar,
+  X
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Order, OrderState, User } from '../types';
 import { SECTORS } from '../constants';
 import { formatDate } from '../utils/formatters';
-import { getISOWeek, getOrderState } from '../services/dataService';
+import { getISOWeek, getOrderState, getWeekRange } from '../services/dataService';
 import HighlightText from './HighlightText';
 
 interface OrderPositionProps {
@@ -132,6 +134,8 @@ export const OrderPosition: React.FC<OrderPositionProps> = ({
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterSector, setFilterSector] = useState('All'); // Filtro pelo setor onde há peças
   const [filterArchived, setFilterArchived] = useState<'active' | 'archived' | 'all'>('active');
+  const [filterDate, setFilterDate] = useState<Date | null>(null);
+  const [filterWeekMode, setFilterWeekMode] = useState<'exact' | 'cumulative'>('exact');
 
   // Modo de visualização: 'document' (agrupado por doc) ou 'item' (por linha de artigo)
   const [viewMode, setViewMode] = useState<'document' | 'item'>('document');
@@ -147,6 +151,25 @@ export const OrderPosition: React.FC<OrderPositionProps> = ({
   // Ordenação
   const [sortField, setSortField] = useState<'date' | 'docNr' | 'client' | 'qtyRequested' | 'qtyOpen'>('date');
   const [sortAsc, setSortAsc] = useState(true);
+
+  // Funções de Navegação de Semana
+  const handlePrevWeek = () => {
+    if (filterDate) {
+      const newDate = new Date(filterDate);
+      newDate.setDate(newDate.getDate() - 7);
+      setFilterDate(newDate);
+      setCurrentPage(1);
+    }
+  };
+
+  const handleNextWeek = () => {
+    if (filterDate) {
+      const newDate = new Date(filterDate);
+      newDate.setDate(newDate.getDate() + 7);
+      setFilterDate(newDate);
+      setCurrentPage(1);
+    }
+  };
 
   // Sincronizar com pesquisa global se mudar
   React.useEffect(() => {
@@ -213,6 +236,20 @@ export const OrderPosition: React.FC<OrderPositionProps> = ({
       result = result.filter(o => getOrderState(o) === filterStatus);
     }
 
+    // Filtro de Semana (Dinâmico: só da semana ou todas as anteriores e até à semana selecionada)
+    if (filterDate) {
+      const { start: weekStart, end: weekEnd } = getWeekRange(filterDate);
+      result = result.filter(o => {
+        const dateToCheck = o.requestedDate || o.armExpDate;
+        if (!dateToCheck) return false;
+        if (filterWeekMode === 'cumulative') {
+          return dateToCheck <= weekEnd;
+        } else {
+          return dateToCheck >= weekStart && dateToCheck <= weekEnd;
+        }
+      });
+    }
+
     // Filtro Setor de Produção com peças
     if (filterSector !== 'All') {
       result = result.filter(o => {
@@ -244,7 +281,7 @@ export const OrderPosition: React.FC<OrderPositionProps> = ({
     }
 
     return result;
-  }, [orders, filterArchived, filterDocSeries, filterClient, filterComercial, filterReference, filterStatus, filterSector, deferredSearch]);
+  }, [orders, filterArchived, filterDocSeries, filterClient, filterComercial, filterReference, filterStatus, filterSector, filterDate, filterWeekMode, deferredSearch]);
 
   // Documentos agrupados para visão por documento
   interface PositionDocGroup {
@@ -543,6 +580,8 @@ export const OrderPosition: React.FC<OrderPositionProps> = ({
     setFilterStatus('All');
     setFilterSector('All');
     setFilterArchived('active');
+    setFilterDate(null);
+    setFilterWeekMode('exact');
     setCurrentPage(1);
   };
 
@@ -553,7 +592,9 @@ export const OrderPosition: React.FC<OrderPositionProps> = ({
     filterReference !== 'All' ||
     filterStatus !== 'All' ||
     filterSector !== 'All' ||
-    filterArchived !== 'active';
+    filterArchived !== 'active' ||
+    filterDate !== null ||
+    filterWeekMode !== 'exact';
 
   // Exportação para Excel
   const handleExportToExcel = () => {
@@ -963,6 +1004,87 @@ export const OrderPosition: React.FC<OrderPositionProps> = ({
               className="w-full pl-7 pr-2.5 py-1 text-[11px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md focus:outline-none focus:border-blue-500 text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
             />
           </div>
+
+          {/* Seletor de Semana com modo Só Semana vs Até à Semana */}
+          {!filterDate ? (
+            <button 
+              type="button"
+              onClick={() => { setFilterDate(new Date()); setCurrentPage(1); }}
+              className="flex items-center gap-1.5 border rounded-md px-2.5 py-1 shadow-2xs transition-colors bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-[10.5px] font-semibold"
+              title="Filtrar por Semana"
+            >
+              <Calendar size={12} className="text-slate-400" />
+              <span>Filtrar Semana</span>
+            </button>
+          ) : (
+            <div className="flex flex-wrap sm:flex-nowrap items-center bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-md shadow-2xs overflow-hidden">
+              <button 
+                type="button"
+                onClick={handlePrevWeek} 
+                className="px-1.5 py-1 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors" 
+                title="Semana anterior"
+              >
+                <ChevronLeft size={13} />
+              </button>
+              <div className="px-1.5 flex flex-col items-center justify-center min-w-[80px]">
+                <span className="text-[9px] font-black uppercase text-blue-500 dark:text-blue-400 leading-none">
+                  Semana {getISOWeek(filterDate)}
+                </span>
+                <span className="text-[8.5px] font-medium text-blue-700 dark:text-blue-200 leading-none mt-0.5">
+                  {(() => {
+                    const {start, end} = getWeekRange(filterDate);
+                    return `${start.getDate()} ${start.toLocaleString('pt-PT', {month: 'short'})} - ${end.getDate()} ${end.toLocaleString('pt-PT', {month: 'short'})}`;
+                  })()}
+                </span>
+              </div>
+              <button 
+                type="button"
+                onClick={handleNextWeek} 
+                className="px-1.5 py-1 hover:bg-blue-100 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-300 transition-colors" 
+                title="Semana seguinte"
+              >
+                <ChevronRight size={13} />
+              </button>
+              
+              {/* Seletor de Modo: Só Semana vs Até à Semana */}
+              <div className="flex items-center border-l border-blue-200 dark:border-blue-800 px-1 py-0.5 gap-0.5 bg-white/60 dark:bg-slate-900/60">
+                <button
+                  type="button"
+                  onClick={() => { setFilterWeekMode('exact'); setCurrentPage(1); }}
+                  className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold transition-all ${
+                    filterWeekMode === 'exact'
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : 'text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40'
+                  }`}
+                  title="Apenas encomendas com entrega na semana selecionada"
+                >
+                  Só Semana
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setFilterWeekMode('cumulative'); setCurrentPage(1); }}
+                  className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold transition-all ${
+                    filterWeekMode === 'cumulative'
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : 'text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40'
+                  }`}
+                  title="Todas as encomendas anteriores e até à semana selecionada"
+                >
+                  ≤ Até à Semana
+                </button>
+              </div>
+
+              <div className="w-px h-4 bg-blue-200 dark:bg-blue-800 mx-0.5"></div>
+              <button 
+                type="button"
+                onClick={() => { setFilterDate(null); setCurrentPage(1); }} 
+                className="px-1.5 py-1 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-blue-400 dark:text-blue-300 hover:text-rose-500 dark:hover:text-rose-400 transition-colors" 
+                title="Remover filtro de semana"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          )}
 
           {/* Filtro Série */}
           <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-2 py-1">

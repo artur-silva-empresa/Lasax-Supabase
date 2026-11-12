@@ -696,51 +696,241 @@ const App: React.FC = () => {
     let finalHeaders: Record<string, string> = {};
     let message = "";
 
-    if (baseData && !newData) {
-      finalOrders = baseData.orders;
-      finalHeaders = baseData.headers;
-      message = `Base de dados carregada com ${finalOrders.length} registos.`;
-    } else if (newData && !baseData) {
-      finalOrders = newData.orders;
-      finalHeaders = newData.headers;
-      message = `Dados importados com ${finalOrders.length} registos novos.`;
-    } else if (baseData && newData) {
+    // 1. Catalogar todo o histórico de arquivamento existente
+    // Mapear por docNr (documento completo), por chave composta docNr-itemNr e por id
+    const archivedItemMap = new Map<string, { isArchived: boolean; archivedAt: Date | null; archivedBy?: string }>();
+    const archivedDocMap = new Map<string, { isArchived: boolean; archivedAt: Date | null; archivedBy?: string }>();
+
+    const recordArchived = (orderList: Order[]) => {
+      orderList.forEach(o => {
+        if (o.isArchived) {
+          const info = {
+            isArchived: true,
+            archivedAt: o.archivedAt ? new Date(o.archivedAt) : new Date(),
+            archivedBy: o.archivedBy || currentUser?.name || 'Admin'
+          };
+          const docKey = String(o.docNr || '').trim();
+          if (docKey) {
+            archivedDocMap.set(docKey, info);
+            if (o.itemNr !== undefined && o.itemNr !== null) {
+              archivedItemMap.set(`${docKey}-${o.itemNr}`, info);
+            }
+          }
+          if (o.id) {
+            archivedItemMap.set(String(o.id).trim(), info);
+          }
+        }
+      });
+    };
+
+    // Registar arquivo das encomendas atuais em memória, do ficheiro base e dos novos dados
+    recordArchived(orders);
+    if (baseData?.orders) recordArchived(baseData.orders);
+    if (newData?.orders) recordArchived(newData.orders);
+
+    const getCompositeKey = (o: Order) => `${String(o.docNr || '').trim()}-${o.itemNr}`;
+
+    // Função de fusão que preserva estritamente o estado de arquivo e alterações manuais do utilizador
+    const mergeWithExisting = (newOrder: Order, existing?: Order): Order => {
+      const docKey = String(newOrder.docNr || '').trim();
+      const itemKey = getCompositeKey(newOrder);
+      const idKey = String(newOrder.id || '').trim();
+
+      const existingItemArchive = existing?.isArchived ? {
+        isArchived: true,
+        archivedAt: existing.archivedAt,
+        archivedBy: existing.archivedBy
+      } : (archivedItemMap.get(itemKey) || (idKey ? archivedItemMap.get(idKey) : undefined));
+
+      const existingDocArchive = archivedDocMap.get(docKey);
+
+      const isArchived = Boolean(
+        newOrder.isArchived ||
+        existing?.isArchived ||
+        existingItemArchive?.isArchived ||
+        existingDocArchive?.isArchived
+      );
+
+      const archivedAt = newOrder.archivedAt ||
+        existing?.archivedAt ||
+        existingItemArchive?.archivedAt ||
+        existingDocArchive?.archivedAt ||
+        (isArchived ? (existing?.archivedAt || new Date()) : null);
+
+      const archivedBy = newOrder.archivedBy ||
+        existing?.archivedBy ||
+        existingItemArchive?.archivedBy ||
+        existingDocArchive?.archivedBy ||
+        (isArchived ? (existing?.archivedBy || currentUser?.name || 'Admin') : undefined);
+
+      if (!existing) {
+        return {
+          ...newOrder,
+          isArchived,
+          archivedAt,
+          archivedBy
+        };
+      }
+
+      const mergedSectorObs = { ...(existing.sectorObservations || {}), ...(newOrder.sectorObservations || {}) };
+      const mergedSectorDates = { ...(existing.sectorPredictedDates || {}), ...(newOrder.sectorPredictedDates || {}) };
+      const mergedSectorPending = { ...(existing.sectorPredictedDatesPending || {}), ...(newOrder.sectorPredictedDatesPending || {}) };
+      const mergedSectorReasons = { ...(existing.sectorStopReasons || {}), ...(newOrder.sectorStopReasons || {}) };
+
+      const genClass = existing.generalClassification || newOrder.generalClassification;
+      const genPredDate = existing.generalPredictedDate || newOrder.generalPredictedDate;
+      const genObs = existing.generalObservation || newOrder.generalObservation;
+      const origReqDate = existing.originalRequestedDate || newOrder.originalRequestedDate || newOrder.requestedDate;
+
+      // Se houver nova data de planeamento, sobrepõe-se à data prevista
+      const effectiveReqDate = genPredDate || newOrder.requestedDate;
+
+      return {
+        ...newOrder,
+        id: existing.id || newOrder.id,
+        priority: existing.priority !== undefined ? existing.priority : newOrder.priority,
+        isManual: existing.isManual !== undefined ? existing.isManual : newOrder.isManual,
+        sectorObservations: mergedSectorObs,
+        sectorPredictedDates: mergedSectorDates,
+        sectorPredictedDatesPending: mergedSectorPending,
+        sectorStopReasons: mergedSectorReasons,
+        generalClassification: genClass,
+        generalPredictedDate: genPredDate,
+        generalObservation: genObs,
+        originalRequestedDate: origReqDate,
+        requestedDate: effectiveReqDate,
+        deliveryWeek: effectiveReqDate ? getISOWeek(effectiveReqDate) : newOrder.deliveryWeek,
+        isArchived,
+        archivedAt,
+        archivedBy
+      };
+    };
+
+    if (baseData && newData) {
+      // 1. Fusão de SQLite Base com Novos Dados Excel
       const mergedMap = new Map<string, Order>();
       let addedCount = 0;
       let updatedCount = 0;
 
-      const getCompositeKey = (o: Order) => `${o.docNr}-${o.itemNr}`;
-
       baseData.orders.forEach(o => {
-        if (o.docNr) mergedMap.set(getCompositeKey(o), o);
+        if (o.docNr) mergedMap.set(getCompositeKey(o), mergeWithExisting(o));
       });
-      
+
       newData.orders.forEach(newOrder => {
         if (!newOrder.docNr) return;
         const key = getCompositeKey(newOrder);
         const existing = mergedMap.get(key);
-        
         if (existing) {
           updatedCount++;
-          mergedMap.set(key, {
-            ...newOrder,
-            id: existing.id,
-            priority: existing.priority, // Manter prioridade existente
-            isManual: existing.isManual, // Manter flag manual existente
-            sectorObservations: existing.sectorObservations || {},
-            sectorPredictedDates: existing.sectorPredictedDates || {},
-            sectorStopReasons: existing.sectorStopReasons || {}
-          });
+          mergedMap.set(key, mergeWithExisting(newOrder, existing));
         } else {
           addedCount++;
-          mergedMap.set(key, newOrder);
+          mergedMap.set(key, mergeWithExisting(newOrder));
         }
       });
-      
+
+      // Preservar encomendas arquivadas do estado da app que não constem no baseData nem no newData
+      orders.forEach(o => {
+        if (o.isArchived && o.docNr) {
+          const key = getCompositeKey(o);
+          if (!mergedMap.has(key)) {
+            mergedMap.set(key, o);
+          }
+        }
+      });
+
       finalOrders = Array.from(mergedMap.values());
       finalHeaders = { ...baseData.headers, ...newData.headers };
-      message = `Importação concluída: ${addedCount} novas linhas adicionadas e ${updatedCount} atualizadas.`;
+      const archivedCount = finalOrders.filter(o => o.isArchived).length;
+      message = `Importação concluída: ${addedCount} novas linhas adicionadas, ${updatedCount} atualizadas (${archivedCount} arquivadas preservadas).`;
+
+    } else if (newData && !baseData) {
+      // 2. Upload de novos dados (Excel ou SQLite)
+      if (orders.length > 0) {
+        const mergedMap = new Map<string, Order>();
+        let addedCount = 0;
+        let updatedCount = 0;
+
+        orders.forEach(o => {
+          if (o.docNr) mergedMap.set(getCompositeKey(o), o);
+        });
+
+        newData.orders.forEach(newOrder => {
+          if (!newOrder.docNr) return;
+          const key = getCompositeKey(newOrder);
+          const existing = mergedMap.get(key);
+          if (existing) {
+            updatedCount++;
+            mergedMap.set(key, mergeWithExisting(newOrder, existing));
+          } else {
+            addedCount++;
+            mergedMap.set(key, mergeWithExisting(newOrder));
+          }
+        });
+
+        // Garantir que encomendas arquivadas pré-existentes na app nunca desaparecem
+        orders.forEach(o => {
+          if (o.isArchived && o.docNr) {
+            const key = getCompositeKey(o);
+            if (!mergedMap.has(key)) {
+              mergedMap.set(key, o);
+            }
+          }
+        });
+
+        finalOrders = Array.from(mergedMap.values());
+        finalHeaders = { ...excelHeaders, ...newData.headers };
+        const archivedCount = finalOrders.filter(o => o.isArchived).length;
+        message = `Dados atualizados com sucesso: ${updatedCount} linhas atualizadas, ${addedCount} novas (${archivedCount} arquivadas preservadas).`;
+      } else {
+        finalOrders = newData.orders.map(o => mergeWithExisting(o));
+        finalHeaders = newData.headers;
+        const archivedCount = finalOrders.filter(o => o.isArchived).length;
+        message = `Dados importados com ${finalOrders.length} registos (${archivedCount} arquivadas).`;
+      }
+
+    } else if (baseData && !newData) {
+      // 3. Upload de ficheiro SQLite Base
+      const mergedMap = new Map<string, Order>();
+      baseData.orders.forEach(o => {
+        if (o.docNr) mergedMap.set(getCompositeKey(o), mergeWithExisting(o));
+      });
+
+      // Preservar encomendas arquivadas da sessão atual caso não estejam no SQLite
+      orders.forEach(o => {
+        if (o.isArchived && o.docNr) {
+          const key = getCompositeKey(o);
+          if (!mergedMap.has(key)) {
+            mergedMap.set(key, o);
+          }
+        }
+      });
+
+      finalOrders = Array.from(mergedMap.values());
+      finalHeaders = baseData.headers;
+      const archivedCount = finalOrders.filter(o => o.isArchived).length;
+      message = `Base de dados carregada com ${finalOrders.length} registos (${archivedCount} arquivadas preservadas).`;
     }
+
+    // Validação e garantia final de integridade de estado arquivado
+    finalOrders = finalOrders.map(order => {
+      const docKey = String(order.docNr || '').trim();
+      const itemKey = getCompositeKey(order);
+      const idKey = String(order.id || '').trim();
+
+      const docArchive = archivedDocMap.get(docKey);
+      const itemArchive = archivedItemMap.get(itemKey) || (idKey ? archivedItemMap.get(idKey) : undefined);
+
+      if (order.isArchived || docArchive?.isArchived || itemArchive?.isArchived) {
+        return {
+          ...order,
+          isArchived: true,
+          archivedAt: order.archivedAt || docArchive?.archivedAt || itemArchive?.archivedAt || new Date(),
+          archivedBy: order.archivedBy || docArchive?.archivedBy || itemArchive?.archivedBy || currentUser?.name || 'Admin'
+        };
+      }
+      return order;
+    });
 
     setOrders(finalOrders);
     setExcelHeaders(finalHeaders);
@@ -748,7 +938,7 @@ const App: React.FC = () => {
     setNotification({ message, type: 'success' });
     setActiveView('orders');
     
-    // Force immediate save after import
+    // Guardar imediatamente no banco de dados local / Supabase
     saveOrdersToDB(finalOrders, finalHeaders);
   };
   
@@ -1067,9 +1257,6 @@ const App: React.FC = () => {
     return uniqueDocs.size;
   }, [orders, activeView]);
 
-  // Estado para o aviso de base de dados existente no login
-  const [pendingLoginUser, setPendingLoginUser] = React.useState<User | null>(null);
-
   // Se não estiver logado, mostra apenas o Login
   const handleGlobalSearch = (term: string) => {
     setGlobalSearchTerm(term);
@@ -1093,70 +1280,13 @@ const App: React.FC = () => {
     };
 
     return (
-      <>
-        <Login 
-          lockoutUntil={loginLockoutUntil}
-          onSetLockoutUntil={setLoginLockoutUntil}
-          onLogin={async (user) => {
-            // Se existirem dados carregados e for admin, pedir confirmação antes de continuar.
-            if (orders.length > 0 && user.role === 'admin') {
-              setPendingLoginUser(user);
-            } else {
-              doLogin(user);
-            }
-          }} 
-        />
-
-        {/* Modal de aviso: existe base de dados carregada */}
-        {pendingLoginUser && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
-              <div className="flex items-start gap-4 mb-5">
-                <div className="bg-amber-100 dark:bg-amber-900/30 p-2.5 rounded-xl text-amber-600 dark:text-amber-400 shrink-0">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-                </div>
-                <div>
-                  <h3 className="font-black text-slate-800 dark:text-white text-base mb-1">Base de dados existente</h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Existem <span className="font-bold text-slate-700 dark:text-slate-200">{orders.length} registos</span> carregados. Deseja apagar estes dados antes de continuar com o login?
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={async () => {
-                    await clearOrdersFromDB();
-                    setOrders([]);
-                    setExcelHeaders({});
-                    const u = pendingLoginUser;
-                    setPendingLoginUser(null);
-                    doLogin(u);
-                  }}
-                  className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-xl transition-colors text-sm"
-                >
-                  Apagar dados e entrar
-                </button>
-                <button
-                  onClick={() => {
-                    const u = pendingLoginUser;
-                    setPendingLoginUser(null);
-                    doLogin(u);
-                  }}
-                  className="w-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold py-3 rounded-xl transition-colors text-sm"
-                >
-                  Manter dados e entrar
-                </button>
-                <button
-                  onClick={() => setPendingLoginUser(null)}
-                  className="w-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium py-2 text-sm transition-colors"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </>
+      <Login 
+        lockoutUntil={loginLockoutUntil}
+        onSetLockoutUntil={setLoginLockoutUntil}
+        onLogin={async (user) => {
+          doLogin(user);
+        }} 
+      />
     );
   }
 

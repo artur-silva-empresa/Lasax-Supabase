@@ -230,9 +230,9 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) => {
           <div className="mt-6 bg-amber-50 border border-amber-100 p-4 rounded-xl flex gap-3">
              <Merge size={24} className="text-amber-600 shrink-0" />
              <div>
-                <h4 className="text-amber-800 text-xs font-bold uppercase tracking-wider mb-1">Nota de Fusão</h4>
+                <h4 className="text-amber-800 text-xs font-bold uppercase tracking-wider mb-1">Nota de Fusão & Preservação</h4>
                 <p className="text-[11px] text-amber-700 leading-relaxed">
-                  O sistema irá cruzar os dados usando o <strong>Nr. Documento e Item</strong>. As observações do SQLite serão preservadas.
+                  O sistema cruza os dados usando o <strong>Nr. Documento e Item</strong>. As observações, prioridades, planeamento e o <strong>estado de encomendas arquivadas são rigorosamente preservados</strong>.
                 </p>
              </div>
           </div>

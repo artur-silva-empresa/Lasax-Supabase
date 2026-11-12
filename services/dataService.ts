@@ -798,14 +798,29 @@ export const parseExcelFile = async (file: File): Promise<{ orders: Order[], hea
         if (isAppExport) {
             Object.entries(extractedHeaders).forEach(([letter, name]) => {
                 const trimmed = name.trim();
-                if (trimmed) fieldToCol[trimmed] = letter;
+                if (trimmed) {
+                    fieldToCol[trimmed] = letter;
+                    fieldToCol[trimmed.toLowerCase()] = letter;
+                }
             });
         }
+
+        // Deteção de colunas de arquivo opcionais em formatos ERP ou customizados
+        let erpArchivedCol: string | undefined;
+        let erpArchivedAtCol: string | undefined;
+        let erpArchivedByCol: string | undefined;
+
+        Object.entries(extractedHeaders).forEach(([letter, name]) => {
+            const n = name.trim().toLowerCase();
+            if (n === 'arquivado' || n === 'isarchived' || n === 'is_archived' || n === 'estado arquivado') erpArchivedCol = letter;
+            if (n === 'data arquivo' || n === 'archivedat' || n === 'archived_at' || n === 'data_arquivo') erpArchivedAtCol = letter;
+            if (n === 'arquivado por' || n === 'archivedby' || n === 'archived_by' || n === 'arquivado_por') erpArchivedByCol = letter;
+        });
 
         // get() para formato app: lookup por nome
         // get() para formato ERP: acesso directo à letra de coluna
         const getApp = (row: any, fieldName: string): any => {
-            const col = fieldToCol[fieldName];
+            const col = fieldToCol[fieldName] || fieldToCol[fieldName.toLowerCase()];
             return col !== undefined ? row[col] : undefined;
         };
 
@@ -816,7 +831,7 @@ export const parseExcelFile = async (file: File): Promise<{ orders: Order[], hea
         };
 
         const parseBool = (val: any): boolean =>
-            val === 1 || val === true || val === '1' || String(val).toLowerCase() === 'true';
+            val === 1 || val === true || val === '1' || String(val).toLowerCase() === 'true' || String(val).toLowerCase() === 'sim';
 
         const mappedOrders: Order[] = [];
 
@@ -898,9 +913,12 @@ export const parseExcelFile = async (file: File): Promise<{ orders: Order[], hea
                         return result;
                     })(),
                     sectorStopReasons:  parseJsonField(getApp(row, 'sectorStopReasons'), {}),
-                    isArchived:  parseBool(getApp(row, 'isArchived')),
-                    archivedAt:  parseExcelDate(getApp(row, 'archivedAt')),
-                    archivedBy:  String(getApp(row, 'archivedBy') ?? '').trim() || undefined,
+                    isArchived:  (() => {
+                        const raw = getApp(row, 'isArchived') ?? getApp(row, 'is_archived') ?? getApp(row, 'arquivado') ?? getApp(row, 'Arquivado');
+                        return parseBool(raw);
+                    })(),
+                    archivedAt:  parseExcelDate(getApp(row, 'archivedAt') ?? getApp(row, 'archived_at') ?? getApp(row, 'dataArquivo') ?? getApp(row, 'Data Arquivo')),
+                    archivedBy:  String(getApp(row, 'archivedBy') ?? getApp(row, 'archived_by') ?? getApp(row, 'arquivadoPor') ?? getApp(row, 'Arquivado Por') ?? '').trim() || undefined,
                     generalClassification: genClass,
                     generalPredictedDate: genPredDate,
                     generalObservation: genObs,
@@ -911,6 +929,11 @@ export const parseExcelFile = async (file: File): Promise<{ orders: Order[], hea
                 // Cada campo usa explicitamente a letra da coluna real do ficheiro ERP.
                 // Sem arrays, sem índices calculados — impossível ter off-by-one.
                 const itemNr = parseNumber(row['F']);
+                const rawArchived = erpArchivedCol ? row[erpArchivedCol] : undefined;
+                const isArchived = parseBool(rawArchived);
+                const archivedAt = erpArchivedAtCol ? parseExcelDate(row[erpArchivedAtCol]) : (isArchived ? new Date() : null);
+                const archivedBy = erpArchivedByCol ? String(row[erpArchivedByCol] ?? '').trim() || undefined : undefined;
+
                 order = {
                     _raw: row,
                     id:            `${docNr}-${itemNr}`,
@@ -952,16 +975,16 @@ export const parseExcelFile = async (file: File): Promise<{ orders: Order[], hea
                     dataBordados:  parseExcelDate(row['AG']),        // Data Bordados.
                     qtyBilled:     parseNumber(row['AH']),           // Facturada
                     qtyOpen:       parseNumber(row['AI']),           // Em Aberto
-                    // Campos exclusivos da app — inexistentes no ERP, inicializar com padrões
+                    // Campos exclusivos da app — inicializar com padrões ou detetados
                     priority:               0,
                     isManual:               false,
                     sectorObservations:     {},
                     sectorPredictedDates:   {},
                     sectorPredictedDatesPending: {},
                     sectorStopReasons:      {},
-                    isArchived:             false,
-                    archivedAt:             null,
-                    archivedBy:             undefined,
+                    isArchived,
+                    archivedAt,
+                    archivedBy,
                     generalClassification:  undefined,
                     generalPredictedDate:   null,
                     generalObservation:     undefined,
@@ -1048,9 +1071,19 @@ export const parseSQLiteFile = async (file: File): Promise<{ orders: Order[], he
                 catch { obj.sectorPredictedDatesPending = {}; }
             } else { obj.sectorPredictedDatesPending = {}; }
 
-            // Normalizar campos boolean
-            obj.isManual   = obj.isManual  === 1 || obj.isManual  === true || obj.isManual  === '1';
-            obj.isArchived = obj.isArchived === 1 || obj.isArchived === true || obj.isArchived === '1';
+            // Normalizar campos boolean e alias snake_case / camelCase
+            if (obj.is_archived !== undefined && obj.isArchived === undefined) {
+                obj.isArchived = obj.is_archived;
+            }
+            if (!obj.archivedAt && obj.archived_at) {
+                obj.archivedAt = new Date(obj.archived_at);
+            }
+            if (!obj.archivedBy && obj.archived_by) {
+                obj.archivedBy = obj.archived_by;
+            }
+
+            obj.isManual   = obj.isManual  === 1 || obj.isManual  === true || obj.isManual  === '1' || String(obj.isManual).toLowerCase() === 'sim';
+            obj.isArchived = obj.isArchived === 1 || obj.isArchived === true || obj.isArchived === '1' || String(obj.isArchived).toLowerCase() === 'sim' || String(obj.isArchived).toLowerCase() === 'true';
 
             // Valores por omissão para campos que possam estar ausentes em ficheiros antigos
             if (!obj.priority)   obj.priority  = 0;
