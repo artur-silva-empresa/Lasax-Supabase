@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import OrderTable, { ActiveFilterType } from './components/OrderTable';
 import OrderTimeline from './components/OrderTimeline';
 import OrderDetails from './components/OrderDetails';
+import OrderPosition from './components/OrderPosition';
 import ImportModal from './components/ImportModal';
 import Settings from './components/Settings';
 import StopReasons from './components/StopReasons';
@@ -937,6 +938,19 @@ const App: React.FC = () => {
           onArchiveOrder={handleArchiveOrder}
           globalSearchTerm={globalSearchTerm}
         />;
+      case 'order-position':
+        if (!currentUser?.permissions?.orders || currentUser?.permissions?.orders === 'none') {
+            const fallback = getFirstAvailableView(currentUser);
+            if (fallback !== 'order-position') { setActiveView(fallback); return null; }
+        }
+        return (
+          <OrderPosition 
+            orders={globalFilteredOrders} 
+            onViewDetails={handleViewDetails} 
+            globalSearchTerm={globalSearchTerm}
+            user={currentUser}
+          />
+        );
       case 'timeline':
         if (!currentUser?.permissions?.timeline || currentUser?.permissions?.timeline === 'none') {
             const fallback = getFirstAvailableView(currentUser);

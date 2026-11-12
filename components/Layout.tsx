@@ -22,7 +22,8 @@ import {
   MessageSquare,
   PanelLeftClose,
   Maximize,
-  Minimize
+  Minimize,
+  Boxes
 } from 'lucide-react';
 import { User, Order } from '../types';
 import { SECTORS } from '../constants';
@@ -274,6 +275,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setActiveView, on
     }
     if (user?.permissions?.orders !== 'none') {
         items.push({ id: 'orders', label: 'Encomendas', icon: Package });
+        items.push({ id: 'order-position', label: 'Posição Encomendas', icon: Boxes });
     }
     if (user?.permissions?.timeline !== 'none') {
         items.push({ id: 'timeline', label: 'Timeline', icon: Clock });
