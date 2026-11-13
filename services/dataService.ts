@@ -2,7 +2,7 @@
 import * as XLSX from 'xlsx';
 import initSqlJs from 'sql.js';
 import { supabase, supabaseAuthAdmin } from '../src/services/supabase';
-import { Order, OrderState, SectorState, DashboardKPIs, User, UserRole, PermissionLevel, SectorAlertTolerances } from '../types';
+import { Order, OrderState, SectorState, DashboardKPIs, User, UserRole, PermissionLevel, SectorAlertTolerances, ProductionCapacity } from '../types';
 import { parseExcelDate, formatDate } from '../utils/formatters';
 export { formatDate };
 import { SECTORS } from '../constants';
@@ -1510,65 +1510,189 @@ export const exportCustomColumns = (
   XLSX.writeFile(workbook, fileName);
 };
 
-export const saveCapacitiesToDB = async (capacities: any[]) => {
-  try {
-    // Clear existing
-    const { error: delError } = await supabase.from('production_capacities').delete().not('id', 'is', null);
-    if (delError) throw delError;
+const CAPACITIES_STORAGE_KEY = 'prod_lasa_production_capacities';
+const CAPACITIES_UPDATED_AT_KEY = 'prod_lasa_capacities_updated_at';
 
-    // Insert new
-    if (capacities.length > 0) {
-        const toInsert = capacities.map(c => ({
-            id: c.id,
-            sector_id: c.sectorId,
-            label: c.label,
-            article_code: c.articleCode,
-            family: c.family,
-            reference: c.reference,
-            color_code: c.colorCode,
-            size: c.size,
-            pieces_per_hour: c.piecesPerHour,
-            hours_per_day: c.hoursPerDay
-        }));
-        const { error: insError } = await supabase.from('production_capacities').insert(toInsert);
-        if (insError) throw insError;
+const normalizeCapacity = (c: any): ProductionCapacity => ({
+  id: String(c.id),
+  sectorId: c.sectorId ?? c.sector_id ?? '',
+  label: c.label ?? '',
+  articleCode: c.articleCode ?? c.article_code ?? '',
+  family: c.family ?? '',
+  reference: c.reference ?? '',
+  colorCode: c.colorCode ?? c.color_code ?? '',
+  size: c.size ?? '',
+  piecesPerHour: Number(c.piecesPerHour ?? c.pieces_per_hour ?? 0) || 0,
+  hoursPerDay: Number(c.hoursPerDay ?? c.hours_per_day ?? 24) || 24
+});
+
+const toSupabaseCapacityRow = (c: ProductionCapacity) => ({
+  id: c.id,
+  sector_id: c.sectorId,
+  label: c.label || '',
+  article_code: c.articleCode || '',
+  family: c.family || '',
+  reference: c.reference || '',
+  color_code: c.colorCode || '',
+  size: c.size || '',
+  pieces_per_hour: Number(c.piecesPerHour) || 0,
+  hours_per_day: Number(c.hoursPerDay) || 24
+});
+
+const saveCapacitiesToLocalDB = async (capacities: ProductionCapacity[], updatedAt: number = Date.now()) => {
+  const normalized = capacities.map(normalizeCapacity);
+  try {
+    localStorage.setItem(CAPACITIES_STORAGE_KEY, JSON.stringify(normalized));
+    localStorage.setItem(CAPACITIES_UPDATED_AT_KEY, String(updatedAt));
+  } catch (e) {
+    console.warn('Erro ao guardar capacidades no localStorage:', e);
+  }
+
+  try {
+    const db = await initDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_CAPACITIES, 'readwrite');
+      const store = tx.objectStore(STORE_CAPACITIES);
+      store.clear();
+      normalized.forEach(item => store.put(item));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.warn('Erro ao guardar capacidades no IndexedDB:', e);
+  }
+};
+
+const loadCapacitiesFromLocalDB = async (): Promise<ProductionCapacity[] | null> => {
+  // 1. Tentar IndexedDB primeiro
+  try {
+    const db = await initDB();
+    const idbCaps = await new Promise<ProductionCapacity[]>((resolve, reject) => {
+      const tx = db.transaction(STORE_CAPACITIES, 'readonly');
+      const req = tx.objectStore(STORE_CAPACITIES).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(tx.error);
+    });
+    if (idbCaps && idbCaps.length > 0) {
+      return idbCaps.map(normalizeCapacity);
+    }
+  } catch (e) {
+    console.warn('Erro ao ler capacidades do IndexedDB:', e);
+  }
+
+  // 2. Fallback para localStorage
+  try {
+    const raw = localStorage.getItem(CAPACITIES_STORAGE_KEY);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map(normalizeCapacity);
+      }
+    }
+  } catch (e) {
+    console.warn('Erro ao ler capacidades do localStorage:', e);
+  }
+
+  return null;
+};
+
+export const saveCapacitiesToDB = async (capacities: ProductionCapacity[]) => {
+  const normalized = capacities.map(normalizeCapacity);
+  const now = Date.now();
+
+  // 1. Persistência Local Imediata (localStorage + IndexedDB)
+  await saveCapacitiesToLocalDB(normalized, now);
+
+  // 2. Persistência Remota no Supabase (tabela production_capacities + backup em app_state)
+  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+  if (!supabaseUrl) return;
+
+  const toRows = normalized.map(toSupabaseCapacityRow);
+
+  try {
+    // Backup atómico em app_state (resiliente caso tabela production_capacities tenha RLS restritiva)
+    await supabase.from('app_state').upsert({
+      key: 'production_capacities',
+      value: normalized
+    });
+
+    // Sincronizar tabela relacional production_capacities sem apagar tudo cegamente antes do upsert
+    if (toRows.length > 0) {
+      const { error: upsertErr } = await supabase.from('production_capacities').upsert(toRows);
+      if (upsertErr) throw upsertErr;
+
+      // Remover apenas registos que foram eliminados pelo utilizador
+      const { data: existingRows } = await supabase.from('production_capacities').select('id');
+      if (existingRows && existingRows.length > 0) {
+        const keepIds = new Set(toRows.map(r => r.id));
+        const toDelete = existingRows.map((r: any) => r.id).filter((id: string) => !keepIds.has(id));
+        if (toDelete.length > 0) {
+          await supabase.from('production_capacities').delete().in('id', toDelete);
+        }
+      }
+    } else {
+      await supabase.from('production_capacities').delete().not('id', 'is', null);
     }
   } catch (error: any) {
-    console.error("Error saving capacities", error);
+    console.warn("Aviso ao sincronizar capacidades com Supabase (cópia local preservada):", error);
     if (!navigator.onLine || error.message?.includes('fetch') || error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-      const toInsert = capacities.map(c => ({
-          id: c.id,
-          sector_id: c.sectorId,
-          label: c.label,
-          article_code: c.articleCode,
-          family: c.family,
-          reference: c.reference,
-          color_code: c.colorCode,
-          size: c.size,
-          pieces_per_hour: c.piecesPerHour,
-          hours_per_day: c.hoursPerDay
-      }));
-      await enqueueSyncOperation('capacities', toInsert);
+      await enqueueSyncOperation('capacities', toRows);
     }
   }
 };
 
-export const loadCapacitiesFromDB = async (): Promise<any[]> => {
-  const { data: caps, error } = await supabase.from('production_capacities').select('*');
-  if (error || !caps) return [];
-  
-  return caps.map((c: any) => ({
-      id: c.id,
-      sectorId: c.sector_id,
-      label: c.label,
-      articleCode: c.article_code,
-      family: c.family,
-      reference: c.reference,
-      colorCode: c.color_code,
-      size: c.size,
-      piecesPerHour: parseFloat(c.pieces_per_hour || 0),
-      hoursPerDay: parseFloat(c.hours_per_day || 0)
-  }));
+export const loadCapacitiesFromDB = async (): Promise<ProductionCapacity[]> => {
+  const localCaps = await loadCapacitiesFromLocalDB();
+  const hasLocalInit = (() => {
+    try {
+      return localStorage.getItem(CAPACITIES_STORAGE_KEY) !== null;
+    } catch {
+      return false;
+    }
+  })();
+
+  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+  if (!supabaseUrl) {
+    return localCaps || [];
+  }
+
+  try {
+    // 1. Tentar tabela principal production_capacities
+    const { data: caps, error } = await supabase.from('production_capacities').select('*');
+    if (!error && caps && caps.length > 0) {
+      const normalized = caps.map(normalizeCapacity);
+      // Mesclar com local apenas se local tiver sido atualizado offline mais recentemente,
+      // caso contrário atualizar cache local com dados da cloud
+      if (localCaps && localCaps.length > normalized.length && hasLocalInit) {
+        // Garantir que regras locais pendentes não se perdem
+        const mergedMap = new Map<string, ProductionCapacity>();
+        normalized.forEach(c => mergedMap.set(c.id, c));
+        localCaps.forEach(c => mergedMap.set(c.id, c));
+        const merged = Array.from(mergedMap.values());
+        await saveCapacitiesToLocalDB(merged);
+        return merged;
+      }
+      await saveCapacitiesToLocalDB(normalized);
+      return normalized;
+    }
+
+    // 2. Tentar backup em app_state se tabela principal estiver vazia
+    const { data: stateData } = await supabase
+      .from('app_state')
+      .select('value')
+      .eq('key', 'production_capacities')
+      .single();
+
+    if (stateData && Array.isArray(stateData.value) && stateData.value.length > 0) {
+      const normalized = stateData.value.map(normalizeCapacity);
+      await saveCapacitiesToLocalDB(normalized);
+      return normalized;
+    }
+  } catch (e) {
+    console.warn('Erro ao carregar capacidades do Supabase, a usar cache local:', e);
+  }
+
+  return localCaps || [];
 };
 
 export const generateMockOrders = (count: number = 20): Order[] => {
@@ -1667,11 +1791,19 @@ export const processSyncQueue = async () => {
             if (error) throw error;
         }
       } else if (op.type === 'capacities') {
-        await supabase.from('production_capacities').delete().not('id', 'is', null);
-        for (let i = 0; i < op.payload.length; i += 250) {
-            const batch = op.payload.slice(i, i + 250);
-            const { error } = await supabase.from('production_capacities').insert(batch);
-            if (error) throw error;
+        const rows = Array.isArray(op.payload) ? op.payload : [];
+        await supabase.from('app_state').upsert({
+          key: 'production_capacities',
+          value: rows.map(normalizeCapacity)
+        });
+        if (rows.length > 0) {
+          for (let i = 0; i < rows.length; i += 250) {
+              const batch = rows.slice(i, i + 250);
+              const { error } = await supabase.from('production_capacities').upsert(batch);
+              if (error) throw error;
+          }
+        } else {
+          await supabase.from('production_capacities').delete().not('id', 'is', null);
         }
       } else if (op.type === 'stop_reasons') {
         const { error } = await supabase.from('app_state').upsert({

@@ -1,13 +1,15 @@
 import React from 'react';
 import {
-  Plus, Trash2, Edit2, Save, X, Search, ChevronDown, Info, Zap, Filter
+  Plus, Trash2, Edit2, Save, X, Search, ChevronDown, Info, Zap, Filter, CheckCircle2, Target
 } from 'lucide-react';
-import { ProductionCapacity } from '../types';
+import { Order, ProductionCapacity } from '../types';
 import { SECTORS } from '../constants';
 
 interface ProductionCapacityPageProps {
   capacities: ProductionCapacity[];
-  onSave: (capacities: ProductionCapacity[]) => void;
+  orders?: Order[];
+  onSave: (capacities: ProductionCapacity[]) => void | Promise<void>;
+  onNavigateToBottleneck?: () => void;
 }
 
 const DEFAULT_HOURS = 24; // 3 turnos × 8h
@@ -38,18 +40,44 @@ const generateLabel = (form: Omit<ProductionCapacity, 'id'>): string => {
   return parts.join(' / ');
 };
 
-const ProductionCapacityPage: React.FC<ProductionCapacityPageProps> = ({ capacities, onSave }) => {
+const ProductionCapacityPage: React.FC<ProductionCapacityPageProps> = ({ capacities, orders = [], onSave, onNavigateToBottleneck }) => {
   const [items, setItems] = React.useState<ProductionCapacity[]>(capacities);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [showForm, setShowForm] = React.useState(false);
   const [form, setForm] = React.useState<Omit<ProductionCapacity, 'id'>>(EMPTY_FORM);
   const [filterSector, setFilterSector] = React.useState<string>('all');
   const [search, setSearch] = React.useState('');
-  const [hasChanges, setHasChanges] = React.useState(false);
+  const [justSaved, setJustSaved] = React.useState(false);
   // Filtros fechados por predefinição em smartphone
   const [showMobileFilters, setShowMobileFilters] = React.useState(false);
 
   React.useEffect(() => { setItems(capacities); }, [capacities]);
+
+  // Sugestões dinâmicas extraídas das encomendas carregadas
+  const suggestions = React.useMemo(() => {
+    const articles = new Set<string>();
+    const families = new Set<string>();
+    const references = new Set<string>();
+    const colors = new Set<string>();
+    const sizes = new Set<string>();
+
+    orders.forEach(o => {
+      if (o.articleCode) articles.add(o.articleCode);
+      if (o.family) families.add(o.family);
+      if (o.reference) references.add(o.reference);
+      if (o.colorCode) colors.add(o.colorCode);
+      if (o.size) sizes.add(o.size);
+      if (o.sizeDesc) sizes.add(o.sizeDesc);
+    });
+
+    return {
+      articleCode: Array.from(articles).sort().slice(0, 100),
+      family: Array.from(families).sort().slice(0, 100),
+      reference: Array.from(references).sort().slice(0, 100),
+      colorCode: Array.from(colors).sort().slice(0, 100),
+      size: Array.from(sizes).sort().slice(0, 100),
+    };
+  }, [orders]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -79,6 +107,13 @@ const ProductionCapacityPage: React.FC<ProductionCapacityPageProps> = ({ capacit
     });
   }, [items, filterSector, search]);
 
+  const persistUpdate = (updated: ProductionCapacity[]) => {
+    setItems(updated);
+    onSave(updated);
+    setJustSaved(true);
+    setTimeout(() => setJustSaved(false), 2500);
+  };
+
   const handleAdd = () => {
     setEditingId(null);
     setForm({ ...EMPTY_FORM, sectorId: filterSector !== 'all' ? filterSector : SECTORS[0].id });
@@ -94,8 +129,7 @@ const ProductionCapacityPage: React.FC<ProductionCapacityPageProps> = ({ capacit
   const handleDelete = (id: string) => {
     if (!window.confirm('Eliminar esta regra de capacidade?')) return;
     const updated = items.filter(c => c.id !== id);
-    setItems(updated);
-    setHasChanges(true);
+    persistUpdate(updated);
   };
 
   const handleSaveForm = () => {
@@ -111,15 +145,9 @@ const ProductionCapacityPage: React.FC<ProductionCapacityPageProps> = ({ capacit
       const newId = `cap_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       updated = [...items, { ...form, label, id: newId }];
     }
-    setItems(updated);
+    persistUpdate(updated);
     setShowForm(false);
     setEditingId(null);
-    setHasChanges(true);
-  };
-
-  const handleSaveAll = () => {
-    onSave(items);
-    setHasChanges(false);
   };
 
   const sectorOf = (id: string) => SECTORS.find(s => s.id === id);
@@ -136,17 +164,26 @@ const ProductionCapacityPage: React.FC<ProductionCapacityPageProps> = ({ capacit
               Capacidades de Produção
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Define a capacidade produtiva (peças/hora) por artigo e secção.
+              Define a capacidade produtiva (peças/hora) por artigo e secção para cálculo de ocupação e gargalos.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            {hasChanges && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+              justSaved
+                ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                : 'bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+            }`}>
+              <CheckCircle2 size={14} className={justSaved ? 'text-emerald-500' : 'text-emerald-500/80'} />
+              {justSaved ? 'Regra guardada!' : 'Guardado automaticamente'}
+            </span>
+            {onNavigateToBottleneck && (
               <button
-                onClick={handleSaveAll}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-sm transition-colors shadow-lg shadow-emerald-900/20"
+                type="button"
+                onClick={onNavigateToBottleneck}
+                className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-blue-400 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-xs transition-colors"
               >
-                <Save size={16} />
-                Guardar Alterações
+                <Target size={14} className="text-rose-500" />
+                Ver Ocupação & Gargalos
               </button>
             )}
             <button
@@ -256,11 +293,17 @@ const ProductionCapacityPage: React.FC<ProductionCapacityPageProps> = ({ capacit
                         <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">{label}</label>
                         <input
                           type="text"
+                          list={`cap-suggest-${key}`}
                           placeholder={placeholder}
                           value={(form as any)[key]}
                           onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
                           className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
+                        <datalist id={`cap-suggest-${key}`}>
+                          {(suggestions as any)[key]?.map((v: string) => (
+                            <option key={v} value={v} />
+                          ))}
+                        </datalist>
                       </div>
                     ))}
                   </div>
@@ -268,11 +311,17 @@ const ProductionCapacityPage: React.FC<ProductionCapacityPageProps> = ({ capacit
                     <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Tamanho</label>
                     <input
                       type="text"
+                      list="cap-suggest-size"
                       placeholder="ex: M, L, 100x150"
                       value={form.size}
                       onChange={e => setForm(f => ({ ...f, size: e.target.value }))}
                       className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                    <datalist id="cap-suggest-size">
+                      {suggestions.size.map(v => (
+                        <option key={v} value={v} />
+                      ))}
+                    </datalist>
                   </div>
                 </div>
 
@@ -502,8 +551,7 @@ const ProductionCapacityPage: React.FC<ProductionCapacityPageProps> = ({ capacit
         </div>
 
         <p className="text-xs text-slate-400 text-center">
-          {items.length} regra{items.length !== 1 ? 's' : ''} de capacidade definida{items.length !== 1 ? 's' : ''}.
-          {hasChanges && ' • Tens alterações não guardadas.'}
+          {items.length} regra{items.length !== 1 ? 's' : ''} de capacidade guardada{items.length !== 1 ? 's' : ''} persistentemente.
         </p>
       </div>
     </div>

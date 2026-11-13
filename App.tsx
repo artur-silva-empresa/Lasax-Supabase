@@ -661,10 +661,15 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveCapacities = (newCapacities: ProductionCapacity[]) => {
+  const handleSaveCapacities = async (newCapacities: ProductionCapacity[]) => {
     setCapacities(newCapacities);
-    saveCapacitiesToDB(newCapacities).catch(err => console.error('Erro ao guardar capacidades:', err));
-    setNotification({ message: 'Capacidades de produção guardadas com sucesso.', type: 'success' });
+    try {
+      await saveCapacitiesToDB(newCapacities);
+      setNotification({ message: 'Capacidades de produção guardadas persistentemente.', type: 'success' });
+    } catch (err) {
+      console.error('Erro ao guardar capacidades:', err);
+      setNotification({ message: 'Capacidades guardadas localmente.', type: 'info' });
+    }
   };
 
   const handleUpdateStopReasonsHierarchy = (newHierarchy: any[]) => {    setStopReasons(newHierarchy);
@@ -1180,10 +1185,23 @@ const App: React.FC = () => {
         );
       case 'bottleneck':
         if (currentUser?.role !== 'admin') return null;
-        return <BottleneckAnalysis orders={globalFilteredOrders} capacities={capacities} />;
+        return (
+          <BottleneckAnalysis
+            orders={globalFilteredOrders}
+            capacities={capacities}
+            onNavigateToCapacities={() => setActiveView('production-capacity')}
+          />
+        );
       case 'production-capacity':
         if (currentUser?.role !== 'admin') return null;
-        return <ProductionCapacityPage capacities={capacities} onSave={handleSaveCapacities} />;
+        return (
+          <ProductionCapacityPage
+            capacities={capacities}
+            orders={orders}
+            onSave={handleSaveCapacities}
+            onNavigateToBottleneck={() => setActiveView('bottleneck')}
+          />
+        );
       case 'stop-reasons':
         return <StopReasons hierarchy={stopReasons} onUpdateHierarchy={handleUpdateStopReasonsHierarchy} />;
       case 'order-details':
